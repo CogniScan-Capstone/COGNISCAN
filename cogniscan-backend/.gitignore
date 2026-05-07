@@ -1,0 +1,31 @@
+# Environment variables (SANGAT PENTING)
+.env
+.env.local
+*.env
+!.env.example
+
+# File sampah Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Anaconda
+.conda/
+
+# IDE
+.vscode/
+.idea/
+
+# File Testing & Log
+.pytest_cache/
+.coverage
+*.log
+
+# Jupyter Notebook (jika ada)
+.ipynb_checkpoints/

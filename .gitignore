@@ -1,0 +1,8 @@
+# 1. Abaikan SEMUA folder dan file yang ada di root ini
+/*
+
+# 2. KECUALI folder/file penting di bawah ini:
+!cogniscan-backend/
+!cogniscan-frontend/
+!.gitignore
+!README.md
