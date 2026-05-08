@@ -1,35 +1,33 @@
 """
-Model HasilKonsultasi — output sesi konsultasi yang diisi psikolog.
+Model HasilKonsultasi — output sesi konsultasi.
+Sesuai schema Supabase.
 """
 
-from datetime import datetime
+from __future__ import annotations
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.core.database import Base
+
+if TYPE_CHECKING:
+    from api.models.pemesanan_konsultasi import PemesananKonsultasi
 
 
 class HasilKonsultasi(Base):
     __tablename__ = "hasil_konsultasi"
 
-    id_hasil: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    id_pemesanan: Mapped[int] = mapped_column(
-        ForeignKey("pemesanan_konsultasi.id_pemesanan", ondelete="CASCADE"), unique=True, nullable=False
+    id_hasil_konsultasi: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id_pemesanan_konsultasi: Mapped[int | None] = mapped_column(
+        ForeignKey("pemesanan_konsultasi.id_pemesanan_konsultasi"), nullable=True
     )
-    id_psikolog: Mapped[int] = mapped_column(
-        ForeignKey("psikolog.id_psikolog", ondelete="CASCADE"), nullable=False
-    )
-    catatan_sesi: Mapped[str | None] = mapped_column(Text, nullable=True)
-    diagnosa_awal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    catatan_evaluasi: Mapped[str | None] = mapped_column(Text, nullable=True)
     rekomendasi_tindak_lanjut: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(
-        String(20), default="draft", comment="'draft', 'final'"
-    )
-    dibuat_pada: Mapped[datetime] = mapped_column(
+    dibuat_pada: Mapped[str | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
     # Relationships
-    pemesanan: Mapped["PemesananKonsultasi"] = relationship(back_populates="hasil_konsultasi")
-    psikolog: Mapped["Psikolog"] = relationship(back_populates="hasil_konsultasi")
+    pemesanan: Mapped[PemesananKonsultasi] = relationship(back_populates="hasil_konsultasi")

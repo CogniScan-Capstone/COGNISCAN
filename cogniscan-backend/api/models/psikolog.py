@@ -1,46 +1,61 @@
 """
-Model Psikolog — extends Pengguna (one-to-one).
-
-Menyimpan data profesional psikolog termasuk nomor STR/SIPP.
+Model Psikolog — extends Pengguna (FK UUID).
+Data profesional lengkap termasuk STR, SIP, dan dokumen upload.
 """
 
-from datetime import datetime
+from __future__ import annotations
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+import uuid as uuid_module
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Text, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.core.database import Base
 
+if TYPE_CHECKING:
+    from api.models.admin import Admin
+    from api.models.jadwal_psikolog import JadwalPsikolog
+    from api.models.pemesanan_konsultasi import PemesananKonsultasi
+    from api.models.pengguna import Pengguna
+    from api.models.pra_asesmen import PraAsesmen
+
 
 class Psikolog(Base):
-    """Profil psikolog — data profesional dan relasi ke pasien-pasiennya."""
-
     __tablename__ = "psikolog"
 
-    id_psikolog: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    id_pengguna: Mapped[int] = mapped_column(
-        ForeignKey("pengguna.id_pengguna", ondelete="CASCADE"), unique=True, nullable=False
+    id_psikolog: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id_pengguna: Mapped[uuid_module.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("pengguna.id"), nullable=True
     )
-    nomor_str: Mapped[str | None] = mapped_column(
-        String(50), nullable=True, comment="Surat Tanda Registrasi"
+    id_admin: Mapped[int | None] = mapped_column(
+        ForeignKey("admin.id_admin"), nullable=True,
+        comment="Admin yang mendaftarkan psikolog ini"
     )
-    nomor_sipp: Mapped[str | None] = mapped_column(
-        String(50), nullable=True, comment="Surat Izin Praktik Psikologi"
-    )
-    spesialisasi: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
-    foto_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    status_verifikasi: Mapped[str] = mapped_column(
-        String(20), default="menunggu",
-        comment="'menunggu', 'disetujui', 'ditolak'"
-    )
-    dibuat_pada: Mapped[datetime] = mapped_column(
+    nama_lengkap: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    nomor_hp: Mapped[str | None] = mapped_column(Text, nullable=True)
+    spesialisasi: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pengalaman_tahun: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    universitas_asal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tahun_lulus: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    no_str: Mapped[str | None] = mapped_column(Text, nullable=True)
+    no_sip: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tgl_kadaluarsa_sip: Mapped[str | None] = mapped_column(Date, nullable=True)
+    tgl_kadaluarsa_str: Mapped[str | None] = mapped_column(Date, nullable=True)
+    upload_dokumen_str: Mapped[str | None] = mapped_column(Text, nullable=True)
+    upload_dokumen_sip: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bio_singkat: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status_akun: Mapped[str | None] = mapped_column(Text, default="pending")
+    apakah_sudah_ganti_password: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    dibuat_pada: Mapped[str | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
-    # ── Relationships ──────────────────────────────────────
-    pengguna: Mapped["Pengguna"] = relationship(back_populates="psikolog")
-    pasien_list: Mapped[list["Pasien"]] = relationship(back_populates="psikolog")
-    pra_asesmen: Mapped[list["PraAsesmen"]] = relationship(back_populates="psikolog")
-    jadwal: Mapped[list["JadwalPsikolog"]] = relationship(back_populates="psikolog")
-    hasil_konsultasi: Mapped[list["HasilKonsultasi"]] = relationship(back_populates="psikolog")
+    # Relationships
+    pengguna: Mapped[Pengguna] = relationship(back_populates="psikolog")
+    admin: Mapped[Admin] = relationship(back_populates="psikolog_terdaftar")
+    pra_asesmen: Mapped[list[PraAsesmen]] = relationship(back_populates="psikolog")
+    jadwal: Mapped[list[JadwalPsikolog]] = relationship(back_populates="psikolog")
+    pemesanan_konsultasi: Mapped[list[PemesananKonsultasi]] = relationship(back_populates="psikolog")

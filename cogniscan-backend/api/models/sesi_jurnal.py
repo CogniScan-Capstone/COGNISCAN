@@ -1,46 +1,45 @@
 """
 Model SesiJurnal — wadah multi-question guided journaling.
-
-Setiap sesi berisi 3-5 pertanyaan terbuka yang dijawab pasien secara berurutan.
-Sesi selesai saat semua pertanyaan dijawab dan di-finalize.
 """
 
-from datetime import datetime
+from __future__ import annotations
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.core.database import Base
 
+if TYPE_CHECKING:
+    from api.models.jawaban_jurnal import JawabanJurnal
+    from api.models.pasien import Pasien
+    from api.models.pra_asesmen import PraAsesmen
+
 
 class SesiJurnal(Base):
-    """Satu sesi guided journaling — berisi beberapa jawaban jurnal."""
-
     __tablename__ = "sesi_jurnal"
 
-    id_sesi: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    id_pasien: Mapped[int] = mapped_column(
-        ForeignKey("pasien.id_pasien", ondelete="CASCADE"), nullable=False
+    id_sesi_jurnal: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id_pasien: Mapped[int | None] = mapped_column(
+        ForeignKey("pasien.id_pasien"), nullable=True
     )
-    konteks_pemicu: Mapped[str | None] = mapped_column(
-        String(255), nullable=True,
-        comment="Konteks: 'akademik', 'hubungan', 'keluarga', 'pekerjaan', 'lainnya'"
+    konteks_pemicu: Mapped[str | None] = mapped_column(Text, nullable=True)
+    total_pertanyaan: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str | None] = mapped_column(
+        Text, default="sedang_berjalan",
+        comment="'sedang_berjalan', 'selesai', 'dibatalkan'"
     )
-    jumlah_pertanyaan: Mapped[int] = mapped_column(Integer, default=5)
-    status: Mapped[str] = mapped_column(
-        String(20), default="berlangsung",
-        comment="'berlangsung', 'selesai', 'dibatalkan'"
-    )
-    dibuat_pada: Mapped[datetime] = mapped_column(
+    dimulai_pada: Mapped[str | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    selesai_pada: Mapped[datetime | None] = mapped_column(
+    diselesaikan_pada: Mapped[str | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
-    # ── Relationships ──────────────────────────────────────
-    pasien: Mapped["Pasien"] = relationship(back_populates="sesi_jurnal")
-    jawaban: Mapped[list["JawabanJurnal"]] = relationship(
-        back_populates="sesi_jurnal", order_by="JawabanJurnal.urutan"
+    # Relationships
+    pasien: Mapped[Pasien] = relationship(back_populates="sesi_jurnal")
+    jawaban: Mapped[list[JawabanJurnal]] = relationship(
+        back_populates="sesi_jurnal", order_by="JawabanJurnal.urutan_pertanyaan"
     )
-    pra_asesmen: Mapped["PraAsesmen"] = relationship(back_populates="sesi_jurnal", uselist=False)
+    pra_asesmen: Mapped[PraAsesmen] = relationship(back_populates="sesi_jurnal", uselist=False)

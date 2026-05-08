@@ -1,45 +1,41 @@
 """
-Model Pasien — extends Pengguna (one-to-one).
-
-Menyimpan data profil pasien dan relasi ke psikolog tetap (fixed assignment).
+Model Pasien — extends Pengguna (FK UUID).
 """
 
-from datetime import date, datetime
+from __future__ import annotations
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, func
+import uuid as uuid_module
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Text, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.core.database import Base
 
+if TYPE_CHECKING:
+    from api.models.pemesanan_konsultasi import PemesananKonsultasi
+    from api.models.pengguna import Pengguna
+    from api.models.sesi_jurnal import SesiJurnal
+
 
 class Pasien(Base):
-    """Profil pasien — terhubung ke pengguna dan psikolog tetap."""
-
     __tablename__ = "pasien"
 
-    id_pasien: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    id_pengguna: Mapped[int] = mapped_column(
-        ForeignKey("pengguna.id_pengguna", ondelete="CASCADE"), unique=True, nullable=False
+    id_pasien: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id_pengguna: Mapped[uuid_module.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("pengguna.id"), nullable=True
     )
-    tanggal_lahir: Mapped[date | None] = mapped_column(Date, nullable=True)
-    jenis_kelamin: Mapped[str | None] = mapped_column(
-        String(20), nullable=True, comment="'laki-laki', 'perempuan', 'lainnya'"
-    )
-    no_telepon: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    alamat: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    # Psikolog tetap (fixed assignment) — NULL jika belum pilih
-    id_psikolog: Mapped[int | None] = mapped_column(
-        ForeignKey("psikolog.id_psikolog", ondelete="SET NULL"), nullable=True
-    )
-
-    dibuat_pada: Mapped[datetime] = mapped_column(
+    nama_lengkap: Mapped[str] = mapped_column(Text, nullable=False)
+    jenis_kelamin: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tanggal_lahir: Mapped[str | None] = mapped_column(Date, nullable=True)
+    alamat_lengkap: Mapped[str | None] = mapped_column(Text, nullable=True)
+    no_hp_wa: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dibuat_pada: Mapped[str | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
-    # ── Relationships ──────────────────────────────────────
-    pengguna: Mapped["Pengguna"] = relationship(back_populates="pasien")
-    psikolog: Mapped["Psikolog"] = relationship(back_populates="pasien_list")
-    sesi_jurnal: Mapped[list["SesiJurnal"]] = relationship(back_populates="pasien")
-    pra_asesmen: Mapped[list["PraAsesmen"]] = relationship(back_populates="pasien")
-    pemesanan_konsultasi: Mapped[list["PemesananKonsultasi"]] = relationship(back_populates="pasien")
+    # Relationships
+    pengguna: Mapped[Pengguna] = relationship(back_populates="pasien")
+    sesi_jurnal: Mapped[list[SesiJurnal]] = relationship(back_populates="pasien")
+    pemesanan_konsultasi: Mapped[list[PemesananKonsultasi]] = relationship(back_populates="pasien")

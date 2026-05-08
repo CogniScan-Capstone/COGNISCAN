@@ -1,30 +1,31 @@
 """
-Model JadwalPsikolog — slot konsultasi yang dibuat oleh psikolog.
+Model JadwalPsikolog — slot konsultasi psikolog.
 """
 
-from datetime import date, time, datetime
+from __future__ import annotations
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Time, func
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.core.database import Base
+
+if TYPE_CHECKING:
+    from api.models.pemesanan_konsultasi import PemesananKonsultasi
+    from api.models.psikolog import Psikolog
 
 
 class JadwalPsikolog(Base):
     __tablename__ = "jadwal_psikolog"
 
-    id_jadwal: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    id_psikolog: Mapped[int] = mapped_column(
-        ForeignKey("psikolog.id_psikolog", ondelete="CASCADE"), nullable=False
-    )
-    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
-    jam_mulai: Mapped[time] = mapped_column(Time, nullable=False)
-    jam_selesai: Mapped[time] = mapped_column(Time, nullable=False)
-    is_tersedia: Mapped[bool] = mapped_column(Boolean, default=True)
-    dibuat_pada: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    id_jadwal_psikolog: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id_psikolog: Mapped[int | None] = mapped_column(ForeignKey("psikolog.id_psikolog"), nullable=True)
+    tanggal_praktik: Mapped[str | None] = mapped_column(Date, nullable=True)
+    waktu_mulai: Mapped[str | None] = mapped_column(Time, nullable=True)
+    waktu_selesai: Mapped[str | None] = mapped_column(Time, nullable=True)
+    apakah_tersedia: Mapped[bool | None] = mapped_column(Boolean, default=True)
 
     # Relationships
-    psikolog: Mapped["Psikolog"] = relationship(back_populates="jadwal")
-    pemesanan: Mapped["PemesananKonsultasi"] = relationship(back_populates="jadwal", uselist=False)
+    psikolog: Mapped[Psikolog] = relationship(back_populates="jadwal")
+    pemesanan: Mapped[PemesananKonsultasi] = relationship(back_populates="jadwal", uselist=False)

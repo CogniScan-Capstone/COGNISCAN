@@ -1,42 +1,44 @@
 """
-Model Pengguna — tabel dasar autentikasi untuk semua role.
-
-Setiap user di CogniScan (pasien, psikolog, admin) punya satu record di tabel ini.
-Role menentukan akses dan fitur yang tersedia.
+Model Pengguna — tabel dasar autentikasi.
+Primary key: UUID (sesuai schema Supabase).
 """
 
-from datetime import datetime
+from __future__ import annotations
 
-from sqlalchemy import Boolean, DateTime, String, func
+import uuid as uuid_module
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, DateTime, Text, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.core.database import Base
 
+if TYPE_CHECKING:
+    from api.models.admin import Admin
+    from api.models.log_persetujuan import LogPersetujuan
+    from api.models.pasien import Pasien
+    from api.models.psikolog import Psikolog
+
 
 class Pengguna(Base):
-    """Tabel utama autentikasi — parent dari pasien, psikolog, admin."""
-
     __tablename__ = "pengguna"
 
-    id_pengguna: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    nama_lengkap: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        comment="Role: 'pasien', 'psikolog', 'admin'",
+    id: Mapped[uuid_module.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid_module.uuid4
     )
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    dibuat_pada: Mapped[datetime] = mapped_column(
+    email: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    peran: Mapped[str | None] = mapped_column(
+        Text, nullable=True,
+        comment="'pasien', 'psikolog', 'admin'"
+    )
+    apakah_aktif: Mapped[bool | None] = mapped_column(Boolean, default=True)
+    dibuat_pada: Mapped[str | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    diperbarui_pada: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
 
-    # ── Relationships ──────────────────────────────────────
-    pasien: Mapped["Pasien"] = relationship(back_populates="pengguna", uselist=False)
-    psikolog: Mapped["Psikolog"] = relationship(back_populates="pengguna", uselist=False)
-    admin: Mapped["Admin"] = relationship(back_populates="pengguna", uselist=False)
-    log_persetujuan: Mapped[list["LogPersetujuan"]] = relationship(back_populates="pengguna")
+    # Relationships
+    pasien: Mapped[Pasien] = relationship(back_populates="pengguna", uselist=False)
+    psikolog: Mapped[Psikolog] = relationship(back_populates="pengguna", uselist=False)
+    admin: Mapped[Admin] = relationship(back_populates="pengguna", uselist=False)
+    log_persetujuan: Mapped[list[LogPersetujuan]] = relationship(back_populates="pengguna")
