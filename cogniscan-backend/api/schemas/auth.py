@@ -11,8 +11,8 @@ class ProfilePasienCreate(BaseModel):
 class UserResponse(BaseModel):
     id: UUID
     email: str
-    peran: str
-    apakah_aktif: bool
+    peran: Optional[str] = None
+    apakah_aktif: Optional[bool] = None
 
     class Config:
         from_attributes = True

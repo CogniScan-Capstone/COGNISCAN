@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import uuid
 
-from api.core.config import settings
+
 from api.core.security import decode_token
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
