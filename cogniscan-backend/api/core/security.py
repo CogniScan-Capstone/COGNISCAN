@@ -109,6 +109,7 @@ def decode_token(token: str) -> dict | None:
             token,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
+            options={"verify_aud": False} # Supabase uses "authenticated" as audience
         )
         return payload
     except JWTError:

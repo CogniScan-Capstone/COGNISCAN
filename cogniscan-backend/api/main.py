@@ -2,8 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.core.config import settings
-# Router imports (akan didaftarkan setelah router diimplementasi)
-# from api.routers import auth, journal, pre_assessment, booking, konsultasi, pembayaran, admin
+from api.routers import auth
+# from api.routers import journal, pre_assessment, booking, konsultasi, pembayaran, admin
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -43,7 +43,7 @@ async def deteksi_teks(teks_user: str):
     hasil_ai = analyze_narrative(teks_user)
     return hasil_ai
 
-# ── Register Routers (Placeholder) ─────────────────────────
-# app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+# ── Register Routers ───────────────────────────────────────
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 # app.include_router(pre_assessment.router, prefix="/api/pre-assessment", tags=["Pre-Assessment"])
 # app.include_router(journal.router, prefix="/api/journal", tags=["Journaling"])

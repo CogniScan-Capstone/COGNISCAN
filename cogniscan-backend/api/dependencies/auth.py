@@ -54,6 +54,33 @@ async def get_current_user(
         
     return user
 
+async def verify_supabase_token(token: str = Depends(oauth2_scheme)) -> uuid.UUID:
+    """
+    Validasi token JWT Supabase tanpa cek ke database (digunakan saat pertama kali buat profil).
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    # Supabase uses JWT with 'sub' containing the user ID
+    # In decode_token we set options={"verify_aud": False} to accept it
+    payload = decode_token(token)
+    if payload is None:
+        raise credentials_exception
+    
+    user_id_str = payload.get("sub")
+    if not user_id_str:
+        raise credentials_exception
+        
+    try:
+        user_id = uuid.UUID(user_id_str)
+    except ValueError:
+        raise credentials_exception
+        
+    return user_id
+
 async def get_current_active_admin(
     current_user: Pengguna = Depends(get_current_user)
 ) -> Pengguna:
