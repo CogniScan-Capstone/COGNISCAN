@@ -60,6 +60,8 @@ class Settings(BaseSettings):
         Output: postgresql+asyncpg://user:pass@host:port/db
         """
         url = self.DATABASE_URL
+        if "?pgbouncer=true" in url:
+            url = url.replace("?pgbouncer=true", "")
         if url.startswith("postgresql://"):
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
