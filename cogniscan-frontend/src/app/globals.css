@@ -193,10 +193,10 @@ body {
 /* ===== QUOTE CARDS ===== */
 .quote-stack {
   position: relative;
-  height: 740px;
-  perspective: 1200px; /* Add 3D perspective to the container */
+  height: 580px;              /* ← ubah dari 740px */
+  perspective: 1200px;
+  transform-style: preserve-3d;  /* ← TAMBAH baris ini */
 }
-
 /* Dim and push back non-hovered cards (Desktop only) */
 @media (min-width: 969px) {
   .quote-stack:has(.quote-card:hover) .quote-card:not(:hover) {
@@ -274,15 +274,15 @@ body {
   margin-bottom: 12px;
   display: block;
 }
-.quote-1 { top: 0; left: 20px; transform: rotate(-3deg); background: #51634e; color: var(--surface); z-index: 3; }
+.quote-1 { top: 0; left: 20px; transform: rotate(-3deg); background: var(--primary); color: var(--surface); z-index: 3; }
 .quote-1 .quote-tag { color: var(--primary-fixed-dim); }
-.quote-2 { top: 145px; right: 0; transform: rotate(2.5deg); background: var(--secondary-container); color: var(--on-secondary-container); z-index: 4; }
+.quote-2 { top: 115px; right: 0; transform: rotate(2.5deg); background: var(--secondary-container); color: var(--on-secondary-container); z-index: 4; }
 .quote-2 .quote-tag { color: var(--on-secondary-container); opacity: 0.7; }
-.quote-3 { top: 295px; left: 50px; transform: rotate(-1.5deg); background: var(--surface-container-lowest); z-index: 5; }
+.quote-3 { top: 230px; left: 50px; transform: rotate(-1.5deg); background: var(--surface-container-lowest); z-index: 5; }
 .quote-3 .quote-tag { color: var(--primary); }
-.quote-4 { top: 440px; right: 20px; transform: rotate(2deg); background: var(--tertiary-container); color: var(--on-tertiary-container); z-index: 2; }
+.quote-4 { top: 345px; right: 20px; transform: rotate(2deg); background: var(--tertiary-container); color: var(--on-tertiary-container); z-index: 2; }
 .quote-4 .quote-tag { color: var(--on-tertiary-container); opacity: 0.8; }
-.quote-5 { top: 590px; left: 30px; transform: rotate(-2.5deg); background: #0e3014; color: var(--surface); z-index: 1; }
+.quote-5 { top: 460px; left: 30px; transform: rotate(-2.5deg); background: var(--on-primary-container); color: var(--surface); z-index: 1; }
 .quote-5 .quote-tag { color: var(--primary-fixed-dim); }
 
 /* ===== STATS ===== */
