@@ -26,6 +26,10 @@ ENV/
 .pytest_cache/
 .coverage
 *.log
+riwayat_percakapan.txt
+
+# Opencode Agent
+.opencode/
 
 # Jupyter Notebook (jika ada)
 .ipynb_checkpoints/

@@ -2,42 +2,45 @@
 Setup SQLAlchemy async engine dan session factory untuk Supabase.
 
 PENTING:
-- Pakai NullPool karena Supabase PgBouncer (transaction mode)
-  tidak support prepared statements.
+- Pakai NullPool karena Supabase PgBouncer transaction mode tidak support
+  prepared statements yang dipertahankan antar koneksi.
 - SSL wajib untuk Supabase.
-- server_settings jit=off untuk kompatibilitas PgBouncer.
+- Matikan statement cache asyncpg untuk kompatibilitas PgBouncer.
 """
 
+from uuid import uuid4
+
+from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import pool
 
 from api.core.config import settings
 
 
-# ── Async Engine (untuk FastAPI runtime) ───────────────────
-# Pakai Transaction Pooler (port 6543) via DATABASE_URL
+# Async engine untuk FastAPI runtime.
+# Pakai Transaction Pooler (port 6543) via DATABASE_URL.
 engine = create_async_engine(
     settings.async_database_url,
-    poolclass=pool.NullPool,  # WAJIB untuk PgBouncer transaction mode
-    echo=settings.DEBUG,      # Log SQL queries saat development
+    poolclass=pool.NullPool,
+    echo=settings.DEBUG,
     connect_args={
-        "ssl": "require",     # Supabase wajib SSL
+        "ssl": "require",
+        "statement_cache_size": 0,
+        "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4().hex}__",
         "server_settings": {
-            "jit": "off",     # PgBouncer tidak support JIT
+            "jit": "off",
         },
     },
 )
 
-# ── Session Factory ────────────────────────────────────────
 async_session_factory = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
-    expire_on_commit=False,  # Object tetap bisa diakses setelah commit
+    expire_on_commit=False,
 )
 
 
-# ── Base Class untuk semua ORM Models ──────────────────────
 class Base(DeclarativeBase):
     """Base class untuk semua SQLAlchemy models CogniScan."""
+
     pass
