@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# tidak penting
+.cogni-pages
+Progress_C3.pdf
+AGENTS.md 
+CLAUDE.md
+cogniscan-frontend.zip
