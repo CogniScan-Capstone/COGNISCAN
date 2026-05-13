@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { Noto_Serif, Manrope } from "next/font/google";
+import { Noto_Serif, Manrope, Geist } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
 
 const notoSerif = Noto_Serif({
   variable: "--font-serif",
@@ -10,12 +11,7 @@ const notoSerif = Noto_Serif({
   display: "swap",
 });
 
-const manrope = Manrope({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  display: "swap",
-});
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: "CogniScan — Refleksi terpandu untuk pikiranmu",
@@ -31,7 +27,7 @@ export default function RootLayout({
   return (
     <html
       lang="id"
-      className={`${notoSerif.variable} ${manrope.variable}`}
+      className={cn(notoSerif.variable, "font-sans", geist.variable)}
     >
       <body suppressHydrationWarning>{children}</body>
     </html>
