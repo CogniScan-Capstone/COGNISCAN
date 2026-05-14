@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid as uuid_module
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Text, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,6 +40,10 @@ class Psikolog(Base):
     pengalaman_tahun: Mapped[int | None] = mapped_column(Integer, nullable=True)
     universitas_asal: Mapped[str | None] = mapped_column(Text, nullable=True)
     tahun_lulus: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    alamat_praktik: Mapped[str | None] = mapped_column(Text, nullable=True)
+    kota: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provinsi: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tarif_konsultasi: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     no_str: Mapped[str | None] = mapped_column(Text, nullable=True)
     no_sip: Mapped[str | None] = mapped_column(Text, nullable=True)
     tgl_kadaluarsa_sip: Mapped[str | None] = mapped_column(Date, nullable=True)

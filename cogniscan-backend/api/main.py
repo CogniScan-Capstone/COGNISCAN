@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.core.config import settings
 from api.core.logging_config import setup_logging
-from api.routers import auth
+from api.routers import admin, auth
 
 # from api.routers import journal, pre_assessment, booking, konsultasi, pembayaran, admin
 
@@ -36,6 +36,7 @@ async def read_root():
 
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 
 # app.include_router(pre_assessment.router, prefix="/api/pre-assessment", tags=["Pre-Assessment"])
 # app.include_router(journal.router, prefix="/api/journal", tags=["Journaling"])

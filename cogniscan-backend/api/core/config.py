@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
+    # Supabase Auth Admin API. SERVICE_ROLE_KEY hanya boleh dipakai server-side.
+    SUPABASE_URL: str | None = None
+    SUPABASE_SERVICE_ROLE_KEY: str | None = None
+    TEMP_PASSWORD_LENGTH: int = 20
+
     # ── Application ────────────────────────────────────────
     APP_NAME: str = "CogniScan API"
     APP_VERSION: str = "1.0.0"
@@ -46,6 +51,15 @@ class Settings(BaseSettings):
 
     # ── CORS ───────────────────────────────────────────────
     CORS_ORIGINS: str = "http://localhost:3000"
+
+    # SMTP untuk email aktivasi psikolog dan temporary password.
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_SENDER_EMAIL: str | None = None
+    SMTP_USE_TLS: bool = True
+    FRONTEND_LOGIN_URL: str = "http://localhost:3000/sign-in"
 
     @property
     def cors_origins_list(self) -> list[str]:

@@ -26,6 +26,7 @@ ENV/
 .pytest_cache/
 .coverage
 *.log
+scratch/
 riwayat_percakapan.txt
 
 # Opencode Agent

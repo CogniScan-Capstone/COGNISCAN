@@ -21,11 +21,11 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from api.models.base import Base
-# target_metadata = Base.metadata
-target_metadata = None
+# Import semua model agar Alembic autogenerate melihat metadata lengkap.
+import api.models  # noqa: F401,E402
+from api.core.database import Base  # noqa: E402
+
+target_metadata = Base.metadata
 
 # Ambil DATABASE_URL_SYNC dari .env dan konversi ke asyncpg
 db_url_sync = os.getenv("DATABASE_URL_SYNC", "")
@@ -62,6 +62,7 @@ async def run_async_migrations() -> None:
     connectable = create_async_engine(
         ASYNC_DB_URL,
         poolclass=pool.NullPool,
+        connect_args={"ssl": "require"},
     )
 
     async with connectable.connect() as connection:

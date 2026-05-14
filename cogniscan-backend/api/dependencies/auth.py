@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Callable
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -10,6 +11,7 @@ import uuid
 from api.core.security import decode_token
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
+from api.models.psikolog import Psikolog
 
 
 @dataclass(frozen=True)
@@ -104,13 +106,59 @@ async def get_current_active_admin(
         )
     return current_user
 
+
+def require_role(*allowed_roles: str) -> Callable:
+    """Factory dependency untuk membatasi endpoint berdasarkan role pengguna."""
+
+    async def _role_dependency(
+        current_user: Pengguna = Depends(get_current_user),
+    ) -> Pengguna:
+        if current_user.peran not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="The user doesn't have enough privileges",
+            )
+        return current_user
+
+    return _role_dependency
+
+
 async def get_current_active_psikolog(
-    current_user: Pengguna = Depends(get_current_user)
+    current_user: Pengguna = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> Pengguna:
-    """Dependency khusus untuk endpoint yang hanya boleh diakses Psikolog."""
+    """
+    Dependency khusus untuk endpoint yang hanya boleh diakses psikolog aktif.
+
+    Psikolog wajib sudah diverifikasi admin dan sudah mengganti temporary
+    password sebelum mengakses fitur profesional seperti jadwal/konsultasi.
+    """
     if current_user.peran != "psikolog":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The user doesn't have enough privileges"
         )
+
+    result = await db.execute(
+        select(Psikolog).where(Psikolog.id_pengguna == current_user.id)
+    )
+    psikolog = result.scalar_one_or_none()
+    if psikolog is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Profil psikolog tidak ditemukan",
+        )
+
+    if psikolog.status_akun != "terverifikasi":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akun psikolog belum terverifikasi",
+        )
+
+    if not psikolog.apakah_sudah_ganti_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Psikolog wajib mengganti temporary password terlebih dahulu",
+        )
+
     return current_user
