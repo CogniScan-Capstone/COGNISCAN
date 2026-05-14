@@ -1,5 +1,5 @@
 import { Eye, LockKeyhole, Mail, UserRound } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 type FieldProps = {
@@ -111,15 +111,17 @@ export function TextAreaField({ label, placeholder }: { label: string; placehold
 export function PrimaryAuthButton({
   children,
   className,
-}: {
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode;
   className?: string;
 }) {
   return (
     <button
       type="submit"
+      {...props}
       className={cn(
-        "inline-flex h-14 w-full items-center justify-center rounded-full bg-primary-container px-8 text-[18px] font-semibold text-white shadow-[0_16px_26px_-18px_rgba(65,87,62,0.65)] transition hover:-translate-y-0.5 hover:bg-[#789477] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-container/25",
+        "inline-flex h-14 w-full items-center justify-center rounded-full bg-primary-container px-8 text-[18px] font-semibold text-white shadow-[0_16px_26px_-18px_rgba(65,87,62,0.65)] transition hover:-translate-y-0.5 hover:bg-[#789477] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-container/25 disabled:pointer-events-none disabled:opacity-65",
         className,
       )}
     >
