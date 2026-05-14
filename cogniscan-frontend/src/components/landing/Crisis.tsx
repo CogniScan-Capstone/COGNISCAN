@@ -7,8 +7,7 @@ const resources = [
   {
     name: "SEJIWA Kemenkes",
     desc: "Telepon 119 lalu tekan 8",
-    contact: "Panggil 119",
-    href: "tel:119",
+    contact: "119 ext. 8",
     priority: true,
   },
   {
@@ -87,13 +86,19 @@ export default function Crisis() {
                     {res.desc}
                   </div>
                 </div>
-                <a
-                  href={res.href}
-                  {...(res.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                  className="crisis-card-contact"
-                >
-                  {res.contact}
-                </a>
+                {res.href ? (
+                  <a
+                    href={res.href}
+                    {...(res.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    className="crisis-card-contact"
+                  >
+                    {res.contact}
+                  </a>
+                ) : (
+                  <span className="crisis-card-contact" aria-label="Nomor kontak darurat">
+                    {res.contact}
+                  </span>
+                )}
               </div>
             ))}
           </div>

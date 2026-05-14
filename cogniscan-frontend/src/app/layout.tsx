@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Noto_Serif, Manrope, Geist } from "next/font/google";
+import { Noto_Serif, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 

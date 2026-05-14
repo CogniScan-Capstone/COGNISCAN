@@ -65,9 +65,6 @@ export default function Navbar() {
           >
             Pertanyaan
           </Link>
-          <Link href="#mulai" className="nav-cta">
-            Mulai Refleksi
-          </Link>
         </div>
       </div>
     </nav>

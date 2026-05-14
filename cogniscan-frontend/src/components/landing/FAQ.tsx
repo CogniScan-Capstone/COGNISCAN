@@ -54,20 +54,6 @@ export default function FAQ() {
             <h2 className="section-title">
               Hal yang sering <em className="lilac">ditanyakan.</em>
             </h2>
-            <p
-              className="text-on-surface-muted"
-              style={{ marginTop: "24px", fontSize: "14px", lineHeight: 1.6 }}
-            >
-              Tidak ketemu jawabanmu?{" "}
-              <a
-                href="mailto:hello@cogniscan.id"
-                className="text-primary font-semibold no-underline"
-                style={{ borderBottom: "1px solid var(--primary-fixed-dim)" }}
-              >
-                Tulis ke kami
-              </a>
-              .
-            </p>
           </div>
 
           {/* FAQ list */}

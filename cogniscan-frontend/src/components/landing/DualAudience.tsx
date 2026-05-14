@@ -71,7 +71,7 @@ export default function DualAudience() {
               </ul>
             </div>
             <a
-              href="#mulai"
+              href="/sign-up"
               className="dual-cta"
               style={{
                 background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%)",
@@ -124,7 +124,7 @@ export default function DualAudience() {
               </ul>
             </div>
             <a
-              href="#daftar-psikolog"
+              href="/sign-up-psikolog"
               className="dual-cta bg-surface text-on-surface hover:bg-tertiary-container"
             >
               Daftar sebagai mitra

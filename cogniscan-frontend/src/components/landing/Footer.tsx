@@ -4,10 +4,10 @@ const footerLinks = {
   produk: [
     { label: "Cara Kerja", href: "#cara-kerja" },
     { label: "Fitur", href: "#fitur" },
-    { label: "Mulai Refleksi", href: "#mulai" },
+    { label: "Mulai Refleksi", href: "/sign-up" },
   ],
   mitra: [
-    { label: "Daftar sebagai psikolog", href: "#daftar-psikolog" },
+    { label: "Daftar sebagai psikolog", href: "/sign-up-psikolog" },
     { label: "Pedoman etika klinis", href: "#" },
     { label: "Hubungi tim", href: "#" },
   ],

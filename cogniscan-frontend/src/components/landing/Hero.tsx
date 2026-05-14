@@ -1,5 +1,3 @@
-import { ArrowRight } from "@/components/icons";
-
 const quoteCards = [
   {
     className: "quote-1",
@@ -78,11 +76,22 @@ export default function Hero() {
               memutuskan langkah berikutnya.
             </p>
 
-            {/* CTAs — scale in */}
+          {/* Container Utama untuk semua CTA */}
             <div className="flex gap-[18px] items-center flex-wrap hero-anim-cta">
-              <a href="#mulai" className="btn-primary">
-                Mulai refleksi sekarang
-                <ArrowRight />
+              {/* Tombol Sign In */}
+              <a
+                href="/sign-in"
+                className="rounded-xl border border-tertiary-container bg-white px-6 py-3 text-[15px] font-semibold text-on-tertiary-container transition-colors hover:bg-tertiary-container"
+              >
+                Sign In
+              </a>
+
+              {/* Tombol Sign Up */}
+              <a
+                href="/sign-up"
+                className="rounded-xl bg-green-900 px-6 py-3 text-[15px] font-semibold text-white hover:bg-secondary-dark"
+              >
+                Sign Up
               </a>
             </div>
 

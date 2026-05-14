@@ -22,7 +22,11 @@
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
+*.log
+*.tmp
+*.temp
 
 # debug
 npm-debug.log*
@@ -40,9 +44,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# tidak penting
-.cogni-pages
+# local project references / handoff artifacts
+AGENTS.md
+cogni-pages/
 Progress_C3.pdf
-AGENTS.md 
 CLAUDE.md
-cogniscan-frontend.zip
+*.zip
+
+# local tool caches
+.cache/
+.turbo/
+.opencode/

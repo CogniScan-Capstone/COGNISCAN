@@ -9,10 +9,12 @@ import {
   FAQ,
   Footer,
 } from "@/components/landing";
+import LandingScrollReset from "@/components/landing/LandingScrollReset";
 
 export default function Home() {
   return (
     <>
+      <LandingScrollReset />
       <Navbar />
       <Hero />
       <Stats />
