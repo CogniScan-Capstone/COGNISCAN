@@ -14,6 +14,26 @@ class ProfilePasienCreate(BaseModel):
     no_hp_wa: Optional[str] = None
 
 
+class ProfilePasienUpdate(BaseModel):
+    nama_lengkap: Optional[str] = Field(default=None, min_length=3)
+    jenis_kelamin: Optional[Literal["laki-laki", "perempuan"]] = None
+    tanggal_lahir: Optional[date] = None
+    alamat_lengkap: Optional[str] = None
+    no_hp_wa: Optional[str] = None
+
+
+class ProfilePasienResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_pasien: int
+    id_pengguna: Optional[UUID] = None
+    nama_lengkap: str
+    jenis_kelamin: Optional[str] = None
+    tanggal_lahir: Optional[date] = None
+    alamat_lengkap: Optional[str] = None
+    no_hp_wa: Optional[str] = None
+
+
 class ProfilePsikologCreate(BaseModel):
     email: EmailStr
     nama_lengkap: str = Field(..., min_length=3, max_length=150)
@@ -33,6 +53,47 @@ class ProfilePsikologCreate(BaseModel):
     upload_dokumen_str: Optional[str] = None
     upload_dokumen_sip: Optional[str] = None
     bio_singkat: Optional[str] = None
+
+
+class ProfilePsikologUpdate(BaseModel):
+    nama_lengkap: Optional[str] = Field(default=None, min_length=3, max_length=150)
+    nomor_hp: Optional[str] = None
+    spesialisasi: Optional[str] = None
+    pengalaman_tahun: Optional[int] = Field(default=None, ge=0)
+    universitas_asal: Optional[str] = None
+    tahun_lulus: Optional[int] = Field(default=None, ge=1950)
+    alamat_praktik: Optional[str] = None
+    kota: Optional[str] = None
+    provinsi: Optional[str] = None
+    tarif_konsultasi: Optional[Decimal] = Field(default=None, ge=0)
+    bio_singkat: Optional[str] = None
+
+
+class ProfilePsikologResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_psikolog: int
+    id_pengguna: Optional[UUID] = None
+    nama_lengkap: str
+    email: Optional[str] = None
+    nomor_hp: Optional[str] = None
+    spesialisasi: Optional[str] = None
+    pengalaman_tahun: Optional[int] = None
+    universitas_asal: Optional[str] = None
+    tahun_lulus: Optional[int] = None
+    alamat_praktik: Optional[str] = None
+    kota: Optional[str] = None
+    provinsi: Optional[str] = None
+    tarif_konsultasi: Optional[Decimal] = None
+    no_str: Optional[str] = None
+    no_sip: Optional[str] = None
+    tgl_kadaluarsa_str: Optional[date] = None
+    tgl_kadaluarsa_sip: Optional[date] = None
+    upload_dokumen_str: Optional[str] = None
+    upload_dokumen_sip: Optional[str] = None
+    bio_singkat: Optional[str] = None
+    status_akun: Optional[str] = None
+    apakah_sudah_ganti_password: Optional[bool] = None
 
 
 class PsikologRegistrationResponse(BaseModel):

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import uuid
@@ -20,11 +20,12 @@ class SupabaseClaims:
     user_id: uuid.UUID
     email: str
 
-# Endpoint login untuk dokumentasi Swagger
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+# Backend menerima access token Supabase lewat header:
+# Authorization: Bearer <access_token>
+bearer_scheme = HTTPBearer()
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> Pengguna:
     """
@@ -37,7 +38,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    payload = decode_token(token)
+    payload = decode_token(credentials.credentials)
     if payload is None:
         raise credentials_exception
     
@@ -65,7 +66,9 @@ async def get_current_user(
         
     return user
 
-async def verify_supabase_token(token: str = Depends(oauth2_scheme)) -> SupabaseClaims:
+async def verify_supabase_token(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+) -> SupabaseClaims:
     """
     Validasi token JWT Supabase tanpa cek ke database (digunakan saat pertama kali buat profil).
     Mengembalikan user_id dan email dari klaim JWT — email tidak boleh dipercaya
@@ -79,7 +82,7 @@ async def verify_supabase_token(token: str = Depends(oauth2_scheme)) -> Supabase
 
     # Supabase uses JWT with 'sub' containing the user ID
     # In decode_token we set options={"verify_aud": False} to accept it
-    payload = decode_token(token)
+    payload = decode_token(credentials.credentials)
     if payload is None:
         raise credentials_exception
 

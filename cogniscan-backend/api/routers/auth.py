@@ -4,14 +4,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies.database import get_db
 from api.dependencies.auth import (
     SupabaseClaims,
+    get_current_active_psikolog,
     get_current_user,
+    require_role,
     verify_supabase_token,
 )
 from api.schemas.auth import (
     ChangeTemporaryPasswordRequest,
     MessageResponse,
     ProfilePasienCreate,
+    ProfilePasienResponse,
+    ProfilePasienUpdate,
     ProfilePsikologCreate,
+    ProfilePsikologResponse,
+    ProfilePsikologUpdate,
     PsikologRegistrationResponse,
     UserResponse,
 )
@@ -19,6 +25,8 @@ from api.services.auth_service import (
     change_psikolog_temporary_password,
     create_pasien_profile,
     register_psikolog_candidate,
+    update_pasien_profile,
+    update_psikolog_profile,
 )
 from api.models.pengguna import Pengguna
 
@@ -51,6 +59,27 @@ async def create_profile(
     )
 
 
+@router.patch(
+    "/profile/pasien",
+    response_model=ProfilePasienResponse,
+)
+async def update_profile_pasien(
+    profile_data: ProfilePasienUpdate,
+    current_user: Pengguna = Depends(require_role("pasien")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update profil pasien milik user yang sedang login.
+
+    Tidak mengubah email, password, role, atau status aktif pengguna.
+    """
+    return await update_pasien_profile(
+        db=db,
+        current_user=current_user,
+        profile_data=profile_data,
+    )
+
+
 @router.post(
     "/register/psikolog",
     response_model=PsikologRegistrationResponse,
@@ -68,6 +97,28 @@ async def register_psikolog(
     ke email psikolog.
     """
     return await register_psikolog_candidate(db=db, profile_data=profile_data)
+
+
+@router.patch(
+    "/profile/psikolog",
+    response_model=ProfilePsikologResponse,
+)
+async def update_profile_psikolog(
+    profile_data: ProfilePsikologUpdate,
+    current_user: Pengguna = Depends(get_current_active_psikolog),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update profil/praktik psikolog milik user yang sedang login.
+
+    Field verifikasi seperti email, STR, SIP, dokumen, dan status akun tidak
+    bisa diubah lewat endpoint ini.
+    """
+    return await update_psikolog_profile(
+        db=db,
+        current_user=current_user,
+        profile_data=profile_data,
+    )
 
 
 @router.post(

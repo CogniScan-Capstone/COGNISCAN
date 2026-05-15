@@ -7,7 +7,12 @@ from sqlalchemy.future import select
 from api.models.pasien import Pasien
 from api.models.pengguna import Pengguna
 from api.models.psikolog import Psikolog
-from api.schemas.auth import ProfilePasienCreate, ProfilePsikologCreate
+from api.schemas.auth import (
+    ProfilePasienCreate,
+    ProfilePasienUpdate,
+    ProfilePsikologCreate,
+    ProfilePsikologUpdate,
+)
 from api.services.supabase_auth_admin import (
     SupabaseAuthAdminError,
     update_user_password,
@@ -67,6 +72,48 @@ async def create_pasien_profile(
     await db.refresh(new_pengguna)
 
     return new_pengguna
+
+
+async def update_pasien_profile(
+    db: AsyncSession,
+    current_user: Pengguna,
+    profile_data: ProfilePasienUpdate,
+) -> Pasien:
+    """
+    Update profil pasien milik user yang sedang login.
+
+    Endpoint ini tidak mengubah data auth seperti email, password, role, atau
+    status aktif pengguna. Perubahan dibatasi ke tabel `pasien`.
+    """
+    if current_user.peran != "pasien":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Endpoint ini hanya untuk pasien",
+        )
+
+    result = await db.execute(
+        select(Pasien).where(Pasien.id_pengguna == current_user.id)
+    )
+    pasien = result.scalar_one_or_none()
+    if pasien is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profil pasien tidak ditemukan",
+        )
+
+    update_data = profile_data.model_dump(exclude_unset=True)
+    if "nama_lengkap" in update_data and update_data["nama_lengkap"] is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nama lengkap tidak boleh kosong",
+        )
+
+    for field_name, value in update_data.items():
+        setattr(pasien, field_name, value)
+
+    await db.commit()
+    await db.refresh(pasien)
+    return pasien
 
 
 async def register_psikolog_candidate(
@@ -169,3 +216,57 @@ async def change_psikolog_temporary_password(
 
     psikolog.apakah_sudah_ganti_password = True
     await db.commit()
+
+
+async def update_psikolog_profile(
+    db: AsyncSession,
+    current_user: Pengguna,
+    profile_data: ProfilePsikologUpdate,
+) -> Psikolog:
+    """
+    Update profil/praktik psikolog milik user yang sedang login.
+
+    Field verifikasi seperti email, STR, SIP, dokumen, status akun, dan flag
+    temporary password tidak bisa diubah lewat endpoint profil ini.
+    """
+    if current_user.peran != "psikolog":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Endpoint ini hanya untuk psikolog",
+        )
+
+    result = await db.execute(
+        select(Psikolog).where(Psikolog.id_pengguna == current_user.id)
+    )
+    psikolog = result.scalar_one_or_none()
+    if psikolog is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profil psikolog tidak ditemukan",
+        )
+
+    if psikolog.status_akun != "terverifikasi":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akun psikolog belum terverifikasi",
+        )
+
+    if not psikolog.apakah_sudah_ganti_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Psikolog wajib mengganti temporary password terlebih dahulu",
+        )
+
+    update_data = profile_data.model_dump(exclude_unset=True)
+    if "nama_lengkap" in update_data and update_data["nama_lengkap"] is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nama lengkap tidak boleh kosong",
+        )
+
+    for field_name, value in update_data.items():
+        setattr(psikolog, field_name, value)
+
+    await db.commit()
+    await db.refresh(psikolog)
+    return psikolog

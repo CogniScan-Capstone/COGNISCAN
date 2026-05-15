@@ -52,13 +52,12 @@ logger = logging.getLogger(__name__)
 # Model Gemini 3 Pro (preview).
 # CATATAN: gemini-3.1-pro-preview adalah versi terbaru per Februari 2026.
 # Kalau gemini-3-pro-preview error, ganti ke gemini-3.1-pro-preview.
-DEFAULT_MODEL_NAME = "gemini-3.1-pro-preview"
-LOCATION = "global"
+MODEL_NAME = "gemini-3.1-pro-preview"
 
 # PENTING: Gemini 3 series HANYA tersedia di global endpoint.
 # Force override location ke "global" walaupun .env set ke us-central1/asia-southeast1.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-MODEL_NAME = os.getenv("GEMINI_MODEL", DEFAULT_MODEL_NAME)
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 if not GEMINI_API_KEY:
       raise RuntimeError("GEMINI_API_KEY belum diset di .env")
