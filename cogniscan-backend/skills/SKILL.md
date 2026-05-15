@@ -189,6 +189,13 @@ User punya code existing di `cogniscan-backend/`:
 - `data/` — Dataset Sastra et al. 2025 (4,992 sentences)
 - `results/` — Hasil evaluasi metrics
 
+**Update per 2026-05-15**:
+- Setelah `git pull`, remote membawa commit `106038d perbaikan servis llm` yang mengubah konfigurasi layanan LLM di `.env.example`, `api/core/config.py`, `test_setup.py`, dan `analyzer/main.py`.
+- `analyzer/main.py` sekarang berisi mode eksperimen Gemini 3.1 Pro preview, tetapi tetap bisa dioverride lewat `.env` `GEMINI_MODEL`.
+- Bug `LOCATION` undefined di `analyzer/main.py` sudah diperbaiki dengan `LOCATION = "global"` agar script tidak crash saat dijalankan langsung.
+- Default model eksperimen dirapikan menjadi `DEFAULT_MODEL_NAME = "gemini-3.1-pro-preview"`; jika `.env` punya `GEMINI_MODEL`, nilai env tetap dipakai.
+- Verifikasi lokal: `python -m py_compile analyzer\main.py` berhasil.
+
 **ATURAN KETAT**: Jangan modifikasi folder `analyzer/` atau `prompts/` kecuali user secara eksplisit minta. Wrap analyzer dengan service layer di `api/services/analyzer_service.py`, jangan ubah core analyzer.
 
 ## 📁 Struktur Folder yang Harus Dipatuhi
@@ -412,6 +419,12 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 6. Mock Gemini di test fixtures; jangan call real API di test.
 7. Pastikan output mencakup distorsi kognitif, severity/triage, ringkasan kondisi, dan flag crisis/self-harm.
 
+**Status per 2026-05-15**:
+- Belum ada `api/services/analyzer_service.py`; analyzer masih berupa module langsung di `analyzer/main.py`.
+- Commit teman `106038d perbaikan servis llm` sudah masuk dan mengubah konfigurasi model LLM.
+- Fix lokal sudah dilakukan untuk `LOCATION = "global"` dan default model eksperimen Gemini 3.1 Pro preview.
+- Phase 5 belum dimulai sebagai integrasi backend API production; perubahan saat ini masih berada di level module analyzer/config.
+
 ### Phase 6: Journal Flow
 1. Schemas: `JournalSessionStart`, `JournalAnswer`, `JournalSessionResponse`
 2. Service `journal_service.py`: 
@@ -446,9 +459,9 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 4. Cron jobs: cleanup expired tokens, hard-delete soft-deleted records setelah retention policy, reminder jadwal.
 5. Audit log untuk login, consent, verifikasi psikolog, pembayaran, dan akses data sensitif.
 
-## 🛣️ Langkah Selanjutnya (Per 2026-05-14)
+## 🛣️ Langkah Selanjutnya (Per 2026-05-15)
 
-## Status Terakhir (Per 2026-05-14)
+## Status Terakhir (Per 2026-05-15)
 
 Tahap terakhir yang sudah selesai adalah **Phase 4/4B backend auth + admin approval flow**, termasuk frontend login admin dan redirect role.
 
@@ -463,14 +476,23 @@ Yang sudah tervalidasi:
 - Frontend `/sign-in` sudah login Supabase, call `GET /api/auth/me`, lalu redirect role ke admin/psikolog/pasien.
 - Frontend `/admin/*` punya guard client-side; backend tetap security final untuk `/api/admin/*`.
 
+Update setelah `git pull` 2026-05-15:
+- Remote sudah berada di commit `106038d perbaikan servis llm`.
+- Update teman menyentuh servis LLM/analyzer: `.env.example`, `api/core/config.py`, `test_setup.py`, dan `analyzer/main.py`.
+- Update frontend sebelumnya memperbarui tampilan admin panel, tetapi `/admin/pendaftaran` masih memakai data dummy dan belum call backend.
+- Fix lokal terbaru: `analyzer/main.py` sudah punya `LOCATION = "global"` dan default model eksperimen `DEFAULT_MODEL_NAME = "gemini-3.1-pro-preview"`.
+- Verifikasi sintaks analyzer berhasil dengan `python -m py_compile analyzer\main.py`.
+
 Langkah berikutnya yang paling dekat:
-1. Hubungkan halaman `/admin/pendaftaran` ke endpoint backend `GET /api/admin/psikolog?status_akun=pending`.
-2. Hubungkan tombol approve/reject admin ke `POST /api/admin/psikolog/{id_psikolog}/approve` dan `/reject`.
-3. Hubungkan signup pasien ke Supabase Auth + `POST /api/auth/profile/pasien`.
-4. Hubungkan signup psikolog ke `POST /api/auth/register/psikolog` tanpa membuat Supabase Auth user sebelum approval.
-5. Buat halaman/flow ganti temporary password untuk psikolog setelah login pertama.
-6. Perbaiki `DATABASE_URL_SYNC` supaya `alembic stamp head` bisa dijalankan.
-7. Setelah admin/registrasi frontend selesai, lanjut Phase 5 Analyzer Integration.
+1. Commit dan push update kecil: fix `analyzer/main.py` + update `skills/SKILL.md`.
+2. Hubungkan halaman `/admin/pendaftaran` ke endpoint backend `GET /api/admin/psikolog?status_akun=pending`.
+3. Hubungkan tombol approve/reject admin ke `POST /api/admin/psikolog/{id_psikolog}/approve` dan `/reject`.
+4. Test flow admin approval dari UI frontend sampai email temporary password terkirim.
+5. Hubungkan signup pasien ke Supabase Auth + `POST /api/auth/profile/pasien`.
+6. Hubungkan signup psikolog ke `POST /api/auth/register/psikolog` tanpa membuat Supabase Auth user sebelum approval.
+7. Buat halaman/flow ganti temporary password untuk psikolog setelah login pertama.
+8. Perbaiki `DATABASE_URL_SYNC` supaya `alembic stamp head` bisa dijalankan.
+9. Setelah admin/registrasi frontend selesai, lanjut Phase 5 Analyzer Integration (`analyzer_service.py`, masking data, dan endpoint journal/analyze).
 
 Catatan: checklist lama di bawah ini adalah konteks historis sebelum update Phase 4/4B selesai.
 
