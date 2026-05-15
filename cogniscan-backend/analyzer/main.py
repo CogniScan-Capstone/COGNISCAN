@@ -56,13 +56,13 @@ MODEL_NAME = "gemini-3.1-pro-preview"
 
 # PENTING: Gemini 3 series HANYA tersedia di global endpoint.
 # Force override location ke "global" walaupun .env set ke us-central1/asia-southeast1.
-PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
-LOCATION = "global"  # WAJIB untuk Gemini 3, override dari .env
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-logger.info(f"Initializing client: project={PROJECT_ID}, location={LOCATION}, model={MODEL_NAME}")
+if not GEMINI_API_KEY:
+      raise RuntimeError("GEMINI_API_KEY belum diset di .env")
 
-# Initialize client dengan global location
-client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 # ============================================================

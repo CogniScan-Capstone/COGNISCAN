@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     )
 
     # ── Google Cloud / Gemini ──────────────────────────────
-    GOOGLE_CLOUD_PROJECT: str = "capstonkuliah"
-    GOOGLE_CLOUD_LOCATION: str = "global"
+    GEMINI_API_KEY: str
+    GEMINI_MODEL: str = "gemini-3-flash"
 
     # ── Database (Supabase) ────────────────────────────────
     # Transaction Pooler (port 6543) → untuk FastAPI runtime

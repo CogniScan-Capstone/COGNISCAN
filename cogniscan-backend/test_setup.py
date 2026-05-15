@@ -72,7 +72,7 @@ async def main():
         load_dotenv()
         
         required_vars = [
-            "GOOGLE_CLOUD_PROJECT",
+            "GEMINI_API_KEY",
             "DATABASE_URL",
             "DATABASE_URL_SYNC",
             "JWT_SECRET_KEY",
