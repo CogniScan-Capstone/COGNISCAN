@@ -7,7 +7,6 @@ import {
   Video,
 } from "lucide-react";
 import {
-  DashboardCard,
   DashboardLayout,
   DashboardTable,
   DashboardTableCell,

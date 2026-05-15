@@ -127,7 +127,7 @@ export default function DualAudience() {
               href="/sign-up-psikolog"
               className="dual-cta bg-surface text-on-surface hover:bg-tertiary-container"
             >
-              Daftar sebagai mitra
+              Daftar sebagai Psikolog
               <ArrowRight />
             </a>
           </div>

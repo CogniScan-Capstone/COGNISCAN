@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
-import { DashboardCard, DashboardLayout, Pagination } from "@/components/dashboard";
+import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import { getPsikologNav, psikologUser } from "@/components/psikolog";
 import { cn } from "@/lib/utils";
 
@@ -127,11 +127,6 @@ const statusLabel: Record<ResponseStatus | "all", string> = {
 const statusBadge: Record<ResponseStatus, string> = {
   "belum-direspon": "bg-surface-container text-on-surface-variant",
   "sudah-direspon": "bg-[#dfeedf] text-[#3f5a3f]",
-};
-
-const statusDotColor: Record<ResponseStatus, string> = {
-  "belum-direspon": "bg-[#d37300]",
-  "sudah-direspon": "bg-primary",
 };
 
 const sortLabel: Record<SortKey, string> = {

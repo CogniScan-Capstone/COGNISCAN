@@ -100,21 +100,17 @@ function formatHref(day: DayInfo) {
   return `/psikolog/jadwal/${day.year}-${m}-${d}`;
 }
 
+function getTodayParts() {
+  const now = new Date();
+  return { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() };
+}
+
 export default function PsikologJadwalPage() {
-  const [viewYear, setViewYear] = useState(2026);
-  const [viewMonth, setViewMonth] = useState(4);
-  const [today, setToday] = useState<{ y: number; m: number; d: number } | null>(
-    null,
-  );
+  const [today] = useState(getTodayParts);
+  const [viewYear, setViewYear] = useState(today.y);
+  const [viewMonth, setViewMonth] = useState(today.m);
   const [yearOpen, setYearOpen] = useState(false);
   const yearRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const now = new Date();
-    setToday({ y: now.getFullYear(), m: now.getMonth(), d: now.getDate() });
-    setViewYear(now.getFullYear());
-    setViewMonth(now.getMonth());
-  }, []);
 
   useEffect(() => {
     if (!yearOpen) return;
@@ -158,7 +154,6 @@ export default function PsikologJadwalPage() {
     }
   };
   const goToday = () => {
-    if (!today) return;
     setViewYear(today.y);
     setViewMonth(today.m);
   };
