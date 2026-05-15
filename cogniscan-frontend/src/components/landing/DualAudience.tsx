@@ -70,18 +70,7 @@ export default function DualAudience() {
                 <li>Lanjut ke psikolog mitra hanya jika kamu mau</li>
               </ul>
             </div>
-            <a
-              href="/sign-up"
-              className="dual-cta"
-              style={{
-                background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%)",
-                color: "#ffffff",
-                boxShadow: "0 12px 28px -12px rgba(81,99,78,0.4)",
-              }}
-            >
-              Mulai refleksi
-              <ArrowRight />
-            </a>
+          
           </div>
 
           {/* Psikolog Card */}

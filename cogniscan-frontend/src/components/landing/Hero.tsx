@@ -92,12 +92,6 @@ export default function Hero() {
                 Masuk
               </a>
 
-              <a
-                href="#untuk-siapa"
-                className="rounded-xl border border-primary/20 bg-surface px-6 py-3 text-[15px] font-semibold text-primary transition-colors hover:border-tertiary-container hover:bg-tertiary-container hover:text-on-tertiary-container"
-              >
-                Daftar sebagai Psikolog
-              </a>
             </div>
 
             {/* Trust chips — fade up last */}

@@ -51,13 +51,7 @@ export default function Navbar() {
           >
             Fitur
           </Link>
-          <Link
-            href="#untuk-siapa"
-            className="hidden md:inline no-underline transition-colors hover:text-primary"
-            style={{ color: "var(--on-surface-variant)", fontSize: "14px", fontWeight: 500 }}
-          >
-            Untuk Siapa
-          </Link>
+
           <Link
             href="#faq"
             className="hidden md:inline no-underline transition-colors hover:text-primary"
@@ -65,6 +59,15 @@ export default function Navbar() {
           >
             Pertanyaan
           </Link>
+            <Link
+
+            href="#untuk-siapa"
+            className="hidden md:inline no-underline transition-colors hover:text-primary"
+            style={{ color: "var(--on-surface-variant)", fontSize: "14px", fontWeight: 500 }}
+          >
+            Daftar Sebagai Psikolog
+          </Link>
+
         </div>
       </div>
     </nav>
