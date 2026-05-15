@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import {
   DashboardLayout,
   DashboardTable,
@@ -99,9 +99,9 @@ export default function AdminRegistrationPage() {
     <DashboardLayout
       navItems={getAdminNav("pendaftaran")}
       user={adminUser}
-      contentClassName="lg:px-6 xl:px-6"
+      contentClassName="px-6 md:px-10 lg:px-10 xl:px-10"
     >
-      <div className="max-w-[980px]">
+      <div className="w-full max-w-none">
         <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-[22px] font-extrabold tracking-[-0.01em] text-[#8d5367]">
@@ -118,7 +118,7 @@ export default function AdminRegistrationPage() {
 
         <section className="mb-6 rounded-[14px] bg-white px-5 py-4 shadow-[0_20px_40px_-30px_rgba(27,28,26,0.35)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <label className="relative block lg:w-[260px]">
+            <label className="relative block lg:w-[300px]">
               <span className="sr-only">Cari pendaftar</span>
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-on-surface-muted" aria-hidden="true" />
               <input
@@ -134,20 +134,13 @@ export default function AdminRegistrationPage() {
                 { label: "Disetujui", count: 14 },
                 { label: "Ditolak", count: 2 },
               ]}
+              className="lg:justify-end"
             />
-
-            <button
-              type="button"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-outline-variant px-5 text-[15px] font-medium text-on-surface-variant transition hover:border-primary hover:text-primary"
-            >
-              <CalendarDays className="h-4 w-4" aria-hidden="true" />
-              12 Mei - 19 Mei 2026
-            </button>
           </div>
         </section>
 
         <DashboardTable>
-          <table className="min-w-full border-collapse">
+          <table className="w-full min-w-[1120px] border-collapse">
             <DashboardTableHeader>
               <tr>
                 <DashboardTableCell as="th">No</DashboardTableCell>
@@ -201,4 +194,3 @@ export default function AdminRegistrationPage() {
     </DashboardLayout>
   );
 }
-

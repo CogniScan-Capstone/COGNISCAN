@@ -33,7 +33,9 @@ export default function AdminRegistrationDetailPage() {
           <div className="h-2 bg-primary" />
           <div className="px-6 pb-8 pt-6">
             <header className="mb-7 flex items-center justify-between">
-              <h1 className="text-[22px] font-medium text-[#8d5367]">Detail Pendaftaran</h1>
+              <h1 className="text-[22px] font-extrabold tracking-[-0.01em] text-[#8d5367]">
+                Detail Pendaftaran
+              </h1>
               <Link
                 href="/admin/pendaftaran"
                 aria-label="Tutup detail pendaftaran"
@@ -103,4 +105,3 @@ export default function AdminRegistrationDetailPage() {
     </DashboardLayout>
   );
 }
-

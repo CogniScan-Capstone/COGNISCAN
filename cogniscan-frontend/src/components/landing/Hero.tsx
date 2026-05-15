@@ -34,7 +34,7 @@ const trustChips = [
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden" style={{ padding: "96px 0 140px" }}>
+    <section id="top" className="relative overflow-hidden" style={{ padding: "96px 0 140px" }}>
       <div className="container-main">
         <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-20 items-center">
           {/* Left column */}

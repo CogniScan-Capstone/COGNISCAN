@@ -1,5 +1,6 @@
 import {
   Navbar,
+  BackToTopButton,
   Hero,
   Stats,
   HowItWorks,
@@ -16,6 +17,7 @@ export default function Home() {
     <>
       <LandingScrollReset />
       <Navbar />
+      <BackToTopButton />
       <Hero />
       <Stats />
       <HowItWorks />

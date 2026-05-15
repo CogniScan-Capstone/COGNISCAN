@@ -1,4 +1,5 @@
 export { default as Navbar } from "./Navbar";
+export { default as BackToTopButton } from "./BackToTopButton";
 export { default as Hero } from "./Hero";
 export { default as Stats } from "./Stats";
 export { default as HowItWorks } from "./HowItWorks";
