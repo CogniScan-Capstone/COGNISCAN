@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useReveal } from "@/hooks/useReveal";
 
 const faqData = [
@@ -31,12 +30,22 @@ const faqData = [
 ];
 
 export default function FAQ() {
-  const [openIndex, setOpenIndex] = useState<number>(0);
   const sideRef = useReveal<HTMLDivElement>();
   const listRef = useReveal<HTMLDivElement>();
 
-  const toggle = (i: number) => {
-    setOpenIndex(openIndex === i ? -1 : i);
+  const closeOtherItems = (currentItem: HTMLDetailsElement) => {
+    if (!currentItem.open) return;
+
+    const items =
+      currentItem.parentElement?.querySelectorAll<HTMLDetailsElement>(
+        ".faq-item",
+      );
+
+    items?.forEach((item) => {
+      if (item !== currentItem) {
+        item.open = false;
+      }
+    });
   };
 
   return (
@@ -59,17 +68,18 @@ export default function FAQ() {
           {/* FAQ list */}
           <div ref={listRef} className="reveal flex flex-col" style={{ gap: "12px" }}>
             {faqData.map((item, i) => (
-              <div
+              <details
                 key={i}
-                className={`bg-surface-lowest overflow-hidden transition-colors ${
-                  openIndex === i ? "faq-item-open" : ""
-                }`}
+                id={`faq-item-${i}`}
+                name="landing-faq"
+                className="faq-item bg-surface-lowest overflow-hidden transition-colors"
+                open={i === 0}
+                onToggle={(event) => closeOtherItems(event.currentTarget)}
                 style={{
                   borderRadius: "var(--r-default)",
-                  boxShadow: openIndex === i ? "var(--shadow-ambient)" : "none",
                 }}
               >
-                <button className="faq-q" onClick={() => toggle(i)}>
+                <summary className="faq-q">
                   {item.q}
                   <span className="faq-icon">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -81,9 +91,11 @@ export default function FAQ() {
                       />
                     </svg>
                   </span>
-                </button>
-                <div className="faq-a">{item.a}</div>
-              </div>
+                </summary>
+                <div id={`faq-answer-${i}`} className="faq-a">
+                  {item.a}
+                </div>
+              </details>
             ))}
           </div>
         </div>

@@ -18,14 +18,23 @@ export default function LandingScrollReset() {
 
     const previousScrollRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";
+    let cancelled = false;
+    let timeouts: number[] = [];
 
     const scrollToHero = () => {
+      if (cancelled || window.location.hash) return;
       window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    };
+
+    const cancelForcedScroll = () => {
+      cancelled = true;
+      timeouts.forEach(window.clearTimeout);
+      timeouts = [];
     };
 
     scrollToHero();
 
-    const timeouts = [0, 50, 150, 350].map((delay) =>
+    timeouts = [0, 50, 150, 350].map((delay) =>
       window.setTimeout(scrollToHero, delay),
     );
 
@@ -36,10 +45,20 @@ export default function LandingScrollReset() {
     };
 
     window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("hashchange", cancelForcedScroll);
+    window.addEventListener("pointerdown", cancelForcedScroll, { once: true });
+    window.addEventListener("wheel", cancelForcedScroll, { once: true, passive: true });
+    window.addEventListener("touchstart", cancelForcedScroll, { once: true, passive: true });
+    window.addEventListener("keydown", cancelForcedScroll, { once: true });
 
     return () => {
-      timeouts.forEach(window.clearTimeout);
+      cancelForcedScroll();
       window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("hashchange", cancelForcedScroll);
+      window.removeEventListener("pointerdown", cancelForcedScroll);
+      window.removeEventListener("wheel", cancelForcedScroll);
+      window.removeEventListener("touchstart", cancelForcedScroll);
+      window.removeEventListener("keydown", cancelForcedScroll);
       window.history.scrollRestoration = previousScrollRestoration;
     };
   }, [pathname]);
