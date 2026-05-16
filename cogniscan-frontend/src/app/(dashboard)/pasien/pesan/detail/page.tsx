@@ -14,7 +14,7 @@ export default function PatientMessageDetailPage() {
       profileHref={patientProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
-      <div className="max-w-[920px]">
+      <div>
         <h2 className="mb-10 text-[34px] font-extrabold tracking-[-0.02em] text-[#6f5794]">
           Detail Pesan
         </h2>
@@ -37,7 +37,7 @@ export default function PatientMessageDetailPage() {
               <p className="mt-1 text-sm text-on-surface-muted">Psikolog Klinis &bull; 14 Mei 2026</p>
             </div>
 
-            <div className="mt-10 max-w-[820px] space-y-5 text-[16px] leading-8 text-on-surface-variant">
+            <div className="mt-10  space-y-5 text-[16px] leading-8 text-on-surface-variant">
               <p>
                 Halo! Berdasarkan hasil screening yang telah kamu selesaikan, saya melihat
                 beberapa pola pikir yang menarik untuk kita eksplorasi lebih lanjut. Kamu
@@ -56,7 +56,7 @@ export default function PatientMessageDetailPage() {
                   <StatusBadge
                     key={distortion}
                     tone="purple"
-                    className="h-10 min-w-[150px] border-[#d4b7ff] bg-[#ead9ff] px-5 text-[15px] font-medium"
+                    className="h-10 min-w-37.5 border-[#d4b7ff] bg-[#ead9ff] px-5 text-[15px] font-medium"
                   >
                     {distortion}
                   </StatusBadge>

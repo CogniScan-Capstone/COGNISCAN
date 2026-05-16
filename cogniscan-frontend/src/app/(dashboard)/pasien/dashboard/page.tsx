@@ -1,8 +1,4 @@
-import {
-  BriefcaseMedical,
-  MessagesSquare,
-  Info,
-} from "lucide-react";
+import { BriefcaseMedical, MessagesSquare, Info } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import {
   getPatientNav,
@@ -53,11 +49,15 @@ const topics = [
 export default function PasienDashboardPage() {
   return (
     <DashboardLayout
-      title="Dashboard"
+      title={`Halo, ${patientUser.name} 👋`}
       navItems={getPatientNav("dashboard")}
       user={patientUser}
       profileHref={patientProfileHref}
       contentClassName="lg:px-10 xl:px-10"
+
+      
+
+      
     >
       <div className="space-y-8">
         <section className="grid gap-6 lg:grid-cols-2">
@@ -66,7 +66,9 @@ export default function PasienDashboardPage() {
               <MessagesSquare className="h-6 w-6" aria-hidden="true" />
             </div>
             <div>
-              <p className="text-[16px] font-medium text-on-surface-variant">Pesan Baru</p>
+              <p className="text-[16px] font-medium text-on-surface-variant">
+                Pesan Baru
+              </p>
               <p className="text-[16px] font-semibold text-[#6f5794]">3</p>
             </div>
           </DashboardCard>
@@ -76,14 +78,18 @@ export default function PasienDashboardPage() {
               <BriefcaseMedical className="h-6 w-6" aria-hidden="true" />
             </div>
             <div>
-              <p className="text-[16px] font-medium text-on-surface-variant">Total Konsultasi</p>
+              <p className="text-[16px] font-medium text-on-surface-variant">
+                Total Konsultasi
+              </p>
               <p className="text-[16px] font-semibold text-primary">12</p>
             </div>
           </DashboardCard>
         </section>
 
         <section className="pb-5">
-          <h2 className="mb-7 text-[17px] font-semibold text-[#6f5794]">Pilih Topik Screening</h2>
+          <h2 className="mb-7 text-[17px] font-semibold text-[#6f5794]">
+            Pilih Topik Screening
+          </h2>
           <div className="grid gap-7 sm:grid-cols-2 xl:grid-cols-3">
             {topics.map((topic) => (
               <ScreeningTopicCard key={topic.title} {...topic} />
@@ -93,13 +99,18 @@ export default function PasienDashboardPage() {
 
         <section className="rounded-[12px] border-l-4 border-[#765a9c] bg-secondary-container/70 px-7 py-6">
           <div className="flex gap-4">
-            <Info className="mt-0.5 h-5 w-5 shrink-0 fill-[#765a9c] text-white" aria-hidden="true" />
+            <Info
+              className="mt-0.5 h-5 w-5 shrink-0 fill-[#765a9c] text-white"
+              aria-hidden="true"
+            />
             <div>
-              <h2 className="text-[16px] font-semibold text-on-surface">Pemberitahuan Penting</h2>
+              <h2 className="text-[16px] font-semibold text-on-surface">
+                Pemberitahuan Penting
+              </h2>
               <p className="mt-2 text-[16px] leading-7 text-on-surface-variant">
-                Hasil screening bersifat rahasia dan hanya dapat dilihat oleh psikolog terpercaya
-                kami. Untuk screening awal bersifat gratis namun untuk konsultasi selanjutnya
-                dikenakan biaya.
+                Hasil screening bersifat rahasia dan hanya dapat dilihat oleh
+                psikolog terpercaya kami. Untuk screening awal bersifat gratis
+                namun untuk konsultasi selanjutnya dikenakan biaya.
               </p>
             </div>
           </div>

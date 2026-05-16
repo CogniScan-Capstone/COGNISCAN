@@ -43,7 +43,7 @@ export default function PatientProfilePage() {
       profileHref={patientProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
-      <div className="max-w-[900px]">
+      <div>
         <header className="mb-10">
           <h1 className="text-[34px] font-extrabold tracking-[-0.02em] text-[#6f5794]">
             Profil Saya

@@ -19,7 +19,7 @@ export function DashboardLayout({
   ...sidebarProps
 }: DashboardLayoutProps) {
   return (
-    <main className="min-h-screen bg-surface-low text-on-surface">
+    <main className="min-h-screen bg-surface-low text-on-surface ">
       <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
         <DashboardSidebar {...sidebarProps} />
 
@@ -28,7 +28,7 @@ export function DashboardLayout({
             <header className="mb-9 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 {title ? (
-                  <h1 className="text-[22px] font-extrabold uppercase leading-tight tracking-[-0.01em] text-on-surface">
+                  <h1 className="text-[26px] font-extrabold tracking-[-0.02em] text-on-surface">
                     {title}
                   </h1>
                 ) : null}

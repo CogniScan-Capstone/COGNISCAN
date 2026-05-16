@@ -194,19 +194,15 @@ export default function FeedbackDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const data = useMemo(
-    () => dataset[id] ?? dataset["rina-marlina"],
-    [id],
-  );
+  const data = useMemo(() => dataset[id] ?? dataset["rina-marlina"], [id]);
 
   const [mode, setMode] = useState<Mode>("compose");
   const [aiAccuracy, setAiAccuracy] = useState<AiAccuracy | null>(null);
   const [severityFinal, setSeverityFinal] = useState<SeverityLevel>(
     data.aiSeverity,
   );
-  const [recommendation, setRecommendation] = useState<Recommendation>(
-    "lanjutkan",
-  );
+  const [recommendation, setRecommendation] =
+    useState<Recommendation>("lanjutkan");
   const [feedbackText, setFeedbackText] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
   const [savedDraft, setSavedDraft] = useState(false);
@@ -259,16 +255,18 @@ export default function FeedbackDetailPage({
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-          <DashboardCard className="overflow-hidden border-transparent bg-[#2d2140] px-7 py-7 text-white shadow-[0_24px_48px_-24px_rgba(45,33,64,0.55)]">
+          <DashboardCard className="overflow-hidden border-transparent bg-[#7d75a1] px-7 py-7 text-white shadow-[0_24px_48px_-24px_rgba(45,33,64,0.55)]">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[#d8c9f0] backdrop-blur-sm">
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
                   <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                   Analisis AI CogniScan
                 </span>
+
                 <h2 className="mt-4 text-[20px] font-bold text-white">
                   {data.name}
                 </h2>
+
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span
                     className={cn(
@@ -278,36 +276,40 @@ export default function FeedbackDetailPage({
                   >
                     {data.topic}
                   </span>
-                  <span className="text-[13px] text-white/60">
+
+                  <span className="text-[13px] text-white/80">
                     {data.relativeTime}
                   </span>
                 </div>
               </div>
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#a98ad6]/20 text-[#d8c9f0] ring-1 ring-white/10">
+
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20">
                 <Brain className="h-6 w-6" aria-hidden="true" />
               </div>
             </div>
 
-            <div className="mt-6 rounded-[18px] bg-white/[0.06] p-5 ring-1 ring-white/10">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/55">
+            <div className="mt-6 rounded-[18px] bg-white/10 p-5 ring-1 ring-white/10">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
                 Pesan Pasien
               </p>
-              <p className="mt-2 text-[15px] leading-7 text-white/85">
+
+              <p className="mt-2 text-[15px] leading-7 text-white">
                 {data.message}
               </p>
             </div>
 
             <div className="mt-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/55">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
                 Ringkasan AI
               </p>
+
               <ul className="mt-3 space-y-2">
                 {data.aiSummary.map((point) => (
                   <li
                     key={point}
-                    className="flex items-start gap-2 text-[14px] text-white/85"
+                    className="flex items-start gap-2 text-[14px] text-white"
                   >
-                    <span className="mt-2 inline-block h-1.5 w-1.5 rounded-full bg-[#a98ad6]" />
+                    <span className="mt-2 inline-block h-1.5 w-1.5 rounded-full bg-white" />
                     <span>{point}</span>
                   </li>
                 ))}
@@ -315,18 +317,20 @@ export default function FeedbackDetailPage({
             </div>
 
             <div className="mt-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/55">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
                 Rekomendasi AI
               </p>
+
               <ol className="mt-3 space-y-2">
                 {data.aiRecommendations.map((rec, idx) => (
                   <li
                     key={rec}
-                    className="flex items-start gap-3 rounded-[12px] bg-white/[0.05] px-3 py-2 text-[14px] text-white/85 ring-1 ring-white/10"
+                    className="flex items-start gap-3 rounded-[12px] bg-white/10 px-3 py-2 text-[14px] text-white ring-1 ring-white/10"
                   >
-                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#a98ad6]/25 text-[11px] font-bold text-[#d8c9f0]">
+                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20 text-[11px] font-bold text-white">
                       {idx + 1}
                     </span>
+
                     <span>{rec}</span>
                   </li>
                 ))}
@@ -337,7 +341,7 @@ export default function FeedbackDetailPage({
               {data.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full bg-white/10 px-3 py-1 text-[12px] font-medium text-[#d8c9f0] ring-1 ring-white/10"
+                  className="rounded-full bg-white/10 px-3 py-1 text-[12px] font-medium text-white ring-1 ring-white/10"
                 >
                   #{tag}
                 </span>
@@ -345,16 +349,17 @@ export default function FeedbackDetailPage({
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[14px] bg-white/[0.06] p-4 ring-1 ring-white/10">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/55">
+              <div className="rounded-[14px] bg-white/10 p-4 ring-1 ring-white/10">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
                   Severity AI
                 </p>
+
                 <p
                   className={cn(
                     "mt-2 inline-flex items-center gap-2 text-[15px] font-semibold",
-                    data.aiSeverity === "hijau" && "text-[#9ec79d]",
-                    data.aiSeverity === "kuning" && "text-[#f0c46a]",
-                    data.aiSeverity === "merah" && "text-[#f59390]",
+                    data.aiSeverity === "hijau" && "text-[#c7f1c6]",
+                    data.aiSeverity === "kuning" && "text-[#ffe29a]",
+                    data.aiSeverity === "merah" && "text-[#ffb5b2]",
                   )}
                 >
                   <span
@@ -363,13 +368,16 @@ export default function FeedbackDetailPage({
                       severityDot[data.aiSeverity],
                     )}
                   />
+
                   {severityLabel[data.aiSeverity]}
                 </p>
               </div>
-              <div className="rounded-[14px] bg-white/[0.06] p-4 ring-1 ring-white/10">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/55">
+
+              <div className="rounded-[14px] bg-white/10 p-4 ring-1 ring-white/10">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
                   Score
                 </p>
+
                 <p className="mt-2 text-[20px] font-bold text-white">
                   {data.aiScore}%
                 </p>
@@ -387,29 +395,31 @@ export default function FeedbackDetailPage({
                   Seberapa akurat analisis AI dibandingkan penilaian Anda?
                 </p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  {([
-                    {
-                      value: "sangat-akurat",
-                      label: "Sangat Akurat",
-                      icon: CheckCircle2,
-                      activeClass:
-                        "border-[#3f5a3f] bg-[#dfeedf] text-[#3f5a3f]",
-                    },
-                    {
-                      value: "sebagian-akurat",
-                      label: "Sebagian Akurat",
-                      icon: PauseCircle,
-                      activeClass:
-                        "border-[#d37300] bg-[#fbe8c5] text-[#a35a1a]",
-                    },
-                    {
-                      value: "tidak-akurat",
-                      label: "Tidak Akurat",
-                      icon: XCircle,
-                      activeClass:
-                        "border-[#d13a31] bg-[#fbd6d4] text-[#a3372e]",
-                    },
-                  ] as const).map((opt) => {
+                  {(
+                    [
+                      {
+                        value: "sangat-akurat",
+                        label: "Sangat Akurat",
+                        icon: CheckCircle2,
+                        activeClass:
+                          "border-[#3f5a3f] bg-[#dfeedf] text-[#3f5a3f]",
+                      },
+                      {
+                        value: "sebagian-akurat",
+                        label: "Sebagian Akurat",
+                        icon: PauseCircle,
+                        activeClass:
+                          "border-[#d37300] bg-[#fbe8c5] text-[#a35a1a]",
+                      },
+                      {
+                        value: "tidak-akurat",
+                        label: "Tidak Akurat",
+                        icon: XCircle,
+                        activeClass:
+                          "border-[#d13a31] bg-[#fbd6d4] text-[#a3372e]",
+                      },
+                    ] as const
+                  ).map((opt) => {
                     const Icon = opt.icon;
                     const active = aiAccuracy === opt.value;
                     return (
@@ -452,7 +462,11 @@ export default function FeedbackDetailPage({
                           className={cn(
                             "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[13px] font-semibold transition",
                             active
-                              ? cn(severityBg[level], severityText[level], "border-transparent")
+                              ? cn(
+                                  severityBg[level],
+                                  severityText[level],
+                                  "border-transparent",
+                                )
                               : "border-outline-variant bg-white text-on-surface-variant hover:border-primary",
                           )}
                         >
@@ -475,26 +489,26 @@ export default function FeedbackDetailPage({
                   Rekomendasi
                 </p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {(
-                    ["lanjutkan", "tidak-perlu"] as Recommendation[]
-                  ).map((opt) => {
-                    const active = recommendation === opt;
-                    return (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setRecommendation(opt)}
-                        className={cn(
-                          "rounded-[14px] border px-4 py-3 text-left text-[13px] font-semibold transition",
-                          active
-                            ? "border-[#3f5a3f] bg-[#dfeedf] text-[#3f5a3f]"
-                            : "border-outline-variant bg-white text-on-surface-variant hover:border-primary",
-                        )}
-                      >
-                        {recommendationLabel[opt]}
-                      </button>
-                    );
-                  })}
+                  {(["lanjutkan", "tidak-perlu"] as Recommendation[]).map(
+                    (opt) => {
+                      const active = recommendation === opt;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setRecommendation(opt)}
+                          className={cn(
+                            "rounded-[14px] border px-4 py-3 text-left text-[13px] font-semibold transition",
+                            active
+                              ? "border-[#3f5a3f] bg-[#dfeedf] text-[#3f5a3f]"
+                              : "border-outline-variant bg-white text-on-surface-variant hover:border-primary",
+                          )}
+                        >
+                          {recommendationLabel[opt]}
+                        </button>
+                      );
+                    },
+                  )}
                 </div>
               </div>
 
@@ -549,18 +563,6 @@ export default function FeedbackDetailPage({
               <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
                 <button
                   type="button"
-                  onClick={handleSaveDraft}
-                  className="inline-flex h-11 items-center gap-2 rounded-full border border-outline-variant bg-white px-5 text-[14px] font-semibold text-on-surface transition hover:border-primary hover:text-primary"
-                >
-                  {savedDraft ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Save className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {savedDraft ? "Tersimpan" : "Simpan Draft"}
-                </button>
-                <button
-                  type="button"
                   onClick={handleSubmit}
                   disabled={!canSubmit}
                   className={cn(
@@ -574,11 +576,6 @@ export default function FeedbackDetailPage({
                   Kirim Feedback ke Pasien
                 </button>
               </div>
-              {!canSubmit ? (
-                <p className="mt-2 text-right text-[12px] text-on-surface-muted">
-                  Lengkapi konfirmasi akurasi & tulis feedback minimal 20 karakter.
-                </p>
-              ) : null}
             </DashboardCard>
           ) : (
             <DashboardCard className="px-7 py-7">

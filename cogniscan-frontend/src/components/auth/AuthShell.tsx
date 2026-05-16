@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Brain } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -39,10 +40,14 @@ export function AuthLogo() {
       className="mx-auto inline-flex items-center gap-1 text-[22px] font-extrabold tracking-[-0.04em] text-[#343a40]"
       aria-label="CogniScan beranda"
     >
-      <span>
-        Cogni<span className="font-serif italic font-medium text-primary-container">Scan</span>
-      </span>
-      <Brain className="h-9 w-9 stroke-[1.3] text-primary-fixed-dim" aria-hidden="true" />
+      <Image
+        src="/logo.png"
+        alt="CogniScan Logo"
+        width={120}
+        height={80}
+        priority
+        className="h-auto w-auto"
+      />
     </Link>
   );
 }

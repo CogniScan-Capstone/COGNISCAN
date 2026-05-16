@@ -8,11 +8,19 @@ import {
   ChevronRight,
   ClipboardList,
 } from "lucide-react";
+
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
-import { getPatientNav, patientProfileHref, patientUser } from "@/components/patient";
+
+import {
+  getPatientNav,
+  patientProfileHref,
+  patientUser,
+} from "@/components/patient";
+
 import { cn } from "@/lib/utils";
 
 const weekdays = ["S", "M", "T", "W", "T", "F", "S"];
+
 const monthNames = [
   "Januari",
   "Februari",
@@ -27,66 +35,156 @@ const monthNames = [
   "November",
   "Desember",
 ];
-const monthShort = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
-const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-const times = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "19:00"];
+
+const monthShort = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "Mei",
+  "Jun",
+  "Jul",
+  "Agt",
+  "Sep",
+  "Okt",
+  "Nov",
+  "Des",
+];
+
+const dayNames = [
+  "Minggu",
+  "Senin",
+  "Selasa",
+  "Rabu",
+  "Kamis",
+  "Jumat",
+  "Sabtu",
+];
+
+const times = [
+  "09:00",
+  "10:00",
+  "11:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "19:00",
+];
+
 const methods = [
   { id: "online", label: "Online (Video Call)" },
   { id: "offline", label: "Offline (Tatap Muka)" },
 ] as const;
 
 type Method = (typeof methods)[number]["id"];
-type DayCell = { year: number; month: number; day: number; muted: boolean };
+
+type DayCell = {
+  year: number;
+  month: number;
+  day: number;
+  muted: boolean;
+};
+
+const fullDates = ["2026-05-10", "2026-05-12", "2026-05-18", "2026-05-25"];
 
 function buildCalendarDays(year: number, month: number): DayCell[] {
   const startWeekday = new Date(year, month, 1).getDay();
+
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+
   const daysInPrev = new Date(year, month, 0).getDate();
+
   const cells: DayCell[] = [];
 
   for (let i = startWeekday - 1; i >= 0; i--) {
-    cells.push({ year: month === 0 ? year - 1 : year, month: (month - 1 + 12) % 12, day: daysInPrev - i, muted: true });
+    cells.push({
+      year: month === 0 ? year - 1 : year,
+      month: (month - 1 + 12) % 12,
+      day: daysInPrev - i,
+      muted: true,
+    });
   }
+
   for (let day = 1; day <= daysInMonth; day++) {
-    cells.push({ year, month, day, muted: false });
+    cells.push({
+      year,
+      month,
+      day,
+      muted: false,
+    });
   }
+
   const remaining = (7 - (cells.length % 7)) % 7;
+
   for (let day = 1; day <= remaining; day++) {
-    cells.push({ year: month === 11 ? year + 1 : year, month: (month + 1) % 12, day, muted: true });
+    cells.push({
+      year: month === 11 ? year + 1 : year,
+      month: (month + 1) % 12,
+      day,
+      muted: true,
+    });
   }
 
   return cells;
 }
 
 function isSameYMD(a: { year: number; month: number; day: number }, b: Date) {
-  return a.year === b.getFullYear() && a.month === b.getMonth() && a.day === b.getDate();
+  return (
+    a.year === b.getFullYear() &&
+    a.month === b.getMonth() &&
+    a.day === b.getDate()
+  );
 }
 
 function formatSelectedDate(date: Date) {
-  return `${dayNames[date.getDay()]}, ${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+  return `${dayNames[date.getDay()]}, ${date.getDate()} ${
+    monthNames[date.getMonth()]
+  } ${date.getFullYear()}`;
+}
+
+function formatDateKey(year: number, month: number, day: number) {
+  return `${year}-${String(month + 1).padStart(
+    2,
+    "0",
+  )}-${String(day).padStart(2, "0")}`;
 }
 
 export default function PatientBookingSchedulePage() {
   const [viewDate, setViewDate] = useState(() => new Date(2026, 4, 1));
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date(2026, 4, 12));
+
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
   const [selectedTime, setSelectedTime] = useState<string>("11:00");
+
   const [selectedMethod, setSelectedMethod] = useState<Method>("online");
+
   const [pickerOpen, setPickerOpen] = useState(false);
+
   const [today] = useState(() => {
     const current = new Date();
+
     current.setHours(0, 0, 0, 0);
+
     return current;
   });
+
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!pickerOpen) return;
+
     const handler = (event: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+      if (
+        pickerRef.current &&
+        !pickerRef.current.contains(event.target as Node)
+      ) {
         setPickerOpen(false);
       }
     };
+
     document.addEventListener("mousedown", handler);
+
     return () => document.removeEventListener("mousedown", handler);
   }, [pickerOpen]);
 
@@ -110,6 +208,7 @@ export default function PatientBookingSchedulePage() {
               <CalendarDays className="h-5 w-5" aria-hidden="true" />
               Buat Booking
             </button>
+
             <a
               href="/pasien/booking/receipt"
               className="inline-flex h-14 items-center gap-2 border-b-2 border-transparent px-6 text-[16px] font-semibold text-on-surface-muted transition-colors hover:text-primary"
@@ -124,8 +223,19 @@ export default function PatientBookingSchedulePage() {
           Booking Konsultasi
         </h2>
 
-        <div className="grid gap-8 xl:grid-cols-[372px_1fr]">
-          <DashboardCard className="relative p-6">
+        <div
+          className={cn(
+            "grid gap-8 transition-all duration-300",
+            selectedDate ? "xl:grid-cols-[320px_1fr]" : "grid-cols-1",
+          )}
+        >
+          {/* CALENDAR */}
+          <DashboardCard
+            className={cn(
+              "relative p-6 transition-all duration-300",
+              selectedDate ? "w-full max-w-[320px]" : "w-full",
+            )}
+          >
             <div className="mb-6 flex items-center justify-between">
               <button
                 type="button"
@@ -136,26 +246,43 @@ export default function PatientBookingSchedulePage() {
               >
                 {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
               </button>
+
               <div className="flex items-center gap-4">
                 <button
                   type="button"
-                  onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))}
-                  aria-label="Bulan sebelumnya"
+                  onClick={() =>
+                    setViewDate(
+                      new Date(
+                        viewDate.getFullYear(),
+                        viewDate.getMonth() - 1,
+                        1,
+                      ),
+                    )
+                  }
                   className="rounded-md p-1 transition-colors hover:bg-surface-container"
                 >
-                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                  <ChevronLeft className="h-5 w-5" />
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1))}
-                  aria-label="Bulan berikutnya"
+                  onClick={() =>
+                    setViewDate(
+                      new Date(
+                        viewDate.getFullYear(),
+                        viewDate.getMonth() + 1,
+                        1,
+                      ),
+                    )
+                  }
                   className="rounded-md p-1 transition-colors hover:bg-surface-container"
                 >
-                  <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                  <ChevronRight className="h-5 w-5" />
                 </button>
               </div>
             </div>
 
+            {/* MONTH PICKER */}
             {pickerOpen ? (
               <div
                 ref={pickerRef}
@@ -166,36 +293,61 @@ export default function PatientBookingSchedulePage() {
                 <div className="mb-3 flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => setViewDate(new Date(viewDate.getFullYear() - 1, viewDate.getMonth(), 1))}
-                    aria-label="Tahun sebelumnya"
+                    onClick={() =>
+                      setViewDate(
+                        new Date(
+                          viewDate.getFullYear() - 1,
+                          viewDate.getMonth(),
+                          1,
+                        ),
+                      )
+                    }
                     className="rounded-md p-1 transition-colors hover:bg-surface-container"
                   >
-                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    <ChevronLeft className="h-4 w-4" />
                   </button>
-                  <span className="text-[15px] font-semibold text-on-surface">{viewDate.getFullYear()}</span>
+
+                  <span className="text-[15px] font-semibold text-on-surface">
+                    {viewDate.getFullYear()}
+                  </span>
+
                   <button
                     type="button"
-                    onClick={() => setViewDate(new Date(viewDate.getFullYear() + 1, viewDate.getMonth(), 1))}
-                    aria-label="Tahun berikutnya"
+                    onClick={() =>
+                      setViewDate(
+                        new Date(
+                          viewDate.getFullYear() + 1,
+                          viewDate.getMonth(),
+                          1,
+                        ),
+                      )
+                    }
                     className="rounded-md p-1 transition-colors hover:bg-surface-container"
                   >
-                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
+
                 <div className="grid grid-cols-3 gap-2">
                   {monthShort.map((month, index) => {
                     const active = index === viewDate.getMonth();
+
                     return (
                       <button
                         key={month}
                         type="button"
                         onClick={() => {
-                          setViewDate(new Date(viewDate.getFullYear(), index, 1));
+                          setViewDate(
+                            new Date(viewDate.getFullYear(), index, 1),
+                          );
+
                           setPickerOpen(false);
                         }}
                         className={cn(
                           "rounded-full px-3 py-2 text-[13px] font-medium transition-colors",
-                          active ? "bg-[#7a9479] text-white" : "text-on-surface hover:bg-surface-container",
+                          active
+                            ? "bg-[#7a9479] text-white"
+                            : "text-on-surface hover:bg-surface-container",
                         )}
                       >
                         {month}
@@ -206,33 +358,59 @@ export default function PatientBookingSchedulePage() {
               </div>
             ) : null}
 
+            {/* CALENDAR GRID */}
             <div className="grid grid-cols-7 gap-y-4 text-center">
               {weekdays.map((day, index) => (
-                <div key={`${day}-${index}`} className="text-xs font-bold text-on-surface-muted">
+                <div
+                  key={`${day}-${index}`}
+                  className="text-xs font-bold text-on-surface-muted"
+                >
                   {day}
                 </div>
               ))}
+
               {cells.map((cell, index) => {
                 const isToday = isSameYMD(cell, today);
-                const isSelected = isSameYMD(cell, selectedDate);
+
+                const isSelected =
+                  selectedDate && isSameYMD(cell, selectedDate);
+
+                const isFull = fullDates.includes(
+                  formatDateKey(cell.year, cell.month, cell.day),
+                );
+
                 return (
                   <button
                     key={`${cell.year}-${cell.month}-${cell.day}-${index}`}
                     type="button"
+                    disabled={isFull}
                     onClick={() => {
-                      setSelectedDate(new Date(cell.year, cell.month, cell.day));
-                      if (cell.muted) setViewDate(new Date(cell.year, cell.month, 1));
+                      if (isFull) return;
+
+                      setSelectedDate(
+                        new Date(cell.year, cell.month, cell.day),
+                      );
+
+                      if (cell.muted) {
+                        setViewDate(new Date(cell.year, cell.month, 1));
+                      }
                     }}
-                    aria-pressed={isSelected}
-                    aria-label={`${cell.day} ${monthNames[cell.month]} ${cell.year}`}
                     className={cn(
                       "mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-colors",
-                      cell.muted && !isSelected && "text-outline-variant",
-                      !cell.muted && !isSelected && "text-on-surface",
-                      isToday && !isSelected && "border border-primary-container",
+
+                      cell.muted && "text-outline-variant",
+
+                      isFull && "bg-gray-200 text-gray-400 cursor-not-allowed",
+
+                      !isFull &&
+                        !cell.muted &&
+                        "text-black hover:bg-primary-container/15",
+
+                      isToday &&
+                        !isSelected &&
+                        "border border-primary-container",
+
                       isSelected && "bg-[#7a9479] text-white",
-                      !isSelected && !cell.muted && "hover:bg-primary-container/15",
-                      !isSelected && cell.muted && "hover:bg-surface-container",
                     )}
                   >
                     {cell.day}
@@ -242,73 +420,96 @@ export default function PatientBookingSchedulePage() {
             </div>
           </DashboardCard>
 
-          <DashboardCard className="p-8">
-            <h3 className="mb-7 text-[20px] font-semibold text-[#a98ad6]">
-              {formatSelectedDate(selectedDate)}
-            </h3>
+          {/* DETAIL CARD */}
+          {selectedDate && (
+            <DashboardCard className="p-8">
+              <h3 className="mb-7 text-[20px] font-semibold text-[#a98ad6]">
+                {formatSelectedDate(selectedDate)}
+              </h3>
 
-            <section>
-              <h4 className="mb-4 text-[15px] font-semibold text-on-surface">Pilih Waktu</h4>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {times.map((time) => {
-                  const active = selectedTime === time;
-                  return (
-                    <button
-                      key={time}
-                      type="button"
-                      onClick={() => setSelectedTime(time)}
-                      aria-pressed={active}
-                      className={cn(
-                        "h-10 rounded-full border border-outline-variant bg-white text-[15px] font-medium transition-colors hover:border-primary hover:text-primary",
-                        active && "border-[#7a9479] bg-[#7a9479] text-white hover:border-[#7a9479] hover:text-white",
-                      )}
-                    >
-                      {time}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
+              {/* TIME */}
+              <section>
+                <h4 className="mb-4 text-[15px] font-semibold text-on-surface">
+                  Pilih Waktu
+                </h4>
 
-            <section className="mt-8">
-              <h4 className="mb-4 text-[15px] font-semibold text-on-surface">Metode Konsultasi</h4>
-              <div className="flex flex-wrap gap-7">
-                {methods.map((method) => {
-                  const checked = selectedMethod === method.id;
-                  return (
-                    <label key={method.id} className="inline-flex cursor-pointer items-center gap-3 text-[15px] font-medium text-on-surface">
-                      <input
-                        type="radio"
-                        name="metode-konsultasi"
-                        value={method.id}
-                        checked={checked}
-                        onChange={() => setSelectedMethod(method.id)}
-                        className="sr-only"
-                      />
-                      <span
-                        aria-hidden="true"
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {times.map((time) => {
+                    const active = selectedTime === time;
+
+                    return (
+                      <button
+                        key={time}
+                        type="button"
+                        onClick={() => setSelectedTime(time)}
                         className={cn(
-                          "flex h-6 w-6 items-center justify-center rounded-[6px] transition-colors",
-                          checked ? "bg-[#7a9479] text-white" : "border-2 border-outline-variant bg-white",
+                          "h-10 rounded-full border border-outline-variant bg-white text-[15px] font-medium transition-colors hover:border-primary hover:text-primary",
+
+                          active &&
+                            "border-[#7a9479] bg-[#7a9479] text-white hover:border-[#7a9479] hover:text-white",
                         )}
                       >
-                        {checked ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
-                      </span>
-                      {method.label}
-                    </label>
-                  );
-                })}
-              </div>
-            </section>
+                        {time}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
 
-            <button
-              type="button"
-              className="mt-8 inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#7a9479] px-8 text-[16px] font-semibold text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition hover:-translate-y-0.5 hover:bg-[#6a8669]"
-            >
-              Konfirmasi Booking
-              <ChevronRight className="h-5 w-5" aria-hidden="true" />
-            </button>
-          </DashboardCard>
+              {/* METHOD */}
+              <section className="mt-8">
+                <h4 className="mb-4 text-[15px] font-semibold text-on-surface">
+                  Metode Konsultasi
+                </h4>
+
+                <div className="flex flex-wrap gap-7">
+                  {methods.map((method) => {
+                    const checked = selectedMethod === method.id;
+
+                    return (
+                      <label
+                        key={method.id}
+                        className="inline-flex cursor-pointer items-center gap-3 text-[15px] font-medium text-on-surface"
+                      >
+                        <input
+                          type="radio"
+                          name="metode-konsultasi"
+                          value={method.id}
+                          checked={checked}
+                          onChange={() => setSelectedMethod(method.id)}
+                          className="sr-only"
+                        />
+
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "flex h-6 w-6 items-center justify-center rounded-[6px] transition-colors",
+
+                            checked
+                              ? "bg-[#7a9479] text-white"
+                              : "border-2 border-outline-variant bg-white",
+                          )}
+                        >
+                          {checked ? <Check className="h-4 w-4" /> : null}
+                        </span>
+
+                        {method.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* BUTTON */}
+              <button
+                type="button"
+                className="mt-8 inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#7a9479] px-8 text-[16px] font-semibold text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition hover:-translate-y-0.5 hover:bg-[#6a8669]"
+              >
+                Konfirmasi Booking
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </DashboardCard>
+          )}
         </div>
       </div>
     </DashboardLayout>

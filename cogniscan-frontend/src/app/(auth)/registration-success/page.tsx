@@ -16,7 +16,7 @@ export default function RegistrationSuccessPage() {
             Password akun kamu akan dikirimkan ke email yang telah di daftarkan
           </p>
           <p className="mt-2 text-xs italic text-on-surface-muted">
-            Pastikan kamu memeriksa email mu
+            Pastikan kamu memeriksa inbox email mu
           </p>
         </div>
       </section>

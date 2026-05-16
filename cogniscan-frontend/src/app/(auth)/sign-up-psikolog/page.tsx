@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useId, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import {
@@ -167,35 +168,57 @@ export default function SignUpPsikologPage() {
   return (
     <AuthShell className="max-w-[900px] before:hidden">
       <form className="px-9 py-10 sm:px-12">
-        <div className="mb-16 text-center">
+        <div className="mb-16 mt-5 text-center">
+          <Link href="/" className="inline-block mb-4">
+            <Image
+              src="/logo.png"
+              alt="CogniScan Logo"
+              width={120}
+              height={50}
+              priority
+              className="h-auto w-auto"
+            />
+          </Link>
           <h1 className="text-2xl font-extrabold tracking-[-0.01em] text-[#8d5367]">
             Registrasi Psikolog
           </h1>
           <p className="mx-auto mt-3 max-w-[560px] text-[16px] leading-7 text-on-surface-variant">
-            Lengkapi data diri dan dokumen resmi kamu untuk bergabung sebagai psikolog di
-            CogniScan.
+            Lengkapi data diri dan dokumen resmi kamu untuk bergabung sebagai
+            psikolog di CogniScan.
           </p>
         </div>
 
         <div className="grid gap-10 md:grid-cols-2">
           <section>
-            <SectionTitle icon={<CircleUserRound className="h-5 w-5" aria-hidden="true" />}>
+            <SectionTitle
+              icon={<CircleUserRound className="h-5 w-5" aria-hidden="true" />}
+            >
               Informasi Akun
             </SectionTitle>
             <div className="space-y-5">
-              <Field label="Nama Lengkap" placeholder="Dr. Sarah Alika, M.Psi" />
+              <Field
+                label="Nama Lengkap"
+                placeholder="Dr. Sarah Alika, M.Psi"
+              />
               <Field
                 label="Username"
                 placeholder="sarahalika_psy"
                 helper="Gunakan username unik untuk profil publik kamu."
               />
-              <Field label="Email" placeholder="sarah.alika@email.com" type="email" icon="mail" />
+              <Field
+                label="Email"
+                placeholder="sarah.alika@email.com"
+                type="email"
+                icon="mail"
+              />
               <PhoneField muted />
             </div>
           </section>
 
           <section>
-            <SectionTitle icon={<FileText className="h-5 w-5" aria-hidden="true" />}>
+            <SectionTitle
+              icon={<FileText className="h-5 w-5" aria-hidden="true" />}
+            >
               Unggah Dokumen Resmi
             </SectionTitle>
             <div className="space-y-5">

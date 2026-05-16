@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, CheckCircle2, ClipboardList } from "lucide-react";
+import { CalendarDays, CheckCircle2, ReceiptText } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import { getPatientNav, patientProfileHref, patientUser } from "@/components/patient";
 
@@ -17,7 +17,7 @@ export default function BookingReceiptPage() {
       profileHref={patientProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
-      <div className="max-w-[940px]">
+      <div>
         <div className="mb-6 border-b border-outline-variant">
           <div className="flex flex-wrap gap-6">
             <Link
@@ -31,13 +31,13 @@ export default function BookingReceiptPage() {
               href="/pasien/booking/receipt"
               className="inline-flex h-14 items-center gap-2 border-b-2 border-primary px-6 text-[16px] font-semibold text-primary"
             >
-              <ClipboardList className="h-5 w-5" aria-hidden="true" />
-              Buat Booking
+              <ReceiptText className="h-5 w-5" aria-hidden="true" />
+              Riwayat & Receipt
             </Link>
           </div>
         </div>
 
-        <h2 className="mb-8 border-t border-outline-variant pt-2 text-[20px] font-bold text-on-surface-muted">
+        <h2 className="mb-8  pt-2 text-[20px] font-bold text-on-surface-muted">
           Riwayat & Receipt (Preview)
         </h2>
 

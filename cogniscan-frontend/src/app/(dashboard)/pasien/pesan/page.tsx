@@ -34,7 +34,7 @@ export default function PatientMessagesPage() {
       profileHref={patientProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
-      <div className="max-w-[920px]">
+      <div>
         <header className="mb-10">
           <h2 className="text-[34px] font-extrabold tracking-[-0.02em] text-[#6f5794]">
             Pesan & Feedback
@@ -48,7 +48,7 @@ export default function PatientMessagesPage() {
           {messages.map((message) => (
             <article
               key={`${message.doctor}-${message.date}`}
-              className="rounded-r-[12px] border-l-4 border-[#a98ad6] bg-white px-7 py-6 shadow-[0_24px_45px_-32px_rgba(27,28,26,0.36)] transition-colors hover:bg-secondary-container/60"
+              className="rounded-r-[12px] border-l-4 border-[#a98ad6] bg-white px-7 py-6 shadow-[0_24px_45px_-32px_rgba(27,28,26,0.36)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_32px_55px_-28px_rgba(27,28,26,0.45)]"
             >
               <div className="mb-4 flex flex-wrap items-center gap-3">
                 <h3 className="text-[20px] font-extrabold leading-6 text-on-surface">

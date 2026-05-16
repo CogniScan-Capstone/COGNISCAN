@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Brain, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 export type DashboardNavItem = {
   label: string;
@@ -35,19 +36,31 @@ export function DashboardSidebar({
         {user.avatar ?? initials(user.name)}
       </div>
       <div className="min-w-0 flex-1 text-left">
-        <p className="truncate text-[15px] font-medium leading-5 text-on-surface">{user.name}</p>
-        <p className="truncate text-[13px] leading-5 text-on-surface-variant">{user.role}</p>
+        <p className="truncate text-[15px] font-medium leading-5 text-on-surface">
+          {user.name}
+        </p>
+        <p className="truncate text-[13px] leading-5 text-on-surface-variant">
+          {user.role}
+        </p>
       </div>
     </>
   );
 
   return (
     <aside className="sticky top-0 hidden h-screen border-r border-outline-variant/70 bg-white px-6 py-10 lg:flex lg:flex-col">
-      <Link href="/" className="mb-14 inline-flex items-center gap-1" aria-label="CogniScan beranda">
-        <span className="text-[38px] font-extrabold tracking-[-0.06em] text-[#343a40]">
-          Cogni<span className="font-serif italic font-medium text-primary-container">Scan</span>
-        </span>
-        <Brain className="h-16 w-16 stroke-[1.1] text-primary-fixed-dim" aria-hidden="true" />
+      <Link
+        href="/"
+        className="mb-14 inline-flex items-center gap-1"
+        aria-label="CogniScan beranda"
+      >
+        <Image
+          src="/logo.png"
+          alt="CogniScan Logo"
+          width={250}
+          height={70}
+          priority
+          className="h-auto w-auto"
+        />
       </Link>
 
       <nav className="flex flex-col gap-3" aria-label="Navigasi dashboard">
@@ -59,7 +72,8 @@ export function DashboardSidebar({
             className={cn(
               "flex h-12 items-center gap-3 rounded-full px-4 text-[16px] font-medium transition-colors",
               "text-on-surface-variant hover:bg-primary-container/10 hover:text-primary",
-              item.active && "bg-primary text-white hover:bg-primary hover:text-white",
+              item.active &&
+                "bg-[#476645] text-white hover:bg-[#476645] hover:text-white",
             )}
           >
             <span className="flex h-6 w-6 items-center justify-center [&_svg]:h-5 [&_svg]:w-5">
@@ -80,7 +94,9 @@ export function DashboardSidebar({
               {profileContent}
             </Link>
           ) : (
-            <div className="flex min-w-0 flex-1 items-center gap-3">{profileContent}</div>
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              {profileContent}
+            </div>
           )}
           <Link
             href={logoutHref}

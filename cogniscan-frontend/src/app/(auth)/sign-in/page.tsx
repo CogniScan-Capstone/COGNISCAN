@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { Eye } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { AuthLogo, AuthShell } from "@/components/auth/AuthShell";
 import { PrimaryAuthButton } from "@/components/auth/fields";
 import { dashboardPathForRole, fetchCurrentUser } from "@/lib/auth";
@@ -15,6 +15,7 @@ export default function SignInPage() {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,7 +43,7 @@ export default function SignInPage() {
   }
 
   return (
-    <AuthShell compact className="max-w-[448px]">
+    <AuthShell compact className="max-w-md">
       <form className="px-12 pb-16 pt-14 sm:px-12" onSubmit={handleSubmit}>
         <div className="mb-10 text-center">
           <AuthLogo />
@@ -79,13 +80,21 @@ export default function SignInPage() {
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="........"
                 required
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
               />
-              <Eye
-                className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#4f584d]"
-                aria-hidden="true"
-              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#4f584d] hover:text-[#343832] transition"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5" aria-hidden="true" />
+                ) : (
+                  <Eye className="h-5 w-5" aria-hidden="true" />
+                )}
+              </button>
             </span>
           </label>
         </div>

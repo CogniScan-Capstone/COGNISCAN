@@ -136,25 +136,42 @@ const sortLabel: Record<SortKey, string> = {
 };
 
 export default function PsikologFeedbackPage() {
-  const [priorityFilter, setPriorityFilter] = useState<Priority | "all">("high");
+  const [priorityFilter, setPriorityFilter] = useState<Priority | "all">(
+    "high",
+  );
   const [statusFilter, setStatusFilter] = useState<ResponseStatus | "all">(
     "belum-direspon",
   );
   const [sort, setSort] = useState<SortKey>("terbaru");
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
     const list = feedback.filter((item) => {
+      const matchSearch = item.name
+        .toLowerCase()
+        .includes(search.toLowerCase());
+
+      if (!matchSearch) {
+        return false;
+      }
+
       if (priorityFilter !== "all" && item.priority !== priorityFilter) {
         return false;
       }
+
       if (statusFilter !== "all" && item.status !== statusFilter) {
         return false;
       }
+
       return true;
     });
 
-    const priorityRank: Record<Priority, number> = { high: 3, medium: 2, low: 1 };
+    const priorityRank: Record<Priority, number> = {
+      high: 3,
+      medium: 2,
+      low: 1,
+    };
     list.sort((a, b) => {
       if (sort === "terbaru") return b.createdAt - a.createdAt;
       if (sort === "terlama") return a.createdAt - b.createdAt;
@@ -162,7 +179,7 @@ export default function PsikologFeedbackPage() {
     });
 
     return list;
-  }, [priorityFilter, statusFilter, sort]);
+  }, [priorityFilter, statusFilter, sort, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -175,6 +192,7 @@ export default function PsikologFeedbackPage() {
     setPriorityFilter("all");
     setStatusFilter("all");
     setSort("terbaru");
+    setSearch("");
     setPage(1);
   };
 
@@ -238,20 +256,33 @@ export default function PsikologFeedbackPage() {
               }}
             />
           </div>
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="inline-flex items-center gap-2 text-[14px] font-medium text-on-surface-variant transition-colors hover:text-primary"
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-            Reset Filter
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Cari nama pasien..."
+              className="h-10 w-[200px] rounded-full border border-outline-variant bg-white px-4 text-[14px] text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="inline-flex items-center gap-2 text-[14px] font-medium text-on-surface-variant transition-colors hover:text-primary"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+              Reset Filter
+            </button>
+          </div>
         </DashboardCard>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="text-[14px] text-on-surface-variant">
             Menampilkan {filtered.length} hasil
           </p>
+
           <Dropdown
             label="Sort"
             value={sortLabel[sort]}
@@ -418,7 +449,10 @@ function Dropdown({
       >
         <span className="text-on-surface-variant">{label}:</span>
         {dot ? (
-          <span className={cn("h-2 w-2 rounded-full", dot)} aria-hidden="true" />
+          <span
+            className={cn("h-2 w-2 rounded-full", dot)}
+            aria-hidden="true"
+          />
         ) : null}
         <span className={cn("font-semibold", valueClassName)}>{value}</span>
         <ChevronDown
@@ -472,7 +506,10 @@ function FeedbackPagination({
 }) {
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
   return (
-    <nav className="flex items-center justify-center gap-3" aria-label="Pagination">
+    <nav
+      className="flex items-center justify-center gap-3"
+      aria-label="Pagination"
+    >
       <button
         type="button"
         onClick={() => onChange(Math.max(1, currentPage - 1))}
