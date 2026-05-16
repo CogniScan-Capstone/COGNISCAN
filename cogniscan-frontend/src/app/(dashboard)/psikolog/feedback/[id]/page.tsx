@@ -270,7 +270,7 @@ export default function FeedbackDetailPage({
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span
                     className={cn(
-                      "inline-flex h-7 items-center rounded-full border px-3 text-[11px] font-bold uppercase tracking-[0.1em]",
+                      "inline-flex h-7 items-center rounded-full border px-3 text-[11px] font-bold uppercase tracking-widest",
                       topicToneClass[data.topicTone],
                     )}
                   >

@@ -198,7 +198,7 @@ export default function PatientBookingSchedulePage() {
       profileHref={patientProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
-      <div className="max-w-[940px]">
+      <div className="max-w-235">
         <div className="mb-12 border-b border-outline-variant">
           <div className="flex flex-wrap gap-6">
             <button
@@ -288,7 +288,7 @@ export default function PatientBookingSchedulePage() {
                 ref={pickerRef}
                 role="dialog"
                 aria-label="Pilih bulan dan tahun"
-                className="absolute left-6 right-6 top-[60px] z-20 rounded-[14px] border border-outline-variant bg-white p-4 shadow-[0_20px_40px_-18px_rgba(27,28,26,0.25)]"
+                className="absolute left-6 right-6 top-15 z-20 rounded-[14px] border border-outline-variant bg-white p-4 shadow-[0_20px_40px_-18px_rgba(27,28,26,0.25)]"
               >
                 <div className="mb-3 flex items-center justify-between">
                   <button

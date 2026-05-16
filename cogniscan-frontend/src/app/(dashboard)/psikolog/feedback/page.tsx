@@ -265,7 +265,7 @@ export default function PsikologFeedbackPage() {
                 setPage(1);
               }}
               placeholder="Cari nama pasien..."
-              className="h-10 w-[200px] rounded-full border border-outline-variant bg-white px-4 text-[14px] text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="h-10 w-50 rounded-full border border-outline-variant bg-white px-4 text-[14px] text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
             <button
               type="button"
@@ -315,7 +315,7 @@ export default function PsikologFeedbackPage() {
                       </h3>
                       <span
                         className={cn(
-                          "inline-flex h-7 items-center rounded-full border px-3 text-[11px] font-bold uppercase tracking-[0.1em]",
+                          "inline-flex h-7 items-center rounded-full border px-3 text-[11px] font-bold uppercase tracking-widest",
                           topicToneClass[item.topicTone],
                         )}
                       >
@@ -329,7 +329,7 @@ export default function PsikologFeedbackPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={cn(
-                        "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold uppercase tracking-[0.1em]",
+                        "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold uppercase tracking-widest",
                         priorityBadge[item.priority],
                       )}
                     >
@@ -337,7 +337,7 @@ export default function PsikologFeedbackPage() {
                     </span>
                     <span
                       className={cn(
-                        "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold uppercase tracking-[0.1em]",
+                        "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold uppercase tracking-widest",
                         statusBadge[item.status],
                       )}
                     >
@@ -464,7 +464,7 @@ function Dropdown({
         <ul
           role="listbox"
           className={cn(
-            "absolute z-20 mt-2 min-w-[180px] overflow-hidden rounded-[12px] border border-outline-variant bg-white py-1 shadow-[0_18px_36px_-18px_rgba(27,28,26,0.22)]",
+            "absolute z-20 mt-2 min-w-45 overflow-hidden rounded-[12px] border border-outline-variant bg-white py-1 shadow-[0_18px_36px_-18px_rgba(27,28,26,0.22)]",
             inline ? "right-0" : "left-0",
           )}
         >

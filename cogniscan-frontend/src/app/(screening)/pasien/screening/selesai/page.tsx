@@ -25,7 +25,7 @@ export default function ScreeningCompletePage() {
 
   return (
     <main className="min-h-screen bg-surface px-5 py-12 text-on-surface">
-      <section className="mx-auto max-w-[580px] rounded-[24px] bg-white px-8 py-12 shadow-[0_24px_45px_-32px_rgba(27,28,26,0.36)] sm:px-10">
+      <section className="mx-auto max-w-145 rounded-[24px] bg-white px-8 py-12 shadow-[0_24px_45px_-32px_rgba(27,28,26,0.36)] sm:px-10">
         <div className="text-center">
           <div className="mx-auto mb-8 flex h-28 w-28 items-center justify-center rounded-full bg-secondary-container text-[#a98ad6]">
             <Image
@@ -41,7 +41,7 @@ export default function ScreeningCompletePage() {
           <p className="mt-3 text-[16px] font-semibold text-on-surface">
             Kamu sudah menyelesaikan semua pertanyaan screening.
           </p>
-          <p className="mx-auto mt-2 max-w-[460px] text-[15px] leading-6 text-on-surface-muted">
+          <p className="mx-auto mt-2 max-w-115 text-[15px] leading-6 text-on-surface-muted">
             Silahkan pilih psikolog dan tunggu respon dari mereka. Hasil dan
             feedback akan segera dikirimkan untukmu.
           </p>

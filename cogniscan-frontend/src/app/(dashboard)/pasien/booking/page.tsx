@@ -65,13 +65,13 @@ export default function PatientBookingPage() {
             <h2 className="text-[30px] font-extrabold tracking-[-0.02em] text-[#a98ad6]">
               Konsultasi lanjutan belum tersedia
             </h2>
-            <p className="mx-auto mt-4 max-w-[640px] text-[16px] leading-7 text-on-surface-variant">
+            <p className="mx-auto mt-4 max-w-160 text-[16px] leading-7 text-on-surface-variant">
               Selesaikan screening awal terlebih dahulu. Setelah psikolog
               meninjau hasil refleksimu dan merekomendasikan konsultasi
               lanjutan, jadwal yang tersedia akan muncul di halaman ini.
             </p>
 
-            <div className="mx-auto mt-8 grid max-w-[700px] gap-4 text-left md:grid-cols-3">
+            <div className="mx-auto mt-8 grid max-w-175 gap-4 text-left md:grid-cols-3">
               {[
                 "Selesaikan screening awal",
                 "Tunggu feedback psikolog",

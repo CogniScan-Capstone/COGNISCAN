@@ -18,7 +18,7 @@ export default function SignUpPage() {
   };
 
   return (
-    <AuthShell className="max-w-[800px]">
+    <AuthShell className="max-w-200">
       <form className="px-8 pb-16 pt-20 sm:px-16 md:px-20">
         <div className="mb-12 text-center">
           <AuthLogo />
