@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
-import { getPsikologNav, psikologUser } from "@/components/psikolog";
+import {
+  getPsikologNav,
+  psikologProfileHref,
+  psikologUser,
+} from "@/components/psikolog";
 import { cn } from "@/lib/utils";
 
 type Priority = "high" | "medium" | "low";
@@ -201,6 +205,7 @@ export default function PsikologFeedbackPage() {
       title="Feedback"
       navItems={getPsikologNav("feedback")}
       user={psikologUser}
+      profileHref={psikologProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
       <div className="space-y-6">

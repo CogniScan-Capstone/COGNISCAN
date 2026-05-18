@@ -1,6 +1,5 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Brain } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 

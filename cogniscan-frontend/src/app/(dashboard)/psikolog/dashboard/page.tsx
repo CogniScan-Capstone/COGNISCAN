@@ -14,7 +14,11 @@ import {
   MetricCard,
   StatusBadge,
 } from "@/components/dashboard";
-import { getPsikologNav, psikologUser } from "@/components/psikolog";
+import {
+  getPsikologNav,
+  psikologProfileHref,
+  psikologUser,
+} from "@/components/psikolog";
 import { cn } from "@/lib/utils";
 
 type SessionRow = {
@@ -101,6 +105,7 @@ export default function PsikologDashboardPage() {
       title="Dashboard"
       navItems={getPsikologNav("dashboard")}
       user={psikologUser}
+      profileHref={psikologProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
       <div className="space-y-8">

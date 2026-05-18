@@ -1,10 +1,15 @@
-import { CheckCircle2, Eye, LockKeyhole } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { CheckCircle2, Eye, EyeOff, LockKeyhole } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { PrimaryAuthButton } from "@/components/auth/fields";
 
 const checks = ["Minimal 8 Karakter", "Huruf Kapital (A-Z)", "Angka (0-9)", "Simbol (@, #, $)"];
 
 export default function ResetPasswordPage() {
+  const [showPassword, setShowPassword] = useState(false);
+
   return (
     <AuthShell compact className="max-w-[450px]">
       <form className="px-8 pb-9 pt-7 sm:px-8">
@@ -18,14 +23,22 @@ export default function ResetPasswordPage() {
             aria-hidden="true"
           />
           <input
-            type="password"
+            type={showPassword ? "text" : "password"}
             placeholder="Masukkan password baru"
             className="h-12 w-full rounded-[10px] border border-[#c9cec4] bg-[#fdfcf9] px-12 text-[15px] text-on-surface outline-none transition focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
           />
-          <Eye
-            className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#4f584d]"
-            aria-hidden="true"
-          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((value) => !value)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#4f584d] transition hover:text-[#343832]"
+            aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+          >
+            {showPassword ? (
+              <EyeOff className="h-5 w-5" aria-hidden="true" />
+            ) : (
+              <Eye className="h-5 w-5" aria-hidden="true" />
+            )}
+          </button>
         </label>
 
         <div className="mt-5 grid grid-cols-4 gap-2">

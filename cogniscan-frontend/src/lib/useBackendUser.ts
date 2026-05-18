@@ -1,0 +1,60 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { fetchCurrentUser, type BackendUser } from "@/lib/auth";
+import { supabase } from "@/lib/supabase/client";
+
+function getMetadataName(metadata: Record<string, unknown> | undefined) {
+  const value = metadata?.nama_lengkap;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+export function useBackendUser() {
+  const [user, setUser] = useState<BackendUser | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUser() {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) return;
+
+      const sessionUser = data.session?.user;
+      const metadataName = getMetadataName(sessionUser?.user_metadata);
+      if (mounted && sessionUser) {
+        setUser({
+          id: sessionUser.id,
+          email: sessionUser.email ?? "",
+          peran:
+            typeof sessionUser.user_metadata?.peran === "string"
+              ? sessionUser.user_metadata.peran
+              : undefined,
+          nama_lengkap: metadataName,
+        });
+      }
+
+      try {
+        const currentUser = await fetchCurrentUser(accessToken);
+        if (mounted) {
+          setUser({
+            ...currentUser,
+            nama_lengkap: currentUser.nama_lengkap?.trim() || metadataName,
+          });
+        }
+      } catch {
+        if (mounted && !sessionUser) setUser(null);
+      }
+    }
+
+    loadUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return user;
+}

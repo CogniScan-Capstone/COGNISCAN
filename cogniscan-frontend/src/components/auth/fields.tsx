@@ -1,5 +1,14 @@
-import { Eye, LockKeyhole, Mail, UserRound } from "lucide-react";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+"use client";
+
+import { useState } from "react";
+import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from "lucide-react";
+import type {
+  ButtonHTMLAttributes,
+  ChangeEventHandler,
+  InputHTMLAttributes,
+  ReactNode,
+  TextareaHTMLAttributes,
+} from "react";
 import { cn } from "@/lib/utils";
 
 type FieldProps = {
@@ -10,7 +19,7 @@ type FieldProps = {
   icon?: "mail" | "lock" | "user";
   showEye?: boolean;
   className?: string;
-};
+} & Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "placeholder" | "type">;
 
 const icons = {
   mail: Mail,
@@ -26,8 +35,11 @@ export function Field({
   icon,
   showEye,
   className,
+  ...props
 }: FieldProps) {
   const Icon = icon ? icons[icon] : null;
+  const [showValue, setShowValue] = useState(false);
+  const inputType = showEye && type === "password" && showValue ? "text" : type;
 
   return (
     <label className={cn("block", className)}>
@@ -42,7 +54,8 @@ export function Field({
           />
         ) : null}
         <input
-          type={type}
+          {...props}
+          type={inputType}
           placeholder={placeholder}
           className={cn(
             "h-12 w-full rounded-[10px] border border-[#c9cec4] bg-[#fdfcf9] px-4 text-[15px] text-on-surface outline-none transition",
@@ -52,10 +65,18 @@ export function Field({
           )}
         />
         {showEye ? (
-          <Eye
-            className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#4f584d]"
-            aria-hidden="true"
-          />
+          <button
+            type="button"
+            onClick={() => setShowValue((value) => !value)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#4f584d] transition hover:text-[#343832]"
+            aria-label={showValue ? "Sembunyikan password" : "Tampilkan password"}
+          >
+            {showValue ? (
+              <EyeOff className="h-5 w-5" aria-hidden="true" />
+            ) : (
+              <Eye className="h-5 w-5" aria-hidden="true" />
+            )}
+          </button>
         ) : null}
       </span>
       {helper ? (
@@ -65,11 +86,25 @@ export function Field({
   );
 }
 
-export function PhoneField({ muted = false }: { muted?: boolean }) {
+export function PhoneField({
+  muted = false,
+  label = "Phone Number",
+  value,
+  onChange,
+  required,
+  placeholder = "812 3456 7890",
+}: {
+  muted?: boolean;
+  label?: string;
+  value?: string;
+  onChange?: ChangeEventHandler<HTMLInputElement>;
+  required?: boolean;
+  placeholder?: string;
+}) {
   return (
     <label className="block">
       <span className="mb-2 block text-[15px] font-semibold leading-none text-[#343832]">
-        Phone Number
+        {label}
       </span>
       <span className="grid h-12 grid-cols-[76px_1fr] overflow-hidden rounded-[10px] border border-[#c9cec4] bg-[#fdfcf9] focus-within:border-primary-container focus-within:ring-4 focus-within:ring-primary-container/15">
         <span
@@ -82,7 +117,11 @@ export function PhoneField({ muted = false }: { muted?: boolean }) {
         </span>
         <input
           type="tel"
-          placeholder="812 3456 7890"
+          value={value}
+          onChange={onChange}
+          required={required}
+          placeholder={placeholder}
+          autoComplete="tel"
           className={cn(
             "h-full min-w-0 border-0 bg-transparent px-4 text-[15px] outline-none placeholder:text-[#737c8f]",
             muted && "bg-[#ecede8]",
@@ -93,15 +132,23 @@ export function PhoneField({ muted = false }: { muted?: boolean }) {
   );
 }
 
-export function TextAreaField({ label, placeholder }: { label: string; placeholder: string }) {
+export function TextAreaField({
+  label,
+  placeholder,
+  ...props
+}: {
+  label: string;
+  placeholder: string;
+} & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "className" | "placeholder">) {
   return (
     <label className="block">
       <span className="mb-2 block text-[15px] font-semibold leading-none text-[#343832]">
         {label}
       </span>
       <textarea
+        {...props}
         placeholder={placeholder}
-        rows={3}
+        rows={props.rows ?? 3}
         className="w-full resize-none rounded-[10px] border border-[#c9cec4] bg-[#fdfcf9] px-4 py-3 text-[15px] text-on-surface outline-none transition placeholder:text-[#737c8f] focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
       />
     </label>

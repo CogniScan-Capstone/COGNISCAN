@@ -5,7 +5,6 @@ import { useState } from "react";
 import {
   CalendarDays,
   LockKeyhole,
-  MessageSquareText,
   ReceiptText,
 } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, HeartHandshake } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 
 const initialPsychologists = [

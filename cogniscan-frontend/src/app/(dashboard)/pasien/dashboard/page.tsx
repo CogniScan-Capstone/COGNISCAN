@@ -1,11 +1,14 @@
+"use client";
+
 import { BriefcaseMedical, MessagesSquare, Info } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import {
   getPatientNav,
   patientProfileHref,
-  patientUser,
+  patientUser as defaultPatientUser,
   ScreeningTopicCard,
 } from "@/components/patient";
+import { useBackendUser } from "@/lib/useBackendUser";
 
 const topics = [
   {
@@ -47,11 +50,18 @@ const topics = [
 ];
 
 export default function PasienDashboardPage() {
+  const backendUser = useBackendUser();
+  const displayUser = {
+    ...defaultPatientUser,
+    name: backendUser?.nama_lengkap?.trim() || defaultPatientUser.name,
+  };
+  const patientUser = displayUser;
+
   return (
     <DashboardLayout
       title={`Halo, ${patientUser.name} 👋`}
       navItems={getPatientNav("dashboard")}
-      user={patientUser}
+      user={displayUser}
       profileHref={patientProfileHref}
       contentClassName="lg:px-10 xl:px-10"
 

@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Brain, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import { useBackendUser } from "@/lib/useBackendUser";
 
 export type DashboardNavItem = {
   label: string;
@@ -30,17 +33,23 @@ export function DashboardSidebar({
   logoutHref = "/sign-in",
   profileHref,
 }: DashboardSidebarProps) {
+  const backendUser = useBackendUser();
+  const displayUser = {
+    ...user,
+    name: backendUser?.nama_lengkap?.trim() || user.name,
+  };
+
   const profileContent = (
     <>
       <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-fixed-dim text-sm font-bold text-primary">
-        {user.avatar ?? initials(user.name)}
+        {displayUser.avatar ?? initials(displayUser.name)}
       </div>
       <div className="min-w-0 flex-1 text-left">
         <p className="truncate text-[15px] font-medium leading-5 text-on-surface">
-          {user.name}
+          {displayUser.name}
         </p>
         <p className="truncate text-[13px] leading-5 text-on-surface-variant">
-          {user.role}
+          {displayUser.role}
         </p>
       </div>
     </>

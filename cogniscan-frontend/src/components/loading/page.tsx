@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from "react";
 import Image from "next/image";
 
 const styles = `
@@ -9,7 +8,9 @@ const styles = `
   .loading-overlay {
     position: fixed;
     inset: 0;
-    background-color: #c8ddb5;
+    background-color: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -38,8 +39,7 @@ const styles = `
     width: 112px;
     height: 112px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.35);
-    backdrop-filter: blur(6px);
+    background: transparent;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -58,7 +58,7 @@ const styles = `
 
   .loading-text {
     margin-top: 20px;
-    color: rgba(255, 255, 255, 0.9);
+    color: #41573e;
     font-size: 14px;
     font-weight: 500;
     letter-spacing: 0.5px;
@@ -76,11 +76,11 @@ const styles = `
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(65, 87, 62, 0.35);
     animation: dot-pulse 1.4s ease-in-out infinite;
   }
 
-  .dot:nth-child(1) { animation-delay: 0s; background: rgba(255,255,255,0.9); }
+  .dot:nth-child(1) { animation-delay: 0s; background: rgba(65,87,62,0.85); }
   .dot:nth-child(2) { animation-delay: 0.2s; }
   .dot:nth-child(3) { animation-delay: 0.4s; }
 
@@ -93,30 +93,22 @@ const styles = `
 interface LoadingPageProps {
   isLoading?: boolean;
   text?: string;
+  showText?: boolean;
   onHidden?: () => void;
 }
 
 export default function LoadingPage({
   isLoading = true,
   text = "Memuat...",
+  showText = true,
   onHidden,
 }: LoadingPageProps) {
-  const [visible, setVisible] = useState(isLoading);
-
-  useEffect(() => {
-    if (isLoading) {
-      setVisible(true);
-    }
-  }, [isLoading]);
-
-  const handleTransitionEnd = () => {
+  const handleTransitionEnd = (event: React.TransitionEvent<HTMLDivElement>) => {
+    if (event.propertyName !== "opacity") return;
     if (!isLoading) {
-      setVisible(false);
       onHidden?.();
     }
   };
-
-  if (!visible) return null;
 
   return (
     <>
@@ -140,12 +132,16 @@ export default function LoadingPage({
           </div>
         </div>
 
-        <p className="loading-text">{text}</p>
-        <div className="dots">
-          <div className="dot" />
-          <div className="dot" />
-          <div className="dot" />
-        </div>
+        {showText ? (
+          <>
+            <p className="loading-text">{text}</p>
+            <div className="dots">
+              <div className="dot" />
+              <div className="dot" />
+              <div className="dot" />
+            </div>
+          </>
+        ) : null}
       </div>
     </>
   );

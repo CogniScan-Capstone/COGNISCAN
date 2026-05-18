@@ -31,7 +31,7 @@ export function getPatientNav(active: "dashboard" | "booking" | "pesan" | "konsu
 }
 
 export const patientUser = {
-  name: "Budi Santoso",
+  name: "Pasien",
   role: "Patient",
 };
 

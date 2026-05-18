@@ -13,7 +13,11 @@ import {
   Wallet,
 } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
-import { getPsikologNav, psikologUser } from "@/components/psikolog";
+import {
+  getPsikologNav,
+  psikologProfileHref,
+  psikologUser,
+} from "@/components/psikolog";
 import { cn } from "@/lib/utils";
 
 type ProfileForm = {
@@ -37,10 +41,8 @@ const initialProfile: ProfileForm = {
 export default function PsikologProfilePage() {
   const [profile, setProfile] = useState<ProfileForm>(initialProfile);
   const [draft, setDraft] = useState<ProfileForm>(initialProfile);
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -54,8 +56,7 @@ export default function PsikologProfilePage() {
     draft.email !== profile.email ||
     draft.address !== profile.address;
 
-  const passwordDirty =
-    currentPassword !== "" || newPassword !== "" || confirmPassword !== "";
+  const passwordDirty = newPassword !== "" || confirmPassword !== "";
 
   const passwordMismatch =
     newPassword !== "" && confirmPassword !== "" && newPassword !== confirmPassword;
@@ -63,14 +64,11 @@ export default function PsikologProfilePage() {
   const canSave =
     (dirty || passwordDirty) &&
     (!passwordDirty ||
-      (currentPassword.length >= 6 &&
-        newPassword.length >= 8 &&
-        newPassword === confirmPassword));
+      (newPassword.length >= 8 && newPassword === confirmPassword));
 
   const handleSave = () => {
     if (!canSave) return;
     setProfile(draft);
-    setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
     setIsEditing(false);
@@ -80,7 +78,6 @@ export default function PsikologProfilePage() {
 
   const handleCancel = () => {
     setDraft(profile);
-    setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
     setIsEditing(false);
@@ -91,6 +88,7 @@ export default function PsikologProfilePage() {
       title="Profil Saya"
       navItems={getPsikologNav("dashboard")}
       user={psikologUser}
+      profileHref={psikologProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
       <div className="space-y-0">
@@ -215,6 +213,23 @@ export default function PsikologProfilePage() {
                   placeholder="Masukkan password baru"
                   disabled={!isEditing}
                 />
+                <label className="mt-3 block text-[12px] font-semibold text-on-surface-variant">
+                  Konfirmasi Password Baru
+                </label>
+                <PasswordField
+                  label=""
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  visible={showConfirm}
+                  onToggle={() => setShowConfirm((v) => !v)}
+                  placeholder="Ulangi password baru"
+                  disabled={!isEditing}
+                />
+                {passwordMismatch ? (
+                  <p className="mt-2 text-[12px] font-semibold text-[#a3372e]">
+                    Konfirmasi password belum sama.
+                  </p>
+                ) : null}
                 {/* Checklist validasi */}
                 <ul className="mt-3 space-y-1">
                   {[

@@ -7,7 +7,6 @@ import {
   Brain,
   CheckCircle2,
   Edit3,
-  Loader2,
   PauseCircle,
   Save,
   Send,
@@ -16,7 +15,11 @@ import {
   XCircle,
 } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
-import { getPsikologNav, psikologUser } from "@/components/psikolog";
+import {
+  getPsikologNav,
+  psikologProfileHref,
+  psikologUser,
+} from "@/components/psikolog";
 import { cn } from "@/lib/utils";
 
 type AiAccuracy = "sangat-akurat" | "sebagian-akurat" | "tidak-akurat";
@@ -238,6 +241,7 @@ export default function FeedbackDetailPage({
       title="Feedback"
       navItems={getPsikologNav("feedback")}
       user={psikologUser}
+      profileHref={psikologProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
       <div className="space-y-6">
@@ -561,6 +565,20 @@ export default function FeedbackDetailPage({
               </div>
 
               <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+                {savedDraft ? (
+                  <span className="inline-flex h-11 items-center gap-2 rounded-full bg-[#dfeedf] px-4 text-[13px] font-semibold text-[#3f5a3f]">
+                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                    Draft tersimpan
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleSaveDraft}
+                  className="inline-flex h-11 items-center gap-2 rounded-full border border-outline-variant bg-white px-5 text-[14px] font-semibold text-on-surface-variant transition hover:border-primary hover:text-primary"
+                >
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                  Simpan Draft
+                </button>
                 <button
                   type="button"
                   onClick={handleSubmit}

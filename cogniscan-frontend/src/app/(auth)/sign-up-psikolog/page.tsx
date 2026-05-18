@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useId, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useId, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import {
   ArrowRight,
@@ -12,9 +13,38 @@ import {
   X,
 } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
-import { Field, PhoneField } from "@/components/auth/fields";
+import {
+  Field,
+  PhoneField,
+  PrimaryAuthButton,
+  TextAreaField,
+} from "@/components/auth/fields";
+import LoadingPage from "@/components/loading/page";
+import { registerPsikologCandidate } from "@/lib/auth";
+import { waitForMinimumLoading } from "@/lib/loadingDelay";
 
 const MB = 1024 * 1024;
+
+function optionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function optionalNumber(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? Number(trimmed) : undefined;
+}
+
+function normalizeIndonesianPhone(value: string) {
+  const raw = value.trim();
+  if (!raw) return undefined;
+
+  const compact = raw.replace(/[\s().-]/g, "");
+  if (compact.startsWith("+")) return compact;
+  if (compact.startsWith("0")) return `+62${compact.slice(1)}`;
+  if (compact.startsWith("62")) return `+${compact}`;
+  return `+62${compact}`;
+}
 
 function SectionTitle({
   icon,
@@ -158,18 +188,83 @@ function UploadBox({
 }
 
 export default function SignUpPsikologPage() {
-  const [sip, setSip] = useState<File | null>(null);
-  const [ktp, setKtp] = useState<File | null>(null);
-  const [ijazah, setIjazah] = useState<File | null>(null);
+  const router = useRouter();
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [specialization, setSpecialization] = useState("");
+  const [experienceYears, setExperienceYears] = useState("");
+  const [university, setUniversity] = useState("");
+  const [graduationYear, setGraduationYear] = useState("");
+  const [practiceAddress, setPracticeAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [province, setProvince] = useState("");
+  const [consultationFee, setConsultationFee] = useState("");
+  const [strNumber, setStrNumber] = useState("");
+  const [sipNumber, setSipNumber] = useState("");
+  const [strExpiredAt, setStrExpiredAt] = useState("");
+  const [sipExpiredAt, setSipExpiredAt] = useState("");
+  const [bio, setBio] = useState("");
+  const [strFile, setStrFile] = useState<File | null>(null);
+  const [sipFile, setSipFile] = useState<File | null>(null);
+  const [strError, setStrError] = useState<string | undefined>();
   const [sipError, setSipError] = useState<string | undefined>();
-  const [ktpError, setKtpError] = useState<string | undefined>();
-  const [ijazahError, setIjazahError] = useState<string | undefined>();
+  const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError("");
+
+    if (!strFile || !sipFile) {
+      setFormError("Dokumen STR dan SIP wajib diunggah untuk proses verifikasi.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const loadingStartedAt = Date.now();
+
+    try {
+      await registerPsikologCandidate({
+        email,
+        nama_lengkap: fullName.trim(),
+        nomor_hp: normalizeIndonesianPhone(phone),
+        spesialisasi: optionalText(specialization),
+        pengalaman_tahun: optionalNumber(experienceYears),
+        universitas_asal: optionalText(university),
+        tahun_lulus: optionalNumber(graduationYear),
+        alamat_praktik: optionalText(practiceAddress),
+        kota: optionalText(city),
+        provinsi: optionalText(province),
+        tarif_konsultasi: optionalNumber(consultationFee),
+        no_str: strNumber.trim(),
+        no_sip: sipNumber.trim(),
+        tgl_kadaluarsa_str: optionalText(strExpiredAt),
+        tgl_kadaluarsa_sip: optionalText(sipExpiredAt),
+        upload_dokumen_str: strFile.name,
+        upload_dokumen_sip: sipFile.name,
+        bio_singkat: optionalText(bio),
+      });
+
+      await waitForMinimumLoading(loadingStartedAt);
+      router.push("/registration-success");
+    } catch (error) {
+      await waitForMinimumLoading(loadingStartedAt);
+      setFormError(
+        error instanceof Error ? error.message : "Registrasi psikolog gagal diproses.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
-    <AuthShell className="max-w-[900px] before:hidden">
-      <form className="px-9 py-10 sm:px-12">
-        <div className="mb-16 mt-5 text-center">
-          <Link href="/" className="inline-block mb-4">
+    <>
+      {isSubmitting ? <LoadingPage text="Mengirim pendaftaran..." showText={false} /> : null}
+      <AuthShell className="max-w-[960px] before:hidden">
+      <form className="px-9 py-10 sm:px-12" onSubmit={handleSubmit}>
+        <div className="mb-14 mt-5 text-center">
+          <Link href="/" className="mb-4 inline-block">
             <Image
               src="/logo.png"
               alt="CogniScan Logo"
@@ -182,9 +277,9 @@ export default function SignUpPsikologPage() {
           <h1 className="text-2xl font-extrabold tracking-[-0.01em] text-[#8d5367]">
             Registrasi Psikolog
           </h1>
-          <p className="mx-auto mt-3 max-w-[560px] text-[16px] leading-7 text-on-surface-variant">
-            Lengkapi data diri dan dokumen resmi kamu untuk bergabung sebagai
-            psikolog di CogniScan.
+          <p className="mx-auto mt-3 max-w-[600px] text-[16px] leading-7 text-on-surface-variant">
+            Lengkapi data profesional dan dokumen resmi. Akun login akan dibuat
+            setelah admin menyetujui pendaftaran.
           </p>
         </div>
 
@@ -193,25 +288,78 @@ export default function SignUpPsikologPage() {
             <SectionTitle
               icon={<CircleUserRound className="h-5 w-5" aria-hidden="true" />}
             >
-              Informasi Akun
+              Informasi Profil
             </SectionTitle>
             <div className="space-y-5">
               <Field
                 label="Nama Lengkap"
                 placeholder="Dr. Sarah Alika, M.Psi"
-              />
-              <Field
-                label="Username"
-                placeholder="sarahalika_psy"
-                helper="Gunakan username unik untuk profil publik kamu."
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                required
               />
               <Field
                 label="Email"
                 placeholder="sarah.alika@email.com"
                 type="email"
                 icon="mail"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
               />
-              <PhoneField muted />
+              <PhoneField
+                muted
+                label="Nomor WhatsApp"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+              />
+              <Field
+                label="Spesialisasi"
+                placeholder="Klinis dewasa, keluarga, remaja..."
+                value={specialization}
+                onChange={(event) => setSpecialization(event.target.value)}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Pengalaman"
+                  placeholder="5"
+                  type="number"
+                  min="0"
+                  value={experienceYears}
+                  onChange={(event) => setExperienceYears(event.target.value)}
+                />
+                <Field
+                  label="Tarif Konsultasi"
+                  placeholder="150000"
+                  type="number"
+                  min="0"
+                  value={consultationFee}
+                  onChange={(event) => setConsultationFee(event.target.value)}
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Universitas"
+                  placeholder="Universitas Indonesia"
+                  value={university}
+                  onChange={(event) => setUniversity(event.target.value)}
+                />
+                <Field
+                  label="Tahun Lulus"
+                  placeholder="2020"
+                  type="number"
+                  min="1950"
+                  value={graduationYear}
+                  onChange={(event) => setGraduationYear(event.target.value)}
+                />
+              </div>
+              <TextAreaField
+                label="Bio Singkat"
+                placeholder="Ceritakan pendekatan praktik dan area pendampingan kamu..."
+                rows={4}
+                value={bio}
+                onChange={(event) => setBio(event.target.value)}
+              />
             </div>
           </section>
 
@@ -219,42 +367,91 @@ export default function SignUpPsikologPage() {
             <SectionTitle
               icon={<FileText className="h-5 w-5" aria-hidden="true" />}
             >
-              Unggah Dokumen Resmi
+              Legalitas dan Praktik
             </SectionTitle>
             <div className="space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Nomor STR"
+                  placeholder="STR-000123"
+                  value={strNumber}
+                  onChange={(event) => setStrNumber(event.target.value)}
+                  required
+                />
+                <Field
+                  label="Nomor SIP"
+                  placeholder="SIP-000123"
+                  value={sipNumber}
+                  onChange={(event) => setSipNumber(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Kadaluarsa STR"
+                  placeholder=""
+                  type="date"
+                  value={strExpiredAt}
+                  onChange={(event) => setStrExpiredAt(event.target.value)}
+                />
+                <Field
+                  label="Kadaluarsa SIP"
+                  placeholder=""
+                  type="date"
+                  value={sipExpiredAt}
+                  onChange={(event) => setSipExpiredAt(event.target.value)}
+                />
+              </div>
+              <TextAreaField
+                label="Alamat Praktik"
+                placeholder="Nama klinik, jalan, dan detail lokasi praktik..."
+                rows={3}
+                value={practiceAddress}
+                onChange={(event) => setPracticeAddress(event.target.value)}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Kota"
+                  placeholder="Makassar"
+                  value={city}
+                  onChange={(event) => setCity(event.target.value)}
+                />
+                <Field
+                  label="Provinsi"
+                  placeholder="Sulawesi Selatan"
+                  value={province}
+                  onChange={(event) => setProvince(event.target.value)}
+                />
+              </div>
               <UploadBox
-                label="Surat Izin Praktik (SIP)"
+                label="Dokumen STR"
                 note="Format: PDF (Max 10MB)"
                 accept="application/pdf,.pdf"
                 maxSizeMB={10}
-                file={sip}
+                file={strFile}
+                error={strError}
+                onChange={setStrFile}
+                onError={setStrError}
+              />
+              <UploadBox
+                label="Dokumen SIP"
+                note="Format: PDF (Max 10MB)"
+                accept="application/pdf,.pdf"
+                maxSizeMB={10}
+                file={sipFile}
                 error={sipError}
-                onChange={setSip}
+                onChange={setSipFile}
                 onError={setSipError}
-              />
-              <UploadBox
-                label="Kartu Tanda Penduduk (KTP)"
-                note="Format: JPG, PNG (Max 5MB)"
-                accept="image/jpeg,image/png,.jpg,.jpeg,.png"
-                maxSizeMB={5}
-                file={ktp}
-                error={ktpError}
-                onChange={setKtp}
-                onError={setKtpError}
-              />
-              <UploadBox
-                label="Ijazah Terakhir"
-                note="Format: PDF (Max 10MB)"
-                accept="application/pdf,.pdf"
-                maxSizeMB={10}
-                file={ijazah}
-                error={ijazahError}
-                onChange={setIjazah}
-                onError={setIjazahError}
               />
             </div>
           </section>
         </div>
+
+        {formError ? (
+          <p className="mt-6 rounded-[8px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {formError}
+          </p>
+        ) : null}
 
         <div className="mt-10 flex flex-wrap gap-4 border-t border-outline-variant pt-6">
           <Link
@@ -263,15 +460,16 @@ export default function SignUpPsikologPage() {
           >
             Batal
           </Link>
-          <Link
-            href="/registration-success"
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary-container px-7 font-semibold text-white shadow-[0_15px_25px_-17px_rgba(65,87,62,0.65)] transition hover:-translate-y-0.5 hover:bg-[#789477]"
+          <PrimaryAuthButton
+            className="h-12 w-auto gap-2 px-7 text-base"
+            disabled={isSubmitting}
           >
-            Daftar Sekarang
+            {isSubmitting ? "Mengirim..." : "Daftar Sekarang"}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
+          </PrimaryAuthButton>
         </div>
       </form>
-    </AuthShell>
+      </AuthShell>
+    </>
   );
 }
