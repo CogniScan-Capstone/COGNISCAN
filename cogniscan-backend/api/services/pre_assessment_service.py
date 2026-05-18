@@ -3,9 +3,13 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from api.models.distorsi_terdeteksi import DistorsiTerdeteksi
+from api.models.pasien import Pasien
+from api.models.pengguna import Pengguna
 from api.models.pra_asesmen import PraAsesmen
+from api.models.psikolog import Psikolog
 from api.models.sesi_jurnal import SesiJurnal
 from api.services.analyzer_service import AnalyzerServiceResult
 
@@ -80,3 +84,48 @@ async def create_pre_assessment_from_analysis(
     await db.commit()
     await db.refresh(pra_asesmen)
     return pra_asesmen
+
+
+async def get_patient_pre_assessment(
+    db: AsyncSession,
+    current_user: Pengguna,
+    id_pra_asesmen: int,
+) -> PraAsesmen:
+    """
+    Ambil pra-asesmen milik pasien login.
+
+    Ownership dicek lewat rantai `pra_asesmen -> sesi_jurnal -> pasien`.
+    """
+    result = await db.execute(
+        select(PraAsesmen)
+        .join(SesiJurnal, PraAsesmen.id_sesi_jurnal == SesiJurnal.id_sesi_jurnal)
+        .join(Pasien, SesiJurnal.id_pasien == Pasien.id_pasien)
+        .where(
+            PraAsesmen.id_pra_asesmen == id_pra_asesmen,
+            Pasien.id_pengguna == current_user.id,
+        )
+        .options(selectinload(PraAsesmen.distorsi_terdeteksi))
+    )
+    pra_asesmen = result.scalar_one_or_none()
+    if pra_asesmen is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pra asesmen tidak ditemukan",
+        )
+
+    return pra_asesmen
+
+
+async def list_available_psikolog(db: AsyncSession) -> list[Psikolog]:
+    """
+    List psikolog yang sudah siap menerima tindak lanjut pasien.
+    """
+    result = await db.execute(
+        select(Psikolog)
+        .where(
+            Psikolog.status_akun == "terverifikasi",
+            Psikolog.apakah_sudah_ganti_password.is_(True),
+        )
+        .order_by(Psikolog.nama_lengkap.asc())
+    )
+    return list(result.scalars().all())

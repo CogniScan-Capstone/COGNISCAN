@@ -155,6 +155,29 @@ async def create_pasien_profile(
     return new_pengguna
 
 
+async def get_pasien_profile(db: AsyncSession, current_user: Pengguna) -> Pasien:
+    """
+    Mengambil profil pasien milik user yang sedang login.
+    """
+    if current_user.peran != "pasien":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Endpoint ini hanya untuk pasien",
+        )
+
+    result = await db.execute(
+        select(Pasien).where(Pasien.id_pengguna == current_user.id)
+    )
+    pasien = result.scalar_one_or_none()
+    if pasien is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profil pasien tidak ditemukan",
+        )
+
+    return pasien
+
+
 async def update_pasien_profile(
     db: AsyncSession,
     current_user: Pengguna,

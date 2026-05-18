@@ -136,6 +136,20 @@ async def read_profile_pasien(
     return await get_pasien_profile(db=db, current_user=current_user)
 
 
+@router.get(
+    "/profile/pasien",
+    response_model=ProfilePasienResponse,
+)
+async def read_profile_pasien(
+    current_user: Pengguna = Depends(require_role("pasien")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Mengambil profil pasien milik user yang sedang login.
+    """
+    return await get_pasien_profile(db=db, current_user=current_user)
+
+
 @router.patch(
     "/profile/pasien",
     response_model=ProfilePasienResponse,

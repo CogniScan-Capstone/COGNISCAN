@@ -3,6 +3,12 @@
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import {
+  finalizeJournalSession,
+  startJournalSession,
+  submitJournalAnswer,
+} from "@/lib/auth";
+import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const questions = [
@@ -62,20 +68,80 @@ export default function ScreeningQuestionPage() {
   const params = useParams<{ topic?: string }>();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [hasConsent, setHasConsent] = useState(false);
+  const [journalSessionId, setJournalSessionId] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const currentQuestion = questions[currentIndex];
   const currentAnswer = answers[currentIndex] ?? "";
-  const canContinue = currentAnswer.trim().length > 0;
+  const canContinue =
+    currentAnswer.trim().length > 0 && (journalSessionId !== null || hasConsent);
   const isLastQuestion = currentIndex === questions.length - 1;
   const progress = ((currentIndex + 1) / questions.length) * 100;
 
-  const topic = useMemo(() => {
+  const topicSlug = useMemo(() => {
     const rawTopic = Array.isArray(params.topic) ? params.topic[0] : params.topic;
-    if (!rawTopic) return "Screening";
-    return topicLabels[rawTopic] ?? rawTopic.replaceAll("-", " ");
+    return rawTopic ?? "screening";
   }, [params.topic]);
 
+  const topic = useMemo(() => {
+    return topicLabels[topicSlug] ?? topicSlug.replaceAll("-", " ");
+  }, [topicSlug]);
+
+  async function getAccessToken() {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      throw new Error("Session tidak ditemukan. Silakan login ulang.");
+    }
+
+    return accessToken;
+  }
+
+  async function ensureJournalSession(accessToken: string) {
+    if (journalSessionId !== null) return journalSessionId;
+
+    const session = await startJournalSession(accessToken, {
+      konteks_pemicu: topicSlug,
+      total_pertanyaan: questions.length,
+      consent_ai_processing: hasConsent,
+    });
+    setJournalSessionId(session.id_sesi_jurnal);
+    return session.id_sesi_jurnal;
+  }
+
+  async function saveAnswerByIndex(
+    accessToken: string,
+    idSesiJurnal: number,
+    questionIndex: number,
+  ) {
+    const answer = answers[questionIndex]?.trim();
+    if (!answer) {
+      throw new Error(`Pertanyaan ${questionIndex + 1} belum dijawab.`);
+    }
+
+    await submitJournalAnswer(accessToken, idSesiJurnal, {
+      urutan_pertanyaan: questionIndex + 1,
+      teks_pertanyaan: questions[questionIndex].question,
+      teks_jawaban: answer,
+    });
+  }
+
+  function buildMissingAnswerMessage() {
+    const missing = questions
+      .map((_, index) => index + 1)
+      .filter((order) => !(answers[order - 1] ?? "").trim());
+
+    if (missing.length === 0) return "";
+    return `Pertanyaan ${missing.join(", ")} belum dijawab.`;
+  }
+
   const goPrevious = () => {
+    if (isSubmitting) return;
+
     if (currentIndex === 0) {
       router.push("/pasien/dashboard");
       return;
@@ -84,15 +150,46 @@ export default function ScreeningQuestionPage() {
     setCurrentIndex((index) => index - 1);
   };
 
-  const goNext = () => {
-    if (!canContinue) return;
+  const goNext = async () => {
+    if (!canContinue || isSubmitting) return;
 
-    if (isLastQuestion) {
-      router.push("/pasien/screening/selesai");
-      return;
+    setErrorMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const accessToken = await getAccessToken();
+      const idSesiJurnal = await ensureJournalSession(accessToken);
+
+      if (!isLastQuestion) {
+        await saveAnswerByIndex(accessToken, idSesiJurnal, currentIndex);
+        setCurrentIndex((index) => index + 1);
+        return;
+      }
+
+      const missingAnswerMessage = buildMissingAnswerMessage();
+      if (missingAnswerMessage) {
+        setErrorMessage(missingAnswerMessage);
+        return;
+      }
+
+      for (let questionIndex = 0; questionIndex < questions.length; questionIndex += 1) {
+        await saveAnswerByIndex(accessToken, idSesiJurnal, questionIndex);
+      }
+
+      const result = await finalizeJournalSession(accessToken, idSesiJurnal);
+      const params = new URLSearchParams({
+        id_sesi_jurnal: String(result.session.id_sesi_jurnal),
+        id_pra_asesmen: String(result.pra_asesmen.id_pra_asesmen),
+        is_crisis: result.is_crisis ? "1" : "0",
+      });
+      router.push(`/pasien/screening/selesai?${params.toString()}`);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Gagal menyimpan screening.",
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setCurrentIndex((index) => index + 1);
   };
 
   return (
@@ -143,6 +240,25 @@ export default function ScreeningQuestionPage() {
               placeholder={currentQuestion.placeholder}
               className="mt-8 w-full resize-none rounded-[12px] border border-surface-variant bg-surface px-6 py-5 text-[16px] text-on-surface outline-none transition placeholder:text-on-surface-muted/45 focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
             />
+            {journalSessionId === null ? (
+              <label className="mt-5 flex items-start gap-3 rounded-[12px] border border-outline-variant bg-surface-container/60 px-4 py-4 text-[14px] leading-6 text-on-surface-variant">
+                <input
+                  type="checkbox"
+                  checked={hasConsent}
+                  onChange={(event) => setHasConsent(event.target.checked)}
+                  className="mt-0.5 h-5 w-5 shrink-0 rounded border-outline-variant text-primary-container focus:ring-primary-container/20"
+                />
+                <span>
+                  Saya setuju jawaban screening diproses oleh sistem AI CogniScan
+                  untuk membuat pra-asesmen awal.
+                </span>
+              </label>
+            ) : null}
+            {errorMessage ? (
+              <p className="mt-5 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {errorMessage}
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -155,7 +271,9 @@ export default function ScreeningQuestionPage() {
               <button
                 key={index}
                 type="button"
-                onClick={() => setCurrentIndex(index)}
+                onClick={() => {
+                  if (!isSubmitting) setCurrentIndex(index);
+                }}
                 className={cn(
                   "flex h-9 items-center justify-center rounded-full border text-sm font-semibold transition-colors",
                   active && "border-[#a98ad6] bg-secondary-container text-[#6f5794]",
@@ -176,6 +294,7 @@ export default function ScreeningQuestionPage() {
           <button
             type="button"
             onClick={goPrevious}
+            disabled={isSubmitting}
             className="inline-flex h-12 items-center gap-3 rounded-full border border-primary px-8 text-sm font-extrabold uppercase tracking-[0.12em] text-primary transition hover:bg-primary-container/10"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
@@ -184,15 +303,21 @@ export default function ScreeningQuestionPage() {
           <button
             type="button"
             onClick={goNext}
-            disabled={!canContinue}
+            disabled={!canContinue || isSubmitting}
             className={cn(
               "inline-flex h-12 items-center gap-3 rounded-full px-10 text-sm font-extrabold uppercase tracking-[0.12em] text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition",
-              canContinue
+              canContinue && !isSubmitting
                 ? "bg-primary-container hover:bg-[#789477]"
                 : "cursor-not-allowed bg-primary-container/45",
             )}
           >
-            {isLastQuestion ? "Selesai" : "Selanjutnya"}
+            {isSubmitting
+              ? isLastQuestion
+                ? "Menganalisis"
+                : "Menyimpan"
+              : isLastQuestion
+                ? "Selesai"
+                : "Selanjutnya"}
             <ArrowRight className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>

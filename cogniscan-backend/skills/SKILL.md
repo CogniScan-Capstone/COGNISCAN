@@ -504,7 +504,7 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 
 ## Status Terakhir (Per 2026-05-18)
 
-Tahap terakhir yang baru diselesaikan adalah **Phase 4/4B auth + admin approval psikolog + onboarding temporary password end-to-end di frontend/backend**. Phase 5/6 journal/screening pasien tetap tercatat sudah tersedia sesuai update sebelumnya, tetapi prioritas terakhir yang benar-benar dites manual adalah approval dan login psikolog.
+Tahap terakhir yang baru diselesaikan adalah **Phase 4/4B auth + admin approval psikolog + onboarding temporary password end-to-end di frontend/backend**. Phase 5/6 journal/screening pasien tetap tercatat sudah tersedia sesuai update sebelumnya (termasuk end-to-end dasar), dan prioritas terakhir yang benar-benar dites manual adalah approval dan login psikolog.
 
 Yang sudah tervalidasi:
 - Phase 3.5 schema alignment selesai: model SQLAlchemy cocok dengan tabel Supabase.
