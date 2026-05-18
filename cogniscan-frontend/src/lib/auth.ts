@@ -45,6 +45,93 @@ export type PsikologRegistrationPayload = {
   bio_singkat?: string;
 };
 
+export type JournalSessionStartPayload = {
+  konteks_pemicu?: string;
+  total_pertanyaan: number;
+  consent_ai_processing: boolean;
+};
+
+export type JournalAnswerPayload = {
+  urutan_pertanyaan: number;
+  teks_pertanyaan: string;
+  teks_jawaban: string;
+};
+
+export type JournalAnswer = {
+  id_jawaban_jurnal: number;
+  id_sesi_jurnal?: number | null;
+  urutan_pertanyaan?: number | null;
+  teks_pertanyaan?: string | null;
+  teks_jawaban?: string | null;
+  dijawab_pada?: string | null;
+};
+
+export type JournalSession = {
+  id_sesi_jurnal: number;
+  id_pasien?: number | null;
+  konteks_pemicu?: string | null;
+  total_pertanyaan?: number | null;
+  status?: string | null;
+  dimulai_pada?: string | null;
+  diselesaikan_pada?: string | null;
+  jawaban?: JournalAnswer[];
+};
+
+export type DetectedDistortion = {
+  id_distorsi_terdeteksi: number;
+  id_pra_asesmen?: number | null;
+  tipe_distorsi?: string | null;
+  penjelasan?: string | null;
+  kalimat_bukti?: string | null;
+  skor_keyakinan_ai?: string | number | null;
+};
+
+export type PreAssessment = {
+  id_pra_asesmen: number;
+  id_sesi_jurnal?: number | null;
+  id_psikolog?: number | null;
+  indikator_urgensi?: string | null;
+  skor_keparahan?: number | null;
+  ringkasan_kondisi?: string | null;
+  rekomendasi?: string | null;
+  feedback_psikolog?: string | null;
+  status_validasi?: string | null;
+  divalidasi_pada?: string | null;
+  dibuat_pada?: string | null;
+  distorsi_terdeteksi?: DetectedDistortion[];
+};
+
+export type JournalFinalizeResult = {
+  session: JournalSession;
+  pra_asesmen: PreAssessment;
+  is_crisis: boolean;
+  message: string;
+  crisis_contacts: Array<{
+    name: string;
+    type: string;
+    phone?: string | null;
+    note?: string | null;
+  }>;
+};
+
+export type AvailablePsychologist = {
+  id_psikolog: number;
+  nama_lengkap: string;
+  spesialisasi?: string | null;
+  pengalaman_tahun?: number | null;
+  universitas_asal?: string | null;
+  tahun_lulus?: number | null;
+  alamat_praktik?: string | null;
+  kota?: string | null;
+  provinsi?: string | null;
+  tarif_konsultasi?: string | number | null;
+  bio_singkat?: string | null;
+  status_akun?: string | null;
+  dibuat_pada?: string | null;
+  tgl_kadaluarsa_str?: string | null;
+  tgl_kadaluarsa_sip?: string | null;
+};
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
 
@@ -197,6 +284,107 @@ export async function registerPsikologCandidate(
   }
 
   return response.json();
+}
+
+export async function startJournalSession(
+  accessToken: string,
+  payload: JournalSessionStartPayload,
+): Promise<JournalSession> {
+  const response = await fetch(`${API_BASE_URL}/api/journal/sessions/start`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<JournalSession>;
+}
+
+export async function submitJournalAnswer(
+  accessToken: string,
+  idSesiJurnal: number,
+  payload: JournalAnswerPayload,
+): Promise<JournalAnswer> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/journal/sessions/${idSesiJurnal}/answers`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<JournalAnswer>;
+}
+
+export async function finalizeJournalSession(
+  accessToken: string,
+  idSesiJurnal: number,
+): Promise<JournalFinalizeResult> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/journal/sessions/${idSesiJurnal}/finalize`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<JournalFinalizeResult>;
+}
+
+export async function fetchPreAssessmentReport(
+  accessToken: string,
+  idPraAsesmen: number,
+): Promise<PreAssessment> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/pre-assessment/reports/${idPraAsesmen}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PreAssessment>;
+}
+
+export async function fetchAvailablePsychologists(
+  accessToken: string,
+): Promise<AvailablePsychologist[]> {
+  const response = await fetch(`${API_BASE_URL}/api/pre-assessment/psikolog/available`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<AvailablePsychologist[]>;
 }
 
 export function dashboardPathForRole(role: BackendUser["peran"]) {
