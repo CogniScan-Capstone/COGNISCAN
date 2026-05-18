@@ -14,8 +14,10 @@ from api.schemas.admin import (
 )
 from api.services.admin_service import (
     approve_psikolog,
+    get_psikolog_by_id,
     list_psikolog_by_status,
     reject_psikolog,
+    reset_psikolog_temporary_password,
 )
 
 router = APIRouter()
@@ -32,6 +34,19 @@ async def list_psikolog_verification(
 ):
     """List data psikolog untuk review admin."""
     return await list_psikolog_by_status(db=db, status_akun=status_akun)
+
+
+@router.get(
+    "/psikolog/{id_psikolog}",
+    response_model=PsikologAdminResponse,
+)
+async def get_psikolog_verification_detail(
+    id_psikolog: int,
+    _admin: Pengguna = Depends(get_current_active_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Detail data psikolog untuk review admin."""
+    return await get_psikolog_by_id(db=db, id_psikolog=id_psikolog)
 
 
 @router.post(
@@ -58,6 +73,30 @@ async def approve_psikolog_verification(
         status_akun=psikolog.status_akun or "terverifikasi",
         apakah_sudah_ganti_password=bool(psikolog.apakah_sudah_ganti_password),
         message="Akun psikolog diverifikasi dan temporary password dikirim lewat email",
+    )
+
+
+@router.post(
+    "/psikolog/{id_psikolog}/reset-temporary-password",
+    response_model=PsikologApproveResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def reset_psikolog_temporary_password_route(
+    id_psikolog: int,
+    _admin: Pengguna = Depends(get_current_active_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reset dan kirim ulang temporary password psikolog."""
+    psikolog = await reset_psikolog_temporary_password(
+        db=db,
+        id_psikolog=id_psikolog,
+    )
+    return PsikologApproveResponse(
+        id_psikolog=psikolog.id_psikolog,
+        email=psikolog.email or "",
+        status_akun=psikolog.status_akun or "terverifikasi",
+        apakah_sudah_ganti_password=bool(psikolog.apakah_sudah_ganti_password),
+        message="Temporary password baru dikirim lewat email",
     )
 
 

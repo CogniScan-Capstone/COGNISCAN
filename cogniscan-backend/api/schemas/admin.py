@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -31,6 +31,7 @@ class PsikologAdminResponse(BaseModel):
     bio_singkat: Optional[str] = None
     status_akun: Optional[str] = None
     apakah_sudah_ganti_password: Optional[bool] = None
+    dibuat_pada: Optional[datetime] = None
 
 
 class PsikologApproveResponse(BaseModel):

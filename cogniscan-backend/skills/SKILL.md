@@ -397,11 +397,19 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 - `PATCH /api/auth/profile/psikolog` sudah tersedia untuk update profil/praktik psikolog yang sudah terverifikasi dan sudah ganti temporary password.
 - Swagger/OpenAPI auth sudah diganti dari OAuth2 password flow ke HTTP Bearer agar cocok dengan access token Supabase.
 
+**Update frontend/backend per 2026-05-18**:
+- Frontend `/sign-up` pasien sudah terhubung ke `supabase.auth.signUp()` dan backend `POST /api/auth/profile/pasien`.
+- Frontend `/sign-up-psikolog` sudah terhubung ke backend `POST /api/auth/register/psikolog`; akun login psikolog tetap belum dibuat sampai admin approve.
+- Frontend `/sign-in` sudah membaca `GET /api/auth/me` setelah login Supabase dan redirect berdasarkan role serta status onboarding.
+- `GET /api/auth/me` sekarang mengembalikan `status_akun` dan `apakah_sudah_ganti_password` untuk psikolog.
+- Frontend route `/psikolog/ganti-password` sudah dibuat dan tersambung ke `POST /api/auth/change-temporary-password`.
+- Guard frontend `/psikolog/*` memaksa psikolog yang masih memakai temporary password masuk ke `/psikolog/ganti-password`; dashboard/jadwal/feedback psikolog tidak bisa dibuka sebelum password diganti.
+- Loading auth/guard frontend memakai overlay icon global; teks loading plain di flow psikolog sudah dihapus.
+
 **Belum selesai**:
-1. Frontend pasien signup belum dihubungkan end-to-end ke Supabase Auth + `POST /api/auth/profile/pasien`.
-2. Frontend psikolog registration belum dihubungkan ke `POST /api/auth/register/psikolog`.
-3. Frontend admin list/approve/reject psikolog belum dihubungkan ke endpoint backend.
-4. Buat test otomatis terstruktur untuk auth/admin service; saat ini baru ada smoke scripts di `scratch/`.
+1. Buat test otomatis terstruktur untuk auth/admin service; saat ini baru ada smoke scripts dan tes manual.
+2. Integrasi Supabase Storage untuk dokumen STR/SIP masih placeholder nama file, belum upload file sungguhan.
+3. Session cookie/server middleware belum dibuat; guard frontend masih client-side, backend tetap sumber security final.
 
 ### Phase 4B: Verifikasi Psikolog oleh Admin
 1. Psikolog mengirim data STR/SIPP dan dokumen pendukung.
@@ -417,7 +425,17 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 - SMTP sudah berhasil dites (`SMTP_OK`), dan flow email temporary password berhasil dalam smoke test lengkap.
 - Frontend `/sign-in` sudah login via Supabase Auth, panggil `GET /api/auth/me`, lalu redirect role: admin ke `/admin/dashboard`, psikolog ke `/psikolog/dashboard`, pasien ke `/pasien/dashboard`.
 - Frontend route `/admin/*` punya guard client-side yang cek session + role admin. Backend tetap sumber security final untuk `/api/admin/*`.
-- Halaman admin `/admin/pendaftaran` masih statis; belum fetch pending psikolog dan belum call approve/reject backend.
+
+**Update per 2026-05-18**:
+- Backend endpoint detail tersedia: `GET /api/admin/psikolog/{id_psikolog}` untuk halaman detail review.
+- Backend endpoint reset temporary password tersedia: `POST /api/admin/psikolog/{id_psikolog}/reset-temporary-password`.
+- Approval flow menangani recovery kasus Supabase Auth user sudah terlanjur dibuat tetapi database rollback: backend reuse user psikolog yang role metadata-nya aman, reset temporary password baru, kirim email lagi, lalu commit link `pengguna`/`psikolog`.
+- Approval flow otomatis membuat row `admin` minimal bila user admin ada di tabel `pengguna` tetapi belum punya profil admin; ini mencegah `id_admin` tetap NULL setelah approval berhasil.
+- Email temporary password dibuat lebih copy-friendly: generator menghindari karakter ambigu, frontend login melakukan `password.trim()`, dan email menampilkan password dalam tanda `[]`.
+- Frontend `/admin/dashboard` sudah membaca ringkasan pendaftaran psikolog dari backend.
+- Frontend `/admin/pendaftaran` sudah fetch data psikolog dari backend, memiliki filter/search, dan link detail per `id_psikolog`.
+- Frontend `/admin/pendaftaran/detail?id=...` sudah menampilkan detail backend, call approve/reject, dan menyediakan tombol "Kirim Ulang Password" untuk psikolog terverifikasi yang belum ganti password.
+- Manual test berhasil: psikolog daftar -> data masuk Supabase -> admin approve -> email temporary password terkirim -> psikolog login -> dipaksa ganti password -> berhasil masuk dashboard setelah password baru.
 
 ### Phase 5: Analyzer Integration
 1. Service `analyzer_service.py`: wrap `analyzer/main.py` dengan async.
@@ -428,7 +446,7 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 6. Mock Gemini di test fixtures; jangan call real API di test.
 7. Pastikan output mencakup distorsi kognitif, severity/triage, ringkasan kondisi, dan flag crisis/self-harm.
 
-**Status per 2026-05-15**:
+**Status per 2026-05-18**:
 - Commit teman `106038d perbaikan servis llm` sudah masuk dan mengubah konfigurasi model LLM.
 - Fix lokal sudah dilakukan untuk `LOCATION = "global"` dan default model eksperimen Gemini 3.1 Pro preview.
 - `api/services/analyzer_service.py` sudah berisi wrapper async untuk `analyzer.main.analyze_narrative`.
@@ -436,7 +454,8 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 - Output analyzer sudah dinormalisasi ke struktur internal backend: `ringkasan_kondisi`, `indikator_urgensi`, `skor_keparahan`, `rekomendasi`, flag crisis, dan daftar distorsi.
 - `api/services/pre_assessment_service.py` sudah bisa menyimpan hasil analyzer ke tabel `pra_asesmen` dan `distorsi_terdeteksi`.
 - Critical/crisis result disimpan dengan `status_validasi="perlu_eskalasi"`; hasil normal memakai `status_validasi="menunggu"`.
-- Phase 5 belum punya router publik dan belum terhubung ke journal finalize.
+- `pre_assessment_service.py` sekarang juga punya read endpoint support untuk pasien melihat hasil miliknya dan list psikolog terverifikasi.
+- Analyzer sudah terhubung ke `journal_service.finalize_journal_session()`; tidak ada router analyzer publik terpisah.
 
 ### Phase 6: Journal Flow
 1. Schemas: `JournalSessionStart`, `JournalAnswer`, `JournalSessionResponse`
@@ -448,6 +467,15 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 4. Data mentah narasi jangan masuk application logs.
 5. Router endpoints untuk start session, submit answer, get progress, finalize.
 6. **Crisis check di finalize**: kalau severity=critical, bypass normal flow dan return crisis response.
+
+**Status per 2026-05-18**:
+- Backend journal flow tersedia di `api/schemas/journal.py`, `api/services/journal_service.py`, dan `api/routers/journal.py`.
+- Endpoint pasien tersedia: `POST /api/journal/sessions/start`, `POST /api/journal/sessions/{id_sesi_jurnal}/answers`, `GET /api/journal/sessions/{id_sesi_jurnal}`, dan `POST /api/journal/sessions/{id_sesi_jurnal}/finalize`.
+- Start session mencatat consent pemrosesan AI ke `log_persetujuan`.
+- Submit answer melakukan upsert jawaban per `urutan_pertanyaan`.
+- Finalize memastikan semua pertanyaan terjawab, menggabungkan jawaban menjadi narasi, memanggil analyzer, menyimpan `pra_asesmen` dan `distorsi_terdeteksi`, lalu mengembalikan crisis contacts jika status `critical/perlu_eskalasi`.
+- Frontend `/pasien/screening/[topic]` sudah membuat session, submit jawaban, finalize, lalu redirect ke `/pasien/screening/selesai?id_sesi_jurnal=...&id_pra_asesmen=...&is_crisis=...`.
+- Frontend `/pasien/screening/selesai` sudah fetch hasil pra-asesmen dan list psikolog tersedia dari backend, bukan data dummy.
 
 ### Phase 6B: Validasi dan Feedback Psikolog
 1. Psikolog menerima pre-assessment report dari hasil AI.
@@ -472,16 +500,17 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 4. Cron jobs: cleanup expired tokens, hard-delete soft-deleted records setelah retention policy, reminder jadwal.
 5. Audit log untuk login, consent, verifikasi psikolog, pembayaran, dan akses data sensitif.
 
-## 🛣️ Langkah Selanjutnya (Per 2026-05-15)
+## 🛣️ Langkah Selanjutnya (Per 2026-05-18)
 
-## Status Terakhir (Per 2026-05-15)
+## Status Terakhir (Per 2026-05-18)
 
-Tahap terakhir yang sudah selesai adalah **Phase 4/4B backend auth + admin approval flow**, termasuk frontend login admin dan redirect role.
+Tahap terakhir yang baru diselesaikan adalah **Phase 4/4B auth + admin approval psikolog + onboarding temporary password end-to-end di frontend/backend**. Phase 5/6 journal/screening pasien tetap tercatat sudah tersedia sesuai update sebelumnya, tetapi prioritas terakhir yang benar-benar dites manual adalah approval dan login psikolog.
 
 Yang sudah tervalidasi:
 - Phase 3.5 schema alignment selesai: model SQLAlchemy cocok dengan tabel Supabase.
 - Alembic baseline sudah distamp: `alembic current` = `a1b2c3d4e5f6 (head)`.
 - Backend admin endpoint tersedia untuk list/approve/reject psikolog.
+- Backend admin endpoint detail dan reset temporary password psikolog tersedia.
 - Admin awal bisa dibuat via `python scratch/create_admin.py`.
 - Supabase Auth trigger lama sudah dibuat no-op agar tidak bentrok dengan backend sync profile.
 - Supabase JWT `ES256` sudah diverifikasi via JWKS di backend.
@@ -490,24 +519,40 @@ Yang sudah tervalidasi:
 - Backend profile update tersedia: `PATCH /api/auth/profile/pasien` dan `PATCH /api/auth/profile/psikolog`.
 - Swagger auth sudah memakai HTTP Bearer token, bukan OAuth2 password login lokal.
 - Frontend `/sign-in` sudah login Supabase, call `GET /api/auth/me`, lalu redirect role ke admin/psikolog/pasien.
+- `GET /api/auth/me` sudah mengirim `status_akun` dan `apakah_sudah_ganti_password` untuk psikolog.
 - Frontend `/admin/*` punya guard client-side; backend tetap security final untuk `/api/admin/*`.
+- Frontend `/admin/dashboard`, `/admin/pendaftaran`, dan `/admin/pendaftaran/detail?id=...` sudah terhubung ke backend admin.
+- Frontend admin approve/reject psikolog sudah live; approve membuat/menyambungkan Supabase Auth user dan mengirim temporary password.
+- Flow recovery approval untuk duplicate Supabase Auth email sudah tersedia dan berhasil dipakai untuk kasus user auth orphan.
+- Frontend admin bisa kirim ulang temporary password untuk psikolog terverifikasi yang belum ganti password.
+- Frontend `/sign-up` pasien sudah terhubung ke `supabase.auth.signUp()` lalu `POST /api/auth/profile/pasien`.
+- Frontend `/sign-up-psikolog` sudah terhubung ke `POST /api/auth/register/psikolog`.
+- Frontend `/psikolog/ganti-password` sudah tersedia dan tersambung ke `POST /api/auth/change-temporary-password`.
+- Guard frontend `/psikolog/*` memaksa psikolog mengganti temporary password sebelum masuk dashboard/jadwal/feedback.
+- Manual test terbaru berhasil: psikolog daftar -> admin approve -> email temporary password -> psikolog login -> dipaksa ganti password -> masuk dashboard.
+- Loading global/route guard frontend sudah memakai overlay icon; loading icon punya ring outline berputar di sekitar karakter.
+- Backend `GET /api/auth/profile/pasien` tersedia untuk halaman profil pasien.
+- Backend journal endpoints tersedia dan terhubung ke analyzer/pre-assessment persistence.
+- Frontend screening pasien sudah terhubung ke backend journal start/answer/finalize.
+- Halaman selesai screening pasien sudah membaca hasil pra-asesmen dan list psikolog tersedia dari backend.
 
-Update setelah `git pull` 2026-05-15:
-- Remote sudah berada di commit `106038d perbaikan servis llm`.
-- Update teman menyentuh servis LLM/analyzer: `.env.example`, `api/core/config.py`, `test_setup.py`, dan `analyzer/main.py`.
-- Update frontend sebelumnya memperbarui tampilan admin panel, tetapi `/admin/pendaftaran` masih memakai data dummy dan belum call backend.
+Update setelah `git pull` 2026-05-18:
+- Remote sudah berada di commit `3e942a9 loading icon`.
+- Update teman menyentuh tampilan frontend/auth dan loading state.
+- `/sign-up` pasien sudah memakai Supabase Auth + backend profile sync.
+- `/admin/pendaftaran` sudah memakai data backend admin, bukan data dummy.
 - Fix lokal terbaru: `analyzer/main.py` sudah punya `LOCATION = "global"` dan default model eksperimen `DEFAULT_MODEL_NAME = "gemini-3.1-pro-preview"`.
 - Verifikasi sintaks analyzer berhasil dengan `python -m py_compile analyzer\main.py`.
-- Phase 5 backend sudah dimulai: `analyzer_service.py` wrapper async + masking data, dan `pre_assessment_service.py` persistence ke `pra_asesmen`/`distorsi_terdeteksi`.
+- Phase 5/6 pasien sudah tersambung: analyzer wrapper + masking data, persistence ke `pra_asesmen`/`distorsi_terdeteksi`, journal finalize, dan frontend screening.
 
 Langkah berikutnya yang paling dekat:
-1. Commit perubahan backend jika sudah direview: auth profile update, Swagger Bearer, Alembic stamp note, analyzer/pre-assessment service, dan update skills.
-2. Lanjut Phase 6 backend: implement journal flow service (`start_session`, `submit_answer`, `finalize_session`).
-3. Hubungkan `finalize_session` ke `analyzer_service.py` dan `pre_assessment_service.py`.
-4. Tambahkan crisis bypass response saat hasil analyzer `critical` atau self-harm flag aktif.
-5. Setelah frontend siap, hubungkan halaman `/admin/pendaftaran` ke endpoint admin dan sambungkan signup pasien/psikolog.
+1. Test manual end-to-end pasien dengan backend aktif: login pasien -> screening -> finalize -> halaman selesai.
+2. Implement assignment pilihan psikolog dari halaman selesai ke `pra_asesmen.id_psikolog` atau buat flow review awal sesuai desain Phase 6B.
+3. Hubungkan psikolog feedback/review pre-assessment agar psikolog bisa validasi hasil AI.
+4. Setelah feedback psikolog siap, lanjut Phase 7: jadwal psikolog, booking, pembayaran/placeholder, dan hasil konsultasi.
+5. Tambahkan test otomatis untuk auth/admin approval/recovery dan temporary password flow.
 
-Catatan: checklist lama di bawah ini adalah konteks historis sebelum update Phase 4/4B selesai.
+Catatan: checklist lama di bawah ini adalah konteks historis sebelum update Phase 4/4B selesai; untuk status aktual gunakan bagian **Status Terakhir** di atas.
 
 Urutan eksekusi yang direkomendasikan setelah Phase 4 partial selesai:
 
@@ -534,15 +579,15 @@ Urutan eksekusi yang direkomendasikan setelah Phase 4 partial selesai:
 - [ ] Guard endpoint psikolog (`booking`, `jadwal`) tolak akses kalau status ≠ `terverifikasi`.
 
 ### D. Phase 5 — Analyzer Integration
-- [ ] `api/services/analyzer_service.py` wrap `analyzer/main.py` async + data masking sebelum kirim ke Gemini.
+- [x] `api/services/analyzer_service.py` wrap `analyzer/main.py` async + data masking sebelum kirim ke Gemini.
 - [ ] Mock Gemini di pytest fixtures.
-- [ ] Output mencakup distorsi, severity 4-level, ringkasan, dan flag crisis.
+- [x] Output mencakup distorsi, severity 4-level, ringkasan, dan flag crisis.
 
 ### E. Phase 6 — Journal Flow + Crisis Bypass
-- [ ] Schemas `JournalSessionStart`, `JournalAnswer`, `JournalSessionResponse`.
-- [ ] Service `journal_service.py`: `start_session`, `submit_answer`, `finalize_session`.
-- [ ] Consent check sebelum narasi masuk analyzer.
-- [ ] Crisis bypass di `finalize_session` (severity=critical → CrisisResponse).
+- [x] Schemas `JournalSessionStart`, `JournalAnswer`, `JournalSessionResponse`.
+- [x] Service `journal_service.py`: `start_session`, `submit_answer`, `finalize_session`.
+- [x] Consent check sebelum narasi masuk analyzer.
+- [x] Crisis bypass di `finalize_session` (severity=critical → CrisisResponse).
 
 ### F. Phase 6B — Feedback Psikolog
 - [ ] Endpoint psikolog approve/edit/reject pre-assessment AI.

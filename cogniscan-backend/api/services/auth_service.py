@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from api.models.log_persetujuan import LogPersetujuan
 from api.models.pasien import Pasien
 from api.models.pengguna import Pengguna
 from api.models.psikolog import Psikolog
@@ -37,18 +38,98 @@ async def create_pasien_profile(
     existing_user = result.scalar_one_or_none()
 
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Profil pengguna sudah ada",
+        if existing_user.email != email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token dan profil pengguna tidak cocok",
+            )
+
+        if existing_user.peran != "pasien":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Pengguna sudah terdaftar dengan role berbeda",
+            )
+
+        existing_pasien = await db.execute(
+            select(Pasien).where(Pasien.id_pengguna == existing_user.id)
         )
+        pasien = existing_pasien.scalar_one_or_none()
+
+        if pasien is None:
+            db.add(
+                Pasien(
+                    id_pengguna=existing_user.id,
+                    nama_lengkap=profile_data.nama_lengkap,
+                    jenis_kelamin=profile_data.jenis_kelamin,
+                    tanggal_lahir=profile_data.tanggal_lahir,
+                    alamat_lengkap=profile_data.alamat_lengkap,
+                    no_hp_wa=profile_data.no_hp_wa,
+                )
+            )
+            await db.commit()
+            await db.refresh(existing_user)
+            return existing_user
+
+        update_data = profile_data.model_dump(exclude_unset=True)
+        for field_name, value in update_data.items():
+            current_value = getattr(pasien, field_name)
+            if current_value is None and value is not None:
+                setattr(pasien, field_name, value)
+
+        await db.commit()
+        await db.refresh(existing_user)
+        return existing_user
 
     stmt_email = select(Pengguna).where(Pengguna.email == email)
     result_email = await db.execute(stmt_email)
-    if result_email.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email sudah terdaftar di sistem",
+    existing_email_user = result_email.scalar_one_or_none()
+    if existing_email_user:
+        if existing_email_user.peran != "pasien":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email sudah terdaftar dengan role berbeda",
+            )
+
+        existing_pasien = await db.execute(
+            select(Pasien).where(Pasien.id_pengguna == existing_email_user.id)
         )
+        if existing_pasien.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email sudah terdaftar di sistem",
+            )
+
+        existing_consent = await db.execute(
+            select(LogPersetujuan).where(
+                LogPersetujuan.id_pengguna == existing_email_user.id
+            )
+        )
+        if existing_consent.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Email masih punya data persetujuan lama. Hapus row lama "
+                    "di tabel pengguna/log_persetujuan untuk signup ulang."
+                ),
+            )
+
+        # Repair akun test yang Supabase Auth-nya pernah dihapus, tetapi row
+        # `pengguna` lama masih tertinggal tanpa profil pasien.
+        existing_email_user.id = user_id
+        existing_email_user.apakah_aktif = True
+        db.add(
+            Pasien(
+                id_pengguna=user_id,
+                nama_lengkap=profile_data.nama_lengkap,
+                jenis_kelamin=profile_data.jenis_kelamin,
+                tanggal_lahir=profile_data.tanggal_lahir,
+                alamat_lengkap=profile_data.alamat_lengkap,
+                no_hp_wa=profile_data.no_hp_wa,
+            )
+        )
+        await db.commit()
+        await db.refresh(existing_email_user)
+        return existing_email_user
 
     new_pengguna = Pengguna(
         id=user_id,
@@ -113,6 +194,30 @@ async def update_pasien_profile(
 
     await db.commit()
     await db.refresh(pasien)
+    return pasien
+
+
+async def get_pasien_profile(
+    db: AsyncSession,
+    current_user: Pengguna,
+) -> Pasien:
+    """Ambil profil pasien milik user yang sedang login."""
+    if current_user.peran != "pasien":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Endpoint ini hanya untuk pasien",
+        )
+
+    result = await db.execute(
+        select(Pasien).where(Pasien.id_pengguna == current_user.id)
+    )
+    pasien = result.scalar_one_or_none()
+    if pasien is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profil pasien tidak ditemukan",
+        )
+
     return pasien
 
 

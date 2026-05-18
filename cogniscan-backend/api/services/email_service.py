@@ -38,11 +38,14 @@ def _require_smtp_config() -> tuple[str, int, str, str, str, bool]:
 
 def _send_email_sync(message: EmailMessage) -> None:
     host, port, username, password, _sender, use_tls = _require_smtp_config()
-    with smtplib.SMTP(host, port, timeout=20) as smtp:
-        if use_tls:
-            smtp.starttls()
-        smtp.login(username, password)
-        smtp.send_message(message)
+    try:
+        with smtplib.SMTP(host, port, timeout=20) as smtp:
+            if use_tls:
+                smtp.starttls()
+            smtp.login(username, password)
+            smtp.send_message(message)
+    except (OSError, smtplib.SMTPException) as exc:
+        raise EmailServiceError(f"{exc.__class__.__name__}: {exc}") from exc
 
 
 async def send_psikolog_temporary_password(
@@ -66,7 +69,9 @@ Akun psikolog CogniScan Anda telah diverifikasi oleh admin.
 Silakan login menggunakan kredensial sementara berikut:
 
 Email: {recipient_email}
-Temporary password: {temporary_password}
+Temporary password: [{temporary_password}]
+
+Salin hanya karakter di dalam tanda kurung siku, tanpa spasi tambahan.
 
 Setelah login pertama, Anda wajib mengganti password sebelum dapat mengakses fitur psikolog.
 

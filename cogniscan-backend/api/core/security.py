@@ -46,14 +46,17 @@ def generate_temporary_password(length: int = 20) -> str:
     if length < 12:
         raise ValueError("Temporary password minimal 12 karakter")
 
-    symbols = "!@#$%^&*()-_=+"
-    alphabet = string.ascii_letters + string.digits + symbols
+    lowercase = "abcdefghijkmnopqrstuvwxyz"
+    uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    digits = "23456789"
+    symbols = "!@#$%"
+    alphabet = lowercase + uppercase + digits + symbols
     rng = secrets.SystemRandom()
 
     password_chars = [
-        rng.choice(string.ascii_lowercase),
-        rng.choice(string.ascii_uppercase),
-        rng.choice(string.digits),
+        rng.choice(lowercase),
+        rng.choice(uppercase),
+        rng.choice(digits),
         rng.choice(symbols),
     ]
     password_chars.extend(rng.choice(alphabet) for _ in range(length - len(password_chars)))

@@ -120,3 +120,6 @@ class UserResponse(BaseModel):
     email: str
     peran: Optional[str] = None
     apakah_aktif: Optional[bool] = None
+    nama_lengkap: Optional[str] = None
+    status_akun: Optional[str] = None
+    apakah_sudah_ganti_password: Optional[bool] = None
