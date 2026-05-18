@@ -321,7 +321,7 @@ export default function SignUpPsikologPage() {
               />
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
-                  label="Pengalaman"
+                  label="Pengalaman (Tahun)"
                   placeholder="5"
                   type="number"
                   min="0"

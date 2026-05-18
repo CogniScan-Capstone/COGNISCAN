@@ -6,6 +6,7 @@ type FilterTab = {
   href?: string;
   count?: number;
   active?: boolean;
+  onClick?: () => void;
 };
 
 type FilterTabsProps = {
@@ -35,7 +36,7 @@ export function FilterTabs({ tabs, className }: FilterTabsProps) {
             {content}
           </Link>
         ) : (
-          <button key={tab.label} type="button" className={classes} aria-pressed={tab.active}>
+          <button key={tab.label} type="button" className={classes} aria-pressed={tab.active} onClick={tab.onClick}>
             {content}
           </button>
         );

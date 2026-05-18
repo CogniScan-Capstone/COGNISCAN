@@ -1,18 +1,22 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
+import LoadingPage from "@/components/loading/page";
 import { dashboardPathForRole, fetchCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 
-export default function AdminDashboardLayout({ children }: { children: ReactNode }) {
+export default function PsikologDashboardLayout({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const router = useRouter();
   const [isAllowed, setIsAllowed] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function verifyAdminAccess() {
+    async function verifyPsikologAccess() {
+      setIsAllowed(false);
+
       const { data } = await supabase.auth.getSession();
       const accessToken = data.session?.access_token;
 
@@ -23,8 +27,21 @@ export default function AdminDashboardLayout({ children }: { children: ReactNode
 
       try {
         const user = await fetchCurrentUser(accessToken);
-        if (user.peran !== "admin") {
+        if (user.peran !== "psikolog") {
           router.replace(dashboardPathForRole(user.peran));
+          return;
+        }
+
+        const mustChangePassword = !user.apakah_sudah_ganti_password;
+        const isChangePasswordPage = pathname === "/psikolog/ganti-password";
+
+        if (mustChangePassword && !isChangePasswordPage) {
+          router.replace("/psikolog/ganti-password");
+          return;
+        }
+
+        if (!mustChangePassword && isChangePasswordPage) {
+          router.replace("/psikolog/dashboard");
           return;
         }
 
@@ -35,15 +52,15 @@ export default function AdminDashboardLayout({ children }: { children: ReactNode
       }
     }
 
-    verifyAdminAccess();
+    verifyPsikologAccess();
 
     return () => {
       isMounted = false;
     };
-  }, [router]);
+  }, [pathname, router]);
 
   if (!isAllowed) {
-    return null;
+    return <LoadingPage text="" />;
   }
 
   return children;

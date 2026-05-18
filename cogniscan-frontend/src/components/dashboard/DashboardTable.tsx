@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, TdHTMLAttributes, ThHTMLAttributes } from "react";
 import { DashboardCard } from "./DashboardCard";
 import { cn } from "@/lib/utils";
 
@@ -27,17 +27,18 @@ export function DashboardTableCell({
   children,
   className,
   as = "td",
+  ...props
 }: {
   children: ReactNode;
   className?: string;
   as?: "td" | "th";
-}) {
+} & TdHTMLAttributes<HTMLTableCellElement> &
+  ThHTMLAttributes<HTMLTableCellElement>) {
   const Comp = as;
 
   return (
-    <Comp className={cn("border-b border-surface-variant px-6 py-4 text-[15px]", className)}>
+    <Comp className={cn("border-b border-surface-variant px-6 py-4 text-[15px]", className)} {...props}>
       {children}
     </Comp>
   );
 }
-

@@ -10,7 +10,7 @@ import LoadingPage from "@/components/loading/page";
 import {
   clearPendingPatientProfile,
   createPatientProfile,
-  dashboardPathForRole,
+  entryPathForUser,
   fetchPatientProfile,
   fetchCurrentUser,
   loadPendingPatientProfile,
@@ -124,7 +124,7 @@ export default function SignInPage() {
       window.sessionStorage.removeItem("cogniscan:pending-confirmation-email");
       const { data, error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
-        password,
+        password: password.trim(),
       });
 
       if (error) {
@@ -169,7 +169,7 @@ export default function SignInPage() {
           profileFallback,
         );
         await waitForMinimumLoading(loadingStartedAt);
-        router.replace(dashboardPathForRole(user.peran));
+        router.replace(entryPathForUser(user));
         router.refresh();
         return;
       } catch (backendError) {
@@ -205,7 +205,7 @@ export default function SignInPage() {
         );
         clearPendingPatientProfile(normalizedEmail);
         await waitForMinimumLoading(loadingStartedAt);
-        router.replace(dashboardPathForRole(user.peran));
+        router.replace(entryPathForUser(user));
         router.refresh();
       }
     } catch (error) {
@@ -218,7 +218,7 @@ export default function SignInPage() {
 
   return (
     <>
-      {isSubmitting ? <LoadingPage text="Memeriksa akun..." /> : null}
+      {isSubmitting ? <LoadingPage text="" /> : null}
       <AuthShell compact className="max-w-md">
       <form className="px-12 pb-16 pt-14 sm:px-12" onSubmit={handleSubmit}>
         <div className="mb-10 text-center">

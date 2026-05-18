@@ -35,6 +35,26 @@ const styles = `
     justify-content: center;
   }
 
+  .spinner-wrapper::before,
+  .spinner-wrapper::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .spinner-wrapper::before {
+    border: 2px solid rgba(65, 87, 62, 0.12);
+  }
+
+  .spinner-wrapper::after {
+    border: 2px solid transparent;
+    border-top-color: rgba(65, 87, 62, 0.88);
+    border-right-color: rgba(169, 138, 214, 0.56);
+    animation: orbit-ring 1.45s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  }
+
   .mascot-container {
     width: 112px;
     height: 112px;
@@ -55,6 +75,10 @@ const styles = `
   @keyframes float {
     0%, 100% { transform: translateY(0px); }
     50% { transform: translateY(-6px); }
+  }
+
+  @keyframes orbit-ring {
+    to { transform: rotate(360deg); }
   }
 
   .loading-text {
@@ -131,7 +155,7 @@ export default function LoadingPage({
           </div>
         </div>
 
-        <p className="loading-text">{text}</p>
+        {text ? <p className="loading-text">{text}</p> : null}
         <div className="dots">
           <div className="dot" />
           <div className="dot" />

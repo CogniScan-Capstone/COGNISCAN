@@ -4,6 +4,8 @@ export type BackendUser = {
   peran?: "admin" | "pasien" | "psikolog" | string | null;
   apakah_aktif?: boolean | null;
   nama_lengkap?: string | null;
+  status_akun?: string | null;
+  apakah_sudah_ganti_password?: boolean | null;
 };
 
 export type PatientProfilePayload = {
@@ -95,7 +97,7 @@ export function clearPendingPatientProfile(email: string) {
   window.localStorage.removeItem(pendingPatientProfileKey(email));
 }
 
-async function getApiErrorMessage(response: Response) {
+export async function getApiErrorMessage(response: Response) {
   try {
     const payload = await response.json();
     if (typeof payload.detail === "string") return payload.detail;
@@ -199,8 +201,36 @@ export async function registerPsikologCandidate(
   return response.json();
 }
 
+export async function changeTemporaryPassword(
+  accessToken: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/change-temporary-password`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ new_password: newPassword }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<{ message: string }>;
+}
+
 export function dashboardPathForRole(role: BackendUser["peran"]) {
   if (role === "admin") return "/admin/dashboard";
   if (role === "psikolog") return "/psikolog/dashboard";
   return "/pasien/dashboard";
+}
+
+export function entryPathForUser(user: BackendUser) {
+  if (user.peran === "psikolog" && !user.apakah_sudah_ganti_password) {
+    return "/psikolog/ganti-password";
+  }
+
+  return dashboardPathForRole(user.peran);
 }

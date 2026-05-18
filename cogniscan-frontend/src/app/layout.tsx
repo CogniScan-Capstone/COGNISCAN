@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Noto_Serif, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { GlobalPageLoader } from "@/components/loading/GlobalPageLoader";
 
 const notoSerif = Noto_Serif({
   variable: "--font-serif",
@@ -29,7 +30,10 @@ export default function RootLayout({
       lang="id"
       className={cn(notoSerif.variable, "font-sans", geist.variable)}
     >
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        <GlobalPageLoader />
+        {children}
+      </body>
     </html>
   );
 }
