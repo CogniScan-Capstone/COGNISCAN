@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies.database import get_db
@@ -24,11 +25,15 @@ from api.schemas.auth import (
 from api.services.auth_service import (
     change_psikolog_temporary_password,
     create_pasien_profile,
+    get_pasien_profile,
     register_psikolog_candidate,
     update_pasien_profile,
     update_psikolog_profile,
 )
+from api.models.admin import Admin
+from api.models.pasien import Pasien
 from api.models.pengguna import Pengguna
+from api.models.psikolog import Psikolog
 
 router = APIRouter()
 
@@ -57,6 +62,20 @@ async def create_profile(
         email=claims.email,
         profile_data=profile_data,
     )
+
+
+@router.get(
+    "/profile/pasien",
+    response_model=ProfilePasienResponse,
+)
+async def read_profile_pasien(
+    current_user: Pengguna = Depends(require_role("pasien")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Mengambil profil pasien milik user yang sedang login.
+    """
+    return await get_pasien_profile(db=db, current_user=current_user)
 
 
 @router.patch(
@@ -141,9 +160,36 @@ async def change_temporary_password(
     return MessageResponse(message="Password berhasil diganti")
 
 @router.get("/me", response_model=UserResponse)
-async def read_users_me(current_user: Pengguna = Depends(get_current_user)):
+async def read_users_me(
+    current_user: Pengguna = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
     Mendapatkan profil pengguna yang sedang login berdasarkan token JWT Supabase.
     Jika ini berhasil, berarti token valid dan user ada di tabel Pengguna.
     """
-    return current_user
+    nama_lengkap = None
+
+    if current_user.peran == "pasien":
+        result = await db.execute(
+            select(Pasien.nama_lengkap).where(Pasien.id_pengguna == current_user.id)
+        )
+        nama_lengkap = result.scalar_one_or_none()
+    elif current_user.peran == "psikolog":
+        result = await db.execute(
+            select(Psikolog.nama_lengkap).where(Psikolog.id_pengguna == current_user.id)
+        )
+        nama_lengkap = result.scalar_one_or_none()
+    elif current_user.peran == "admin":
+        result = await db.execute(
+            select(Admin.nama_lengkap).where(Admin.id_pengguna == current_user.id)
+        )
+        nama_lengkap = result.scalar_one_or_none()
+
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        peran=current_user.peran,
+        apakah_aktif=current_user.apakah_aktif,
+        nama_lengkap=nama_lengkap,
+    )

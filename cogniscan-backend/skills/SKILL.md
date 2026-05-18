@@ -428,7 +428,7 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 6. Mock Gemini di test fixtures; jangan call real API di test.
 7. Pastikan output mencakup distorsi kognitif, severity/triage, ringkasan kondisi, dan flag crisis/self-harm.
 
-**Status per 2026-05-15**:
+**Status per 2026-05-18**:
 - Commit teman `106038d perbaikan servis llm` sudah masuk dan mengubah konfigurasi model LLM.
 - Fix lokal sudah dilakukan untuk `LOCATION = "global"` dan default model eksperimen Gemini 3.1 Pro preview.
 - `api/services/analyzer_service.py` sudah berisi wrapper async untuk `analyzer.main.analyze_narrative`.
@@ -436,7 +436,8 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 - Output analyzer sudah dinormalisasi ke struktur internal backend: `ringkasan_kondisi`, `indikator_urgensi`, `skor_keparahan`, `rekomendasi`, flag crisis, dan daftar distorsi.
 - `api/services/pre_assessment_service.py` sudah bisa menyimpan hasil analyzer ke tabel `pra_asesmen` dan `distorsi_terdeteksi`.
 - Critical/crisis result disimpan dengan `status_validasi="perlu_eskalasi"`; hasil normal memakai `status_validasi="menunggu"`.
-- Phase 5 belum punya router publik dan belum terhubung ke journal finalize.
+- `pre_assessment_service.py` sekarang juga punya read endpoint support untuk pasien melihat hasil miliknya dan list psikolog terverifikasi.
+- Analyzer sudah terhubung ke `journal_service.finalize_journal_session()`; tidak ada router analyzer publik terpisah.
 
 ### Phase 6: Journal Flow
 1. Schemas: `JournalSessionStart`, `JournalAnswer`, `JournalSessionResponse`
@@ -448,6 +449,15 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 4. Data mentah narasi jangan masuk application logs.
 5. Router endpoints untuk start session, submit answer, get progress, finalize.
 6. **Crisis check di finalize**: kalau severity=critical, bypass normal flow dan return crisis response.
+
+**Status per 2026-05-18**:
+- Backend journal flow tersedia di `api/schemas/journal.py`, `api/services/journal_service.py`, dan `api/routers/journal.py`.
+- Endpoint pasien tersedia: `POST /api/journal/sessions/start`, `POST /api/journal/sessions/{id_sesi_jurnal}/answers`, `GET /api/journal/sessions/{id_sesi_jurnal}`, dan `POST /api/journal/sessions/{id_sesi_jurnal}/finalize`.
+- Start session mencatat consent pemrosesan AI ke `log_persetujuan`.
+- Submit answer melakukan upsert jawaban per `urutan_pertanyaan`.
+- Finalize memastikan semua pertanyaan terjawab, menggabungkan jawaban menjadi narasi, memanggil analyzer, menyimpan `pra_asesmen` dan `distorsi_terdeteksi`, lalu mengembalikan crisis contacts jika status `critical/perlu_eskalasi`.
+- Frontend `/pasien/screening/[topic]` sudah membuat session, submit jawaban, finalize, lalu redirect ke `/pasien/screening/selesai?id_sesi_jurnal=...&id_pra_asesmen=...&is_crisis=...`.
+- Frontend `/pasien/screening/selesai` sudah fetch hasil pra-asesmen dan list psikolog tersedia dari backend, bukan data dummy.
 
 ### Phase 6B: Validasi dan Feedback Psikolog
 1. Psikolog menerima pre-assessment report dari hasil AI.
@@ -472,11 +482,11 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 4. Cron jobs: cleanup expired tokens, hard-delete soft-deleted records setelah retention policy, reminder jadwal.
 5. Audit log untuk login, consent, verifikasi psikolog, pembayaran, dan akses data sensitif.
 
-## 🛣️ Langkah Selanjutnya (Per 2026-05-15)
+## 🛣️ Langkah Selanjutnya (Per 2026-05-18)
 
-## Status Terakhir (Per 2026-05-15)
+## Status Terakhir (Per 2026-05-18)
 
-Tahap terakhir yang sudah selesai adalah **Phase 4/4B backend auth + admin approval flow**, termasuk frontend login admin dan redirect role.
+Tahap terakhir yang sudah selesai adalah **Phase 6 journal/screening pasien end-to-end dasar**, setelah Phase 4/4B auth + admin approval flow.
 
 Yang sudah tervalidasi:
 - Phase 3.5 schema alignment selesai: model SQLAlchemy cocok dengan tabel Supabase.
@@ -491,21 +501,27 @@ Yang sudah tervalidasi:
 - Swagger auth sudah memakai HTTP Bearer token, bukan OAuth2 password login lokal.
 - Frontend `/sign-in` sudah login Supabase, call `GET /api/auth/me`, lalu redirect role ke admin/psikolog/pasien.
 - Frontend `/admin/*` punya guard client-side; backend tetap security final untuk `/api/admin/*`.
+- Frontend `/sign-up` pasien sudah terhubung ke `supabase.auth.signUp()` lalu `POST /api/auth/profile/pasien`.
+- Backend `GET /api/auth/profile/pasien` tersedia untuk halaman profil pasien.
+- Backend journal endpoints tersedia dan terhubung ke analyzer/pre-assessment persistence.
+- Frontend screening pasien sudah terhubung ke backend journal start/answer/finalize.
+- Halaman selesai screening pasien sudah membaca hasil pra-asesmen dan list psikolog tersedia dari backend.
 
-Update setelah `git pull` 2026-05-15:
-- Remote sudah berada di commit `106038d perbaikan servis llm`.
-- Update teman menyentuh servis LLM/analyzer: `.env.example`, `api/core/config.py`, `test_setup.py`, dan `analyzer/main.py`.
-- Update frontend sebelumnya memperbarui tampilan admin panel, tetapi `/admin/pendaftaran` masih memakai data dummy dan belum call backend.
+Update setelah `git pull` 2026-05-18:
+- Remote sudah berada di commit `3e942a9 loading icon`.
+- Update teman menyentuh tampilan frontend/auth dan loading state.
+- `/sign-up` pasien sudah memakai Supabase Auth + backend profile sync.
+- `/admin/pendaftaran` masih memakai data dummy dan belum call backend admin.
 - Fix lokal terbaru: `analyzer/main.py` sudah punya `LOCATION = "global"` dan default model eksperimen `DEFAULT_MODEL_NAME = "gemini-3.1-pro-preview"`.
 - Verifikasi sintaks analyzer berhasil dengan `python -m py_compile analyzer\main.py`.
-- Phase 5 backend sudah dimulai: `analyzer_service.py` wrapper async + masking data, dan `pre_assessment_service.py` persistence ke `pra_asesmen`/`distorsi_terdeteksi`.
+- Phase 5/6 pasien sudah tersambung: analyzer wrapper + masking data, persistence ke `pra_asesmen`/`distorsi_terdeteksi`, journal finalize, dan frontend screening.
 
 Langkah berikutnya yang paling dekat:
-1. Commit perubahan backend jika sudah direview: auth profile update, Swagger Bearer, Alembic stamp note, analyzer/pre-assessment service, dan update skills.
-2. Lanjut Phase 6 backend: implement journal flow service (`start_session`, `submit_answer`, `finalize_session`).
-3. Hubungkan `finalize_session` ke `analyzer_service.py` dan `pre_assessment_service.py`.
-4. Tambahkan crisis bypass response saat hasil analyzer `critical` atau self-harm flag aktif.
-5. Setelah frontend siap, hubungkan halaman `/admin/pendaftaran` ke endpoint admin dan sambungkan signup pasien/psikolog.
+1. Test manual end-to-end pasien dengan backend aktif: login pasien -> screening -> finalize -> halaman selesai.
+2. Implement assignment pilihan psikolog dari halaman selesai ke `pra_asesmen.id_psikolog` atau buat booking awal sesuai desain Phase 6B/7.
+3. Hubungkan psikolog feedback/review pre-assessment agar psikolog bisa validasi hasil AI.
+4. Hubungkan halaman `/admin/pendaftaran` ke endpoint backend `GET /api/admin/psikolog?status_akun=pending` dan tombol approve/reject.
+5. Setelah flow review siap, lanjut Phase 7: jadwal, booking, pembayaran, dan hasil konsultasi.
 
 Catatan: checklist lama di bawah ini adalah konteks historis sebelum update Phase 4/4B selesai.
 
@@ -534,15 +550,15 @@ Urutan eksekusi yang direkomendasikan setelah Phase 4 partial selesai:
 - [ ] Guard endpoint psikolog (`booking`, `jadwal`) tolak akses kalau status ≠ `terverifikasi`.
 
 ### D. Phase 5 — Analyzer Integration
-- [ ] `api/services/analyzer_service.py` wrap `analyzer/main.py` async + data masking sebelum kirim ke Gemini.
+- [x] `api/services/analyzer_service.py` wrap `analyzer/main.py` async + data masking sebelum kirim ke Gemini.
 - [ ] Mock Gemini di pytest fixtures.
-- [ ] Output mencakup distorsi, severity 4-level, ringkasan, dan flag crisis.
+- [x] Output mencakup distorsi, severity 4-level, ringkasan, dan flag crisis.
 
 ### E. Phase 6 — Journal Flow + Crisis Bypass
-- [ ] Schemas `JournalSessionStart`, `JournalAnswer`, `JournalSessionResponse`.
-- [ ] Service `journal_service.py`: `start_session`, `submit_answer`, `finalize_session`.
-- [ ] Consent check sebelum narasi masuk analyzer.
-- [ ] Crisis bypass di `finalize_session` (severity=critical → CrisisResponse).
+- [x] Schemas `JournalSessionStart`, `JournalAnswer`, `JournalSessionResponse`.
+- [x] Service `journal_service.py`: `start_session`, `submit_answer`, `finalize_session`.
+- [x] Consent check sebelum narasi masuk analyzer.
+- [x] Crisis bypass di `finalize_session` (severity=critical → CrisisResponse).
 
 ### F. Phase 6B — Feedback Psikolog
 - [ ] Endpoint psikolog approve/edit/reject pre-assessment AI.
