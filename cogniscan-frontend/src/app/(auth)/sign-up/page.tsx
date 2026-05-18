@@ -140,7 +140,7 @@ export default function SignUpPage() {
 
   return (
     <>
-      {isSubmitting ? <LoadingPage text="Membuat akun..." showText={false} /> : null}
+      {isSubmitting ? <LoadingPage text="Membuat akun..." /> : null}
       <AuthShell className="max-w-200">
       <form className="px-8 pb-16 pt-20 sm:px-16 md:px-20" onSubmit={handleSubmit}>
         <div className="mb-12 text-center">

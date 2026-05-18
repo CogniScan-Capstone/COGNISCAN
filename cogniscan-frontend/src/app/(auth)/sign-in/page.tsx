@@ -218,7 +218,7 @@ export default function SignInPage() {
 
   return (
     <>
-      {isSubmitting ? <LoadingPage text="Memeriksa akun..." showText={false} /> : null}
+      {isSubmitting ? <LoadingPage text="Memeriksa akun..." /> : null}
       <AuthShell compact className="max-w-md">
       <form className="px-12 pb-16 pt-14 sm:px-12" onSubmit={handleSubmit}>
         <div className="mb-10 text-center">

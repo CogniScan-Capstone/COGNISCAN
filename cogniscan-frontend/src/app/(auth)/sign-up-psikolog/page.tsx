@@ -260,7 +260,7 @@ export default function SignUpPsikologPage() {
 
   return (
     <>
-      {isSubmitting ? <LoadingPage text="Mengirim pendaftaran..." showText={false} /> : null}
+      {isSubmitting ? <LoadingPage text="Mengirim pendaftaran..." /> : null}
       <AuthShell className="max-w-[960px] before:hidden">
       <form className="px-9 py-10 sm:px-12" onSubmit={handleSubmit}>
         <div className="mb-14 mt-5 text-center">
