@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { BriefcaseMedical, MessagesSquare, Info } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import {
@@ -8,6 +9,8 @@ import {
   patientUser as defaultPatientUser,
   ScreeningTopicCard,
 } from "@/components/patient";
+import { fetchPatientDashboardSummary, type PatientDashboardSummary } from "@/lib/auth";
+import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
 
 const topics = [
@@ -51,11 +54,40 @@ const topics = [
 
 export default function PasienDashboardPage() {
   const backendUser = useBackendUser();
+  const [summary, setSummary] = useState<PatientDashboardSummary | null>(null);
   const displayUser = {
     ...defaultPatientUser,
     name: backendUser?.nama_lengkap?.trim() || defaultPatientUser.name,
   };
   const patientUser = displayUser;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSummary() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+
+        if (!accessToken) {
+          throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+        }
+
+        const result = await fetchPatientDashboardSummary(accessToken);
+        if (isMounted) setSummary(result);
+      } catch {
+        if (isMounted) {
+          setSummary({ pesan_baru: 0, total_konsultasi: 0 });
+        }
+      }
+    }
+
+    loadSummary();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <DashboardLayout
@@ -79,7 +111,9 @@ export default function PasienDashboardPage() {
               <p className="text-[16px] font-medium text-on-surface-variant">
                 Pesan Baru
               </p>
-              <p className="text-[16px] font-semibold text-[#6f5794]">3</p>
+              <p className="text-[16px] font-semibold text-[#6f5794]">
+                {summary ? summary.pesan_baru : "-"}
+              </p>
             </div>
           </DashboardCard>
 
@@ -91,7 +125,9 @@ export default function PasienDashboardPage() {
               <p className="text-[16px] font-medium text-on-surface-variant">
                 Total Konsultasi
               </p>
-              <p className="text-[16px] font-semibold text-primary">12</p>
+              <p className="text-[16px] font-semibold text-primary">
+                {summary ? summary.total_konsultasi : "-"}
+              </p>
             </div>
           </DashboardCard>
         </section>

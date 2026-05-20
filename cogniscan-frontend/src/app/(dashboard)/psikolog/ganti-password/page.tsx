@@ -6,7 +6,6 @@ import { AuthLogo, AuthShell } from "@/components/auth/AuthShell";
 import { Field, PrimaryAuthButton } from "@/components/auth/fields";
 import LoadingPage from "@/components/loading/page";
 import { changeTemporaryPassword } from "@/lib/auth";
-import { waitForMinimumLoading } from "@/lib/loadingDelay";
 import { supabase } from "@/lib/supabase/client";
 
 export default function PsikologChangeTemporaryPasswordPage() {
@@ -32,7 +31,6 @@ export default function PsikologChangeTemporaryPasswordPage() {
     }
 
     setIsSubmitting(true);
-    const loadingStartedAt = Date.now();
 
     try {
       const { data } = await supabase.auth.getSession();
@@ -43,11 +41,9 @@ export default function PsikologChangeTemporaryPasswordPage() {
       }
 
       await changeTemporaryPassword(accessToken, password);
-      await waitForMinimumLoading(loadingStartedAt);
       router.replace("/psikolog/dashboard");
       router.refresh();
     } catch (error) {
-      await waitForMinimumLoading(loadingStartedAt);
       setErrorMessage(
         error instanceof Error ? error.message : "Password baru gagal disimpan.",
       );

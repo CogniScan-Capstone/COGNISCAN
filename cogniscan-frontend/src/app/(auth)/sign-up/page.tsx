@@ -13,7 +13,6 @@ import {
   normalizeAuthEmail,
   savePendingPatientProfile,
 } from "@/lib/auth";
-import { waitForMinimumLoading } from "@/lib/loadingDelay";
 import { supabase } from "@/lib/supabase/client";
 
 type GenderValue = "" | "laki-laki" | "perempuan";
@@ -77,7 +76,6 @@ export default function SignUpPage() {
     }
 
     setIsSubmitting(true);
-    const loadingStartedAt = Date.now();
 
     try {
       const normalizedEmail = normalizeAuthEmail(email);
@@ -119,7 +117,6 @@ export default function SignUpPage() {
           "cogniscan:auth-info",
           "Akun berhasil dibuat. Silakan konfirmasi email dari Supabase, lalu masuk dengan email dan password yang sama.",
         );
-        await waitForMinimumLoading(loadingStartedAt);
         router.replace("/sign-in");
         return;
       }
@@ -127,11 +124,9 @@ export default function SignUpPage() {
       await createPatientProfile(accessToken, patientProfile);
       clearPendingPatientProfile(normalizedEmail);
 
-      await waitForMinimumLoading(loadingStartedAt);
       router.replace("/pasien/dashboard");
       router.refresh();
     } catch (error) {
-      await waitForMinimumLoading(loadingStartedAt);
       setErrorMessage(getSignupErrorMessage(error));
     } finally {
       setIsSubmitting(false);

@@ -92,6 +92,8 @@ export type PreAssessment = {
   id_pra_asesmen: number;
   id_sesi_jurnal?: number | null;
   id_psikolog?: number | null;
+  nama_psikolog?: string | null;
+  konteks_pemicu?: string | null;
   indikator_urgensi?: string | null;
   skor_keparahan?: number | null;
   ringkasan_kondisi?: string | null;
@@ -132,6 +134,11 @@ export type AvailablePsychologist = {
   dibuat_pada?: string | null;
   tgl_kadaluarsa_str?: string | null;
   tgl_kadaluarsa_sip?: string | null;
+};
+
+export type PatientDashboardSummary = {
+  pesan_baru: number;
+  total_konsultasi: number;
 };
 
 export const API_BASE_URL =
@@ -202,8 +209,22 @@ export async function getApiErrorMessage(response: Response) {
   return `Request gagal dengan status ${response.status}`;
 }
 
+async function fetchApi(input: RequestInfo | URL, init?: RequestInit) {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(
+        "Tidak bisa menghubungi backend. Pastikan backend aktif, sudah direstart, dan frontend memakai URL API yang benar.",
+      );
+    }
+
+    throw error;
+  }
+}
+
 export async function fetchCurrentUser(accessToken: string): Promise<BackendUser> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+  const response = await fetchApi(`${API_BASE_URL}/api/auth/me`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -220,7 +241,7 @@ export async function createPatientProfile(
   accessToken: string,
   payload: PatientProfilePayload,
 ): Promise<BackendUser> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/profile/pasien`, {
+  const response = await fetchApi(`${API_BASE_URL}/api/auth/profile/pasien`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -237,7 +258,7 @@ export async function createPatientProfile(
 }
 
 export async function fetchPatientProfile(accessToken: string): Promise<PatientProfile> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/profile/pasien`, {
+  const response = await fetchApi(`${API_BASE_URL}/api/auth/profile/pasien`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -254,7 +275,7 @@ export async function updatePatientProfile(
   accessToken: string,
   payload: PatientProfilePayload,
 ): Promise<PatientProfile> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/profile/pasien`, {
+  const response = await fetchApi(`${API_BASE_URL}/api/auth/profile/pasien`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -273,7 +294,7 @@ export async function updatePatientProfile(
 export async function registerPsikologCandidate(
   payload: PsikologRegistrationPayload,
 ) {
-  const response = await fetch(`${API_BASE_URL}/api/auth/register/psikolog`, {
+  const response = await fetchApi(`${API_BASE_URL}/api/auth/register/psikolog`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -292,7 +313,7 @@ export async function changeTemporaryPassword(
   accessToken: string,
   newPassword: string,
 ): Promise<{ message: string }> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/change-temporary-password`, {
+  const response = await fetchApi(`${API_BASE_URL}/api/auth/change-temporary-password`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -312,7 +333,7 @@ export async function startJournalSession(
   accessToken: string,
   payload: JournalSessionStartPayload,
 ): Promise<JournalSession> {
-  const response = await fetch(`${API_BASE_URL}/api/journal/sessions/start`, {
+  const response = await fetchApi(`${API_BASE_URL}/api/journal/sessions/start`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -333,7 +354,7 @@ export async function submitJournalAnswer(
   idSesiJurnal: number,
   payload: JournalAnswerPayload,
 ): Promise<JournalAnswer> {
-  const response = await fetch(
+  const response = await fetchApi(
     `${API_BASE_URL}/api/journal/sessions/${idSesiJurnal}/answers`,
     {
       method: "POST",
@@ -356,7 +377,7 @@ export async function finalizeJournalSession(
   accessToken: string,
   idSesiJurnal: number,
 ): Promise<JournalFinalizeResult> {
-  const response = await fetch(
+  const response = await fetchApi(
     `${API_BASE_URL}/api/journal/sessions/${idSesiJurnal}/finalize`,
     {
       method: "POST",
@@ -377,7 +398,7 @@ export async function fetchPreAssessmentReport(
   accessToken: string,
   idPraAsesmen: number,
 ): Promise<PreAssessment> {
-  const response = await fetch(
+  const response = await fetchApi(
     `${API_BASE_URL}/api/pre-assessment/reports/${idPraAsesmen}`,
     {
       headers: {
@@ -393,10 +414,29 @@ export async function fetchPreAssessmentReport(
   return response.json() as Promise<PreAssessment>;
 }
 
+export async function fetchPatientPreAssessments(
+  accessToken: string,
+): Promise<PreAssessment[]> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/pre-assessment/reports`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PreAssessment[]>;
+}
+
 export async function fetchAvailablePsychologists(
   accessToken: string,
 ): Promise<AvailablePsychologist[]> {
-  const response = await fetch(`${API_BASE_URL}/api/pre-assessment/psikolog/available`, {
+  const response = await fetchApi(`${API_BASE_URL}/api/pre-assessment/psikolog/available`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -407,6 +447,22 @@ export async function fetchAvailablePsychologists(
   }
 
   return response.json() as Promise<AvailablePsychologist[]>;
+}
+
+export async function fetchPatientDashboardSummary(
+  accessToken: string,
+): Promise<PatientDashboardSummary> {
+  const response = await fetchApi(`${API_BASE_URL}/api/dashboard/pasien/summary`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PatientDashboardSummary>;
 }
 
 export function dashboardPathForRole(role: BackendUser["peran"]) {

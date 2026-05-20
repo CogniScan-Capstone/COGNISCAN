@@ -19,7 +19,6 @@ import {
   type BackendUser,
   type PatientProfilePayload,
 } from "@/lib/auth";
-import { waitForMinimumLoading } from "@/lib/loadingDelay";
 import { supabase } from "@/lib/supabase/client";
 
 export default function SignInPage() {
@@ -117,7 +116,6 @@ export default function SignInPage() {
     setErrorMessage("");
     setInfoMessage("");
     setIsSubmitting(true);
-    const loadingStartedAt = Date.now();
 
     try {
       const normalizedEmail = normalizeAuthEmail(email);
@@ -168,7 +166,6 @@ export default function SignInPage() {
           currentUser,
           profileFallback,
         );
-        await waitForMinimumLoading(loadingStartedAt);
         router.replace(entryPathForUser(user));
         router.refresh();
         return;
@@ -204,12 +201,10 @@ export default function SignInPage() {
           pendingProfile ?? metadataProfile,
         );
         clearPendingPatientProfile(normalizedEmail);
-        await waitForMinimumLoading(loadingStartedAt);
         router.replace(entryPathForUser(user));
         router.refresh();
       }
     } catch (error) {
-      await waitForMinimumLoading(loadingStartedAt);
       setErrorMessage(error instanceof Error ? error.message : "Gagal masuk ke akun");
     } finally {
       setIsSubmitting(false);

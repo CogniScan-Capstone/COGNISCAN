@@ -129,3 +129,25 @@ async def list_available_psikolog(db: AsyncSession) -> list[Psikolog]:
         .order_by(Psikolog.nama_lengkap.asc())
     )
     return list(result.scalars().all())
+
+
+async def list_patient_pre_assessments(
+    db: AsyncSession,
+    current_user: Pengguna,
+) -> list[PraAsesmen]:
+    """
+    Ambil semua pra-asesmen milik pasien login.
+    """
+    result = await db.execute(
+        select(PraAsesmen)
+        .join(SesiJurnal, PraAsesmen.id_sesi_jurnal == SesiJurnal.id_sesi_jurnal)
+        .join(Pasien, SesiJurnal.id_pasien == Pasien.id_pasien)
+        .where(Pasien.id_pengguna == current_user.id)
+        .options(
+            selectinload(PraAsesmen.distorsi_terdeteksi),
+            selectinload(PraAsesmen.psikolog),
+            selectinload(PraAsesmen.sesi_jurnal),
+        )
+        .order_by(PraAsesmen.dibuat_pada.desc())
+    )
+    return list(result.scalars().all())

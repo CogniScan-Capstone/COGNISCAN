@@ -21,7 +21,6 @@ import {
 } from "@/components/auth/fields";
 import LoadingPage from "@/components/loading/page";
 import { registerPsikologCandidate } from "@/lib/auth";
-import { waitForMinimumLoading } from "@/lib/loadingDelay";
 
 const MB = 1024 * 1024;
 
@@ -222,7 +221,6 @@ export default function SignUpPsikologPage() {
     }
 
     setIsSubmitting(true);
-    const loadingStartedAt = Date.now();
 
     try {
       await registerPsikologCandidate({
@@ -246,10 +244,8 @@ export default function SignUpPsikologPage() {
         bio_singkat: optionalText(bio),
       });
 
-      await waitForMinimumLoading(loadingStartedAt);
       router.push("/registration-success");
     } catch (error) {
-      await waitForMinimumLoading(loadingStartedAt);
       setFormError(
         error instanceof Error ? error.message : "Registrasi psikolog gagal diproses.",
       );

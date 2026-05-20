@@ -133,6 +133,34 @@ class AnalysisError(Exception):
         self.details = details
 
 
+def get_cleaned_schema() -> dict:
+    raw_schema = CognitiveDistortionAnalysis.model_json_schema()
+    import copy
+    schema = copy.deepcopy(raw_schema)
+    defs = schema.pop("$defs", {})
+
+    def _resolve(node):
+        if isinstance(node, dict):
+            if "$ref" in node:
+                ref_path = node["$ref"]
+                if ref_path.startswith("#/$defs/"):
+                    def_name = ref_path.split("/")[-1]
+                    if def_name in defs:
+                        resolved_def = _resolve(defs[def_name])
+                        node.clear()
+                        node.update(resolved_def)
+                        return node
+            node.pop("title", None)
+            for k, v in list(node.items()):
+                node[k] = _resolve(v)
+        elif isinstance(node, list):
+            for i in range(len(node)):
+                node[i] = _resolve(node[i])
+        return node
+
+    return _resolve(schema)
+
+
 def analyze_narrative_with_retry(
     text: str,
     prompt_version: str = "v2",
@@ -162,23 +190,30 @@ def analyze_narrative_with_retry(
     
     for attempt in range(max_retries):
         try:
+            config_kwargs = {
+                "system_instruction": system_instruction,
+                "response_mime_type": "application/json",
+                "response_schema": get_cleaned_schema(),
+                "temperature": 0.2,
+                "max_output_tokens": max_output,
+            }
+
+            # Check if ThinkingConfig is supported by the installed google-genai version
+            # and if the model is a reasoning model (contains 'pro', 'thinking', or 'gemini-3')
+            is_reasoning_model = any(x in MODEL_NAME.lower() for x in ["pro", "thinking", "gemini-3"])
+            if is_reasoning_model and hasattr(genai_types, 'ThinkingConfig'):
+                try:
+                    thinking_level_val = getattr(genai_types.ThinkingLevel, 'LOW', 'LOW')
+                    config_kwargs["thinking_config"] = genai_types.ThinkingConfig(
+                        thinking_level=thinking_level_val,
+                    )
+                except Exception as ex:
+                    logger.warning(f"Could not set thinking_config: {ex}")
+
             response = client.models.generate_content(
                 model=MODEL_NAME,
                 contents=text,
-                config=genai_types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    response_mime_type="application/json",
-                    response_schema=CognitiveDistortionAnalysis,
-                    temperature=0.2,
-                    max_output_tokens=max_output,
-                    # GEMINI 3 SPECIFIC: thinking_level menggantikan thinking_budget
-                    # LOW = minimum thinking untuk task klasifikasi cepat
-                    # MEDIUM = balanced
-                    # HIGH = full reasoning (default, paling lambat & mahal)
-                    thinking_config=genai_types.ThinkingConfig(
-                        thinking_level=genai_types.ThinkingLevel.LOW,
-                    ),
-                ),
+                config=genai_types.GenerateContentConfig(**config_kwargs),
             )
             
             if response.parsed is None:
@@ -239,7 +274,10 @@ def analyze_narrative_with_retry(
                     details={"text_length": text_len, "finish_reason": finish_reason}
                 )
             
-            return response.parsed
+            if response.parsed is not None:
+                if isinstance(response.parsed, dict):
+                    return CognitiveDistortionAnalysis(**response.parsed)
+                return response.parsed
         
         except google_exceptions.ResourceExhausted as e:
             wait_time = initial_delay * (2 ** attempt)

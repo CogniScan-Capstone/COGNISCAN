@@ -23,6 +23,8 @@ class PraAsesmenPasienResponse(BaseModel):
     id_pra_asesmen: int
     id_sesi_jurnal: int | None = None
     id_psikolog: int | None = None
+    nama_psikolog: str | None = None
+    konteks_pemicu: str | None = None
     indikator_urgensi: str | None = None
     skor_keparahan: int | None = None
     ringkasan_kondisi: str | None = None

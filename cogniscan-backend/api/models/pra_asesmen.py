@@ -49,3 +49,11 @@ class PraAsesmen(Base):
     psikolog: Mapped[Psikolog] = relationship(back_populates="pra_asesmen")
     distorsi_terdeteksi: Mapped[list[DistorsiTerdeteksi]] = relationship(back_populates="pra_asesmen")
     pemesanan_konsultasi: Mapped[list[PemesananKonsultasi]] = relationship(back_populates="pra_asesmen")
+
+    @property
+    def nama_psikolog(self) -> str | None:
+        return self.psikolog.nama_lengkap if self.psikolog else None
+
+    @property
+    def konteks_pemicu(self) -> str | None:
+        return self.sesi_jurnal.konteks_pemicu if self.sesi_jurnal else None

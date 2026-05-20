@@ -13,7 +13,11 @@ from api.models.pasien import Pasien
 from api.models.pengguna import Pengguna
 from api.models.pra_asesmen import PraAsesmen
 from api.models.sesi_jurnal import SesiJurnal
-from api.schemas.journal import JournalAnswerSubmit, JournalSessionStart
+from api.schemas.journal import (
+    JournalAnswerSubmit,
+    JournalSessionResponse,
+    JournalSessionStart,
+)
 from api.services.analyzer_service import analyze_narrative_for_pre_assessment
 from api.services.pre_assessment_service import create_pre_assessment_from_analysis
 
@@ -108,7 +112,7 @@ async def start_journal_session(
     db: AsyncSession,
     current_user: Pengguna,
     payload: JournalSessionStart,
-) -> SesiJurnal:
+) -> JournalSessionResponse:
     if not payload.consent_ai_processing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -127,7 +131,16 @@ async def start_journal_session(
     db.add(sesi_jurnal)
     await db.commit()
     await db.refresh(sesi_jurnal)
-    return sesi_jurnal
+    return JournalSessionResponse(
+        id_sesi_jurnal=sesi_jurnal.id_sesi_jurnal,
+        id_pasien=sesi_jurnal.id_pasien,
+        konteks_pemicu=sesi_jurnal.konteks_pemicu,
+        total_pertanyaan=sesi_jurnal.total_pertanyaan,
+        status=sesi_jurnal.status,
+        dimulai_pada=sesi_jurnal.dimulai_pada,
+        diselesaikan_pada=sesi_jurnal.diselesaikan_pada,
+        jawaban=[],
+    )
 
 
 async def _ensure_ai_processing_consent(

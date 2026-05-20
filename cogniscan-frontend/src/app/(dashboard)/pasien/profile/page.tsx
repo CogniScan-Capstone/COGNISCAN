@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
-import { ArrowRight, CalendarDays, KeyRound, Phone } from "lucide-react";
+import { ArrowRight, CalendarDays, KeyRound, Loader2, Phone } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import { getPatientNav, patientProfileHref, patientUser } from "@/components/patient";
 import {
@@ -197,7 +197,16 @@ export default function PatientProfilePage() {
           </h2>
 
           {isLoading ? (
-            <p className="text-sm text-on-surface-variant">Memuat profil...</p>
+            <div
+              className="flex min-h-[360px] items-center justify-center"
+              aria-label="Memuat profil pasien"
+              role="status"
+            >
+              <Loader2
+                className="h-9 w-9 animate-spin text-[#6f5794]"
+                aria-hidden="true"
+              />
+            </div>
           ) : (
             <form onSubmit={handleSave}>
               <div className="grid gap-x-10 gap-y-5 md:grid-cols-2">

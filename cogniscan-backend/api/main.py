@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.core.config import settings
 from api.core.logging_config import setup_logging
-from api.routers import admin, auth, journal, pre_assessment
+from api.routers import admin, auth, dashboard, journal, pre_assessment
 
 # from api.routers import journal, pre_assessment, booking, konsultasi, pembayaran, admin
 
@@ -19,6 +19,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1):\d+$"
+    if settings.DEBUG
+    else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,6 +40,7 @@ async def read_root():
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(journal.router, prefix="/api/journal", tags=["Journaling"])
 app.include_router(
     pre_assessment.router,

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
 import {
   finalizeJournalSession,
   startJournalSession,
@@ -79,6 +79,16 @@ export default function ScreeningQuestionPage() {
     currentAnswer.trim().length > 0 && (journalSessionId !== null || hasConsent);
   const isLastQuestion = currentIndex === questions.length - 1;
   const progress = ((currentIndex + 1) / questions.length) * 100;
+  const submitStatusText = isLastQuestion
+    ? "Menganalisis jawaban..."
+    : "Menyimpan jawaban...";
+  const submitButtonText = isSubmitting
+    ? isLastQuestion
+      ? "Menganalisis"
+      : "Menyimpan"
+    : isLastQuestion
+      ? "Selesai"
+      : "Selanjutnya";
 
   const topicSlug = useMemo(() => {
     const rawTopic = Array.isArray(params.topic) ? params.topic[0] : params.topic;
@@ -217,7 +227,10 @@ export default function ScreeningQuestionPage() {
           </div>
         </header>
 
-        <section className="relative overflow-hidden rounded-[24px] bg-white px-8 py-8 shadow-[0_24px_45px_-32px_rgba(27,28,26,0.36)] sm:px-12">
+        <section
+          className="relative overflow-hidden rounded-[24px] bg-white px-8 py-8 shadow-[0_24px_45px_-32px_rgba(27,28,26,0.36)] sm:px-12"
+          aria-busy={isSubmitting}
+        >
           <span
             aria-hidden="true"
             className="pointer-events-none absolute -left-1 -top-3 text-[150px] font-extrabold leading-none text-[#a98ad6]/8"
@@ -236,9 +249,10 @@ export default function ScreeningQuestionPage() {
                   [currentIndex]: event.target.value,
                 }))
               }
+              disabled={isSubmitting}
               rows={7}
               placeholder={currentQuestion.placeholder}
-              className="mt-8 w-full resize-none rounded-[12px] border border-surface-variant bg-surface px-6 py-5 text-[16px] text-on-surface outline-none transition placeholder:text-on-surface-muted/45 focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
+              className="mt-8 w-full resize-none rounded-[12px] border border-surface-variant bg-surface px-6 py-5 text-[16px] text-on-surface outline-none transition placeholder:text-on-surface-muted/45 focus:border-primary-container focus:ring-4 focus:ring-primary-container/15 disabled:cursor-wait disabled:opacity-70"
             />
             {journalSessionId === null ? (
               <label className="mt-5 flex items-start gap-3 rounded-[12px] border border-outline-variant bg-surface-container/60 px-4 py-4 text-[14px] leading-6 text-on-surface-variant">
@@ -246,6 +260,7 @@ export default function ScreeningQuestionPage() {
                   type="checkbox"
                   checked={hasConsent}
                   onChange={(event) => setHasConsent(event.target.checked)}
+                  disabled={isSubmitting}
                   className="mt-0.5 h-5 w-5 shrink-0 rounded border-outline-variant text-primary-container focus:ring-primary-container/20"
                 />
                 <span>
@@ -253,6 +268,16 @@ export default function ScreeningQuestionPage() {
                   untuk membuat pra-asesmen awal.
                 </span>
               </label>
+            ) : null}
+            {isSubmitting ? (
+              <div
+                className="mt-5 inline-flex items-center gap-3 rounded-full border border-primary-container/40 bg-primary-container/10 px-4 py-2 text-sm font-semibold text-primary"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                {submitStatusText}
+              </div>
             ) : null}
             {errorMessage ? (
               <p className="mt-5 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -274,8 +299,9 @@ export default function ScreeningQuestionPage() {
                 onClick={() => {
                   if (!isSubmitting) setCurrentIndex(index);
                 }}
+                disabled={isSubmitting}
                 className={cn(
-                  "flex h-9 items-center justify-center rounded-full border text-sm font-semibold transition-colors",
+                  "flex h-9 items-center justify-center rounded-full border text-sm font-semibold transition-colors disabled:cursor-wait disabled:opacity-60",
                   active && "border-[#a98ad6] bg-secondary-container text-[#6f5794]",
                   !active && answered && "border-primary-container bg-primary-container text-white",
                   !active && !answered && "border-outline-variant bg-white text-on-surface-muted",
@@ -295,7 +321,7 @@ export default function ScreeningQuestionPage() {
             type="button"
             onClick={goPrevious}
             disabled={isSubmitting}
-            className="inline-flex h-12 items-center gap-3 rounded-full border border-primary px-8 text-sm font-extrabold uppercase tracking-[0.12em] text-primary transition hover:bg-primary-container/10"
+            className="inline-flex h-12 items-center gap-3 rounded-full border border-primary px-8 text-sm font-extrabold uppercase tracking-[0.12em] text-primary transition hover:bg-primary-container/10 disabled:cursor-wait disabled:opacity-60"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
             Sebelumnya
@@ -311,14 +337,13 @@ export default function ScreeningQuestionPage() {
                 : "cursor-not-allowed bg-primary-container/45",
             )}
           >
-            {isSubmitting
-              ? isLastQuestion
-                ? "Menganalisis"
-                : "Menyimpan"
-              : isLastQuestion
-                ? "Selesai"
-                : "Selanjutnya"}
-            <ArrowRight className="h-5 w-5" aria-hidden="true" />
+            {isSubmitting ? (
+              <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+            ) : null}
+            {submitButtonText}
+            {!isSubmitting ? (
+              <ArrowRight className="h-5 w-5" aria-hidden="true" />
+            ) : null}
           </button>
         </div>
       </footer>
