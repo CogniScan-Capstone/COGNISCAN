@@ -24,6 +24,8 @@ class PraAsesmenPasienResponse(BaseModel):
     id_sesi_jurnal: int | None = None
     id_psikolog: int | None = None
     nama_psikolog: str | None = None
+    nama_pasien: str | None = None
+    dialog_jurnal: str | None = None
     konteks_pemicu: str | None = None
     indikator_urgensi: str | None = None
     skor_keparahan: int | None = None
@@ -34,6 +36,15 @@ class PraAsesmenPasienResponse(BaseModel):
     divalidasi_pada: datetime | None = None
     dibuat_pada: datetime | None = None
     distorsi_terdeteksi: list[DistorsiTerdeteksiResponse] = Field(default_factory=list)
+
+
+class PraAsesmenAssignPsikologRequest(BaseModel):
+    id_psikolog: int = Field(..., gt=0)
+
+
+class PraAsesmenFeedbackRequest(BaseModel):
+    feedback_psikolog: str = ""
+    status_validasi: str | None = "selesai"
 
 
 class PsikologAvailableResponse(BaseModel):

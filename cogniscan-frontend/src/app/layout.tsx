@@ -11,7 +11,7 @@ const notoSerif = Noto_Serif({
   display: "swap",
 });
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "CogniScan — Refleksi terpandu untuk pikiranmu",
@@ -29,9 +29,7 @@ export default function RootLayout({
       lang="id"
       className={cn(notoSerif.variable, "font-sans", geist.variable)}
     >
-      <body suppressHydrationWarning>
-        {children}
-      </body>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

@@ -1,18 +1,24 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { dashboardPathForRole, fetchCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 
 export default function AdminDashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [isAllowed, setIsAllowed] = useState(false);
+  const verifiedRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
 
     async function verifyAdminAccess() {
+      if (verifiedRef.current) {
+        if (isMounted) setIsAllowed(true);
+        return;
+      }
+
       const { data } = await supabase.auth.getSession();
       const accessToken = data.session?.access_token;
 
@@ -28,6 +34,7 @@ export default function AdminDashboardLayout({ children }: { children: ReactNode
           return;
         }
 
+        verifiedRef.current = true;
         if (isMounted) setIsAllowed(true);
       } catch {
         await supabase.auth.signOut();

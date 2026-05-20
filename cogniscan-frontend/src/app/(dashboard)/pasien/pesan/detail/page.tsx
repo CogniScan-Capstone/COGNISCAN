@@ -151,7 +151,18 @@ function PatientMessageDetailContent() {
             </div>
 
             <div className="mt-10 space-y-5 text-[16px] leading-8 text-on-surface-variant">
-              <p className="whitespace-pre-wrap">{report.feedback_psikolog}</p>
+              {report.feedback_psikolog ? (
+                <p className="whitespace-pre-wrap">{report.feedback_psikolog}</p>
+              ) : (
+                <div className="rounded-[12px] border border-dashed border-outline-variant bg-surface-container/30 px-6 py-8 text-center">
+                  <p className="text-[15px] italic text-on-surface-muted">
+                    Psikolog belum menuliskan tanggapan atau catatan feedback resmi untuk hasil screening ini.
+                  </p>
+                  <p className="mt-2 text-sm text-on-surface-variant">
+                    Jangan khawatir, hasil analisis awal AI tetap dapat diakses oleh psikolog Anda untuk mempersiapkan sesi konsultasi tatap muka Anda.
+                  </p>
+                </div>
+              )}
             </div>
 
             {distortions.length > 0 && (

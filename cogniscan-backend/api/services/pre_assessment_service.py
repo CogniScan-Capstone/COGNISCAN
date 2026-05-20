@@ -104,7 +104,12 @@ async def get_patient_pre_assessment(
             PraAsesmen.id_pra_asesmen == id_pra_asesmen,
             Pasien.id_pengguna == current_user.id,
         )
-        .options(selectinload(PraAsesmen.distorsi_terdeteksi))
+        .options(
+            selectinload(PraAsesmen.distorsi_terdeteksi),
+            selectinload(PraAsesmen.psikolog),
+            selectinload(PraAsesmen.sesi_jurnal).selectinload(SesiJurnal.pasien),
+            selectinload(PraAsesmen.sesi_jurnal).selectinload(SesiJurnal.jawaban),
+        )
     )
     pra_asesmen = result.scalar_one_or_none()
     if pra_asesmen is None:
@@ -114,6 +119,62 @@ async def get_patient_pre_assessment(
         )
 
     return pra_asesmen
+
+
+async def assign_psikolog_to_pre_assessment(
+    db: AsyncSession,
+    current_user: Pengguna,
+    id_pra_asesmen: int,
+    id_psikolog: int,
+) -> PraAsesmen:
+    """
+    Simpan psikolog pilihan pasien untuk pra-asesmen miliknya.
+    """
+    pra_asesmen = await get_patient_pre_assessment(
+        db=db,
+        current_user=current_user,
+        id_pra_asesmen=id_pra_asesmen,
+    )
+
+    if (
+        pra_asesmen.status_validasi == "perlu_eskalasi"
+        or pra_asesmen.indikator_urgensi == "critical"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pra asesmen krisis tidak dapat masuk antrean review normal",
+        )
+
+    if pra_asesmen.feedback_psikolog and pra_asesmen.feedback_psikolog.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pra asesmen ini sudah memiliki feedback psikolog",
+        )
+
+    psikolog_result = await db.execute(
+        select(Psikolog).where(
+            Psikolog.id_psikolog == id_psikolog,
+            Psikolog.status_akun == "terverifikasi",
+            Psikolog.apakah_sudah_ganti_password.is_(True),
+        )
+    )
+    psikolog = psikolog_result.scalar_one_or_none()
+    if psikolog is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Psikolog terverifikasi tidak ditemukan",
+        )
+
+    pra_asesmen.id_psikolog = psikolog.id_psikolog
+    if pra_asesmen.status_validasi not in {"sedang_direview", "selesai"}:
+        pra_asesmen.status_validasi = "menunggu"
+
+    await db.commit()
+    return await get_patient_pre_assessment(
+        db=db,
+        current_user=current_user,
+        id_pra_asesmen=id_pra_asesmen,
+    )
 
 
 async def list_available_psikolog(db: AsyncSession) -> list[Psikolog]:
@@ -146,8 +207,109 @@ async def list_patient_pre_assessments(
         .options(
             selectinload(PraAsesmen.distorsi_terdeteksi),
             selectinload(PraAsesmen.psikolog),
-            selectinload(PraAsesmen.sesi_jurnal),
+            selectinload(PraAsesmen.sesi_jurnal).selectinload(SesiJurnal.pasien),
+            selectinload(PraAsesmen.sesi_jurnal).selectinload(SesiJurnal.jawaban),
         )
         .order_by(PraAsesmen.dibuat_pada.desc())
     )
     return list(result.scalars().all())
+
+
+async def get_psikolog_by_pengguna_id(db: AsyncSession, id_pengguna) -> Psikolog:
+    result = await db.execute(
+        select(Psikolog).where(Psikolog.id_pengguna == id_pengguna)
+    )
+    psikolog = result.scalar_one_or_none()
+    if psikolog is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profil psikolog tidak ditemukan",
+        )
+    return psikolog
+
+
+async def list_psikolog_pre_assessments(
+    db: AsyncSession,
+    current_user: Pengguna,
+) -> list[PraAsesmen]:
+    """
+    Ambil semua pra-asesmen yang ditugaskan ke psikolog login.
+    """
+    psikolog = await get_psikolog_by_pengguna_id(db, current_user.id)
+    result = await db.execute(
+        select(PraAsesmen)
+        .join(SesiJurnal, PraAsesmen.id_sesi_jurnal == SesiJurnal.id_sesi_jurnal)
+        .join(Pasien, SesiJurnal.id_pasien == Pasien.id_pasien)
+        .where(PraAsesmen.id_psikolog == psikolog.id_psikolog)
+        .options(
+            selectinload(PraAsesmen.distorsi_terdeteksi),
+            selectinload(PraAsesmen.psikolog),
+            selectinload(PraAsesmen.sesi_jurnal).selectinload(SesiJurnal.pasien),
+            selectinload(PraAsesmen.sesi_jurnal).selectinload(SesiJurnal.jawaban),
+        )
+        .order_by(PraAsesmen.dibuat_pada.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_psikolog_pre_assessment(
+    db: AsyncSession,
+    current_user: Pengguna,
+    id_pra_asesmen: int,
+) -> PraAsesmen:
+    """
+    Ambil pra-asesmen spesifik yang ditugaskan ke psikolog login.
+    """
+    psikolog = await get_psikolog_by_pengguna_id(db, current_user.id)
+    result = await db.execute(
+        select(PraAsesmen)
+        .where(
+            PraAsesmen.id_pra_asesmen == id_pra_asesmen,
+            PraAsesmen.id_psikolog == psikolog.id_psikolog,
+        )
+        .options(
+            selectinload(PraAsesmen.distorsi_terdeteksi),
+            selectinload(PraAsesmen.psikolog),
+            selectinload(PraAsesmen.sesi_jurnal).selectinload(SesiJurnal.pasien),
+            selectinload(PraAsesmen.sesi_jurnal).selectinload(SesiJurnal.jawaban),
+        )
+    )
+    pra_asesmen = result.scalar_one_or_none()
+    if pra_asesmen is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pra asesmen tidak ditemukan atau tidak ditugaskan kepada Anda",
+        )
+    return pra_asesmen
+
+
+async def submit_pre_assessment_feedback(
+    db: AsyncSession,
+    current_user: Pengguna,
+    id_pra_asesmen: int,
+    feedback_psikolog: str,
+    status_validasi: str = "selesai",
+) -> PraAsesmen:
+    """
+    Simpan feedback psikolog pada pra-asesmen.
+    """
+    from sqlalchemy import func
+    pra_asesmen = await get_psikolog_pre_assessment(db, current_user, id_pra_asesmen)
+
+    normalized_feedback = feedback_psikolog.strip()
+    normalized_status = status_validasi or "selesai"
+
+    if normalized_status == "selesai" and len(normalized_feedback) < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Feedback psikolog minimal 10 karakter untuk menyelesaikan review",
+        )
+
+    pra_asesmen.feedback_psikolog = normalized_feedback or None
+    pra_asesmen.status_validasi = normalized_status
+    pra_asesmen.divalidasi_pada = func.now() if normalized_feedback else None
+
+    await db.commit()
+
+    # Reload and return
+    return await get_psikolog_pre_assessment(db, current_user, id_pra_asesmen)

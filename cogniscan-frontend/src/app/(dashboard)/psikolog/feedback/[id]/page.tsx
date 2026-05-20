@@ -1,160 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { use, useMemo, useState } from "react";
+import { use, useMemo, useState, useEffect } from "react";
 import {
   ArrowLeft,
   Brain,
   CheckCircle2,
   Edit3,
-  PauseCircle,
+  Eye,
+  EyeOff,
   Save,
   Send,
   Sparkles,
   Trash2,
-  XCircle,
+  Loader2,
 } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import {
   getPsikologNav,
   psikologProfileHref,
-  psikologUser,
+  psikologUser as defaultPsikologUser,
 } from "@/components/psikolog";
 import { cn } from "@/lib/utils";
+import {
+  fetchPsikologPreAssessmentReport,
+  submitPreAssessmentFeedback,
+  type PreAssessment,
+} from "@/lib/auth";
+import { supabase } from "@/lib/supabase/client";
+import { useBackendUser } from "@/lib/useBackendUser";
 
 type AiAccuracy = "sangat-akurat" | "sebagian-akurat" | "tidak-akurat";
 type SeverityLevel = "hijau" | "kuning" | "merah";
 type Recommendation = "lanjutkan" | "tidak-perlu";
 type Mode = "compose" | "view";
 
-type FeedbackData = {
-  id: string;
-  name: string;
-  topic: string;
-  topicTone: "peach" | "orange" | "lilac" | "green" | "blue";
-  relativeTime: string;
-  message: string;
-  aiSummary: string[];
-  aiRecommendations: string[];
-  aiSeverity: SeverityLevel;
-  aiScore: number;
-  tags: string[];
-};
-
-const dataset: Record<string, FeedbackData> = {
-  "rina-marlina": {
-    id: "rina-marlina",
-    name: "Rina Marlina",
-    topic: "Keluarga",
-    topicTone: "peach",
-    relativeTime: "2 jam yang lalu",
-    message:
-      "Saya merasa kesulitan untuk berkomunikasi dengan anak saya belakangan ini. Setiap kali saya mencoba berbicara, dia justru menjauh. Mohon arahannya untuk sesi minggu depan apakah kita bisa fokus pada topik ini?",
-    aiSummary: [
-      "Pasien menunjukkan kekhawatiran terhadap relasi orang tua-anak.",
-      "Terdapat indikasi stres ringan akibat komunikasi yang terputus.",
-      "Pola interaksi keluarga berpotensi memengaruhi kondisi emosional.",
-    ],
-    aiRecommendations: [
-      "Eksplorasi pola komunikasi keluarga pada sesi berikutnya.",
-      "Sarankan teknik active listening untuk dipraktikkan di rumah.",
-      "Pertimbangkan psikoedukasi singkat tentang fase remaja.",
-    ],
-    aiSeverity: "kuning",
-    aiScore: 62,
-    tags: ["komunikasi", "relasi keluarga", "stres ringan"],
-  },
-  "dimas-pratama": {
-    id: "dimas-pratama",
-    name: "Dimas Pratama",
-    topic: "Kecemasan",
-    topicTone: "lilac",
-    relativeTime: "Kemarin, 09:15",
-    message:
-      "Beberapa hari ini saya susah tidur dan jantung sering berdebar kencang menjelang ujian. Saya butuh strategi cepat untuk menenangkan diri sebelum sesi ujian besok.",
-    aiSummary: [
-      "Pasien melaporkan gejala kecemasan fisik (insomnia, palpitasi).",
-      "Pemicu utama: tekanan ujian dan ekspektasi performa.",
-      "Membutuhkan strategi grounding jangka pendek.",
-    ],
-    aiRecommendations: [
-      "Berikan teknik pernapasan 4-7-8 untuk meredakan palpitasi.",
-      "Sarankan jurnal kecemasan harian menjelang ujian.",
-      "Pertimbangkan sesi follow-up dalam 3 hari ke depan.",
-    ],
-    aiSeverity: "merah",
-    aiScore: 78,
-    tags: ["kecemasan", "insomnia", "ujian"],
-  },
-  "sari-wulandari": {
-    id: "sari-wulandari",
-    name: "Sari Wulandari",
-    topic: "Pendidikan",
-    topicTone: "orange",
-    relativeTime: "Kemarin, 14:20",
-    message:
-      "Terima kasih atas sarannya dokter, saya sudah mulai menerapkan jadwal belajar baru dan merasa jauh lebih tenang.",
-    aiSummary: [
-      "Pasien menunjukkan progres positif dengan intervensi.",
-      "Tingkat stres akademik menurun signifikan.",
-      "Cocok untuk dipertahankan tanpa perubahan rencana.",
-    ],
-    aiRecommendations: [
-      "Apresiasi konsistensi pasien dalam menjalankan jadwal baru.",
-      "Lanjutkan monitoring ringan setiap 2 minggu.",
-      "Dorong pasien mendokumentasikan keberhasilan kecil.",
-    ],
-    aiSeverity: "hijau",
-    aiScore: 28,
-    tags: ["progres positif", "manajemen waktu"],
-  },
-  "bagas-nugroho": {
-    id: "bagas-nugroho",
-    name: "Bagas Nugroho",
-    topic: "Keuangan",
-    topicTone: "green",
-    relativeTime: "2 hari lalu",
-    message:
-      "Pekerjaan saya sedang tidak stabil dan saya merasa cemas memikirkan tagihan bulan depan. Apakah ada teknik untuk mengelola pikiran berulang seperti ini?",
-    aiSummary: [
-      "Pasien menunjukkan ruminasi terkait kestabilan finansial.",
-      "Kekhawatiran berdampak pada konsentrasi harian.",
-      "Membutuhkan teknik reframing dan grounding sederhana.",
-    ],
-    aiRecommendations: [
-      "Latih cognitive reframing untuk pikiran berulang.",
-      "Sarankan teknik grounding 5-4-3-2-1 saat ruminasi muncul.",
-      "Diskusikan rencana finansial sederhana untuk menurunkan beban kognitif.",
-    ],
-    aiSeverity: "kuning",
-    aiScore: 55,
-    tags: ["ruminasi", "stres finansial"],
-  },
-  "lina-marlina": {
-    id: "lina-marlina",
-    name: "Lina Marlina",
-    topic: "Hubungan",
-    topicTone: "blue",
-    relativeTime: "3 hari lalu",
-    message:
-      "Saya dan pasangan sudah mencoba teknik komunikasi yang dokter sarankan, perlahan terasa lebih lega. Terima kasih banyak.",
-    aiSummary: [
-      "Pasien menerapkan teknik komunikasi yang disarankan.",
-      "Hubungan menunjukkan kualitas yang membaik.",
-      "Direkomendasikan check-in ringan dalam 2 minggu.",
-    ],
-    aiRecommendations: [
-      "Apresiasi penerapan teknik komunikasi yang konsisten.",
-      "Sarankan ritual quality time mingguan bersama pasangan.",
-      "Jadwalkan check-in singkat 2 minggu lagi.",
-    ],
-    aiSeverity: "hijau",
-    aiScore: 30,
-    tags: ["komunikasi pasangan", "progres positif"],
-  },
-};
-
-const topicToneClass: Record<FeedbackData["topicTone"], string> = {
+const topicToneClass: Record<string, string> = {
   peach: "border-[#f1d2c5] bg-[#fce6dc] text-[#a3553c]",
   orange: "border-[#fadcb5] bg-[#fdedd6] text-[#a35a1a]",
   lilac: "border-[#dbcfee] bg-[#e8e0f0] text-[#6f5794]",
@@ -180,16 +61,42 @@ const severityText: Record<SeverityLevel, string> = {
   merah: "text-[#d13a31]",
 };
 
-const severityBg: Record<SeverityLevel, string> = {
-  hijau: "bg-[#dfeedf]",
-  kuning: "bg-[#fbe8c5]",
-  merah: "bg-[#fbd6d4]",
-};
-
 const recommendationLabel: Record<Recommendation, string> = {
   lanjutkan: "Lanjutkan ke Sesi Konsultasi",
   "tidak-perlu": "Tidak Perlu Konsultasi Lanjutan",
 };
+
+const recommendationFallback = [
+  "Pertimbangkan psikoedukasi singkat yang membantu pasien memahami pola pikirnya dan memantau emosi harian.",
+];
+
+function cleanRecommendationText(value: string) {
+  return value
+    .replace(/^\s*(?:[-*]|\d+[.)])\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatAiRecommendations(value?: string | null) {
+  if (!value?.trim()) return recommendationFallback;
+
+  const normalized = value.replace(/\r/g, "\n").trim();
+  const lineItems = normalized
+    .split(/\n+/)
+    .map(cleanRecommendationText)
+    .filter(Boolean);
+
+  if (lineItems.length > 1) return lineItems;
+
+  const sentenceItems = normalized
+    .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
+    ?.map(cleanRecommendationText)
+    .filter(Boolean);
+
+  return sentenceItems && sentenceItems.length > 0
+    ? sentenceItems
+    : recommendationFallback;
+}
 
 export default function FeedbackDetailPage({
   params,
@@ -197,50 +104,250 @@ export default function FeedbackDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const data = useMemo(() => dataset[id] ?? dataset["rina-marlina"], [id]);
+  const backendUser = useBackendUser();
+  const displayUser = useMemo(() => ({
+    ...defaultPsikologUser,
+    name: backendUser?.nama_lengkap?.trim() || defaultPsikologUser.name,
+  }), [backendUser]);
+
+  const [report, setReport] = useState<PreAssessment | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const [mode, setMode] = useState<Mode>("compose");
   const [aiAccuracy, setAiAccuracy] = useState<AiAccuracy | null>(null);
-  const [severityFinal, setSeverityFinal] = useState<SeverityLevel>(
-    data.aiSeverity,
-  );
-  const [recommendation, setRecommendation] =
-    useState<Recommendation>("lanjutkan");
+  const [severityFinal, setSeverityFinal] = useState<SeverityLevel>("hijau");
+  const [recommendation, setRecommendation] = useState<Recommendation>("lanjutkan");
   const [feedbackText, setFeedbackText] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
   const [savedDraft, setSavedDraft] = useState(false);
+  const [showDialog, setShowDialog] = useState(false);
+
+  const loadReport = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+      }
+      const dataReport = await fetchPsikologPreAssessmentReport(accessToken, Number(id));
+      setReport(dataReport);
+
+      const hasFeedback = (dataReport.feedback_psikolog && dataReport.feedback_psikolog.trim().length > 0) || dataReport.status_validasi === "selesai";
+      if (hasFeedback) {
+        setMode("view");
+        setFeedbackText(dataReport.feedback_psikolog || "");
+      } else {
+        setMode("compose");
+        setFeedbackText("");
+      }
+
+      const severityMap: Record<string, SeverityLevel> = {
+        critical: "merah",
+        tinggi: "merah",
+        high: "merah",
+        sedang: "kuning",
+        medium: "kuning",
+        rendah: "hijau",
+        low: "hijau",
+      };
+      setSeverityFinal(severityMap[dataReport.indikator_urgensi || "rendah"] || "hijau");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal memuat detail feedback.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadInitialReport() {
+      setLoading(true);
+      setError("");
+      try {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (!accessToken) {
+          throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+        }
+        const dataReport = await fetchPsikologPreAssessmentReport(accessToken, Number(id));
+        if (!isMounted) return;
+
+        setReport(dataReport);
+
+        const hasExistingFeedback =
+          (dataReport.feedback_psikolog &&
+            dataReport.feedback_psikolog.trim().length > 0) ||
+          dataReport.status_validasi === "selesai";
+        if (hasExistingFeedback) {
+          setMode("view");
+          setFeedbackText(dataReport.feedback_psikolog || "");
+        } else {
+          setMode("compose");
+          setFeedbackText("");
+        }
+
+        const severityMap: Record<string, SeverityLevel> = {
+          critical: "merah",
+          tinggi: "merah",
+          high: "merah",
+          sedang: "kuning",
+          medium: "kuning",
+          rendah: "hijau",
+          low: "hijau",
+        };
+        setSeverityFinal(severityMap[dataReport.indikator_urgensi || "rendah"] || "hijau");
+      } catch (err) {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : "Gagal memuat detail feedback.");
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadInitialReport();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
+  const displayData = useMemo(() => {
+    if (!report) return null;
+
+    const topicToneMap: Record<string, "peach" | "orange" | "lilac" | "green" | "blue"> = {
+      pendidikan: "orange",
+      keluarga: "peach",
+      hubungan: "blue",
+      keuangan: "green",
+      "diri-sendiri": "lilac",
+      kesehatan: "lilac",
+    };
+    const topicTone = topicToneMap[report.konteks_pemicu?.toLowerCase() || ""] || "blue";
+
+    const relativeTime = report.dibuat_pada
+      ? new Date(report.dibuat_pada).toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        })
+      : "-";
+
+    const aiSummary = report.distorsi_terdeteksi && report.distorsi_terdeteksi.length > 0
+      ? report.distorsi_terdeteksi.map((distortion, index) => ({
+          id: String(distortion.id_distorsi_terdeteksi ?? `${index}-${distortion.tipe_distorsi ?? "distorsi"}`),
+          type: distortion.tipe_distorsi?.trim() || "Distorsi kognitif",
+          evidence: distortion.kalimat_bukti?.trim() || "",
+          explanation: distortion.penjelasan?.trim() || "Penjelasan AI belum tersedia.",
+        }))
+      : [
+          {
+            id: "no-distortion",
+            type: "Tidak ada distorsi spesifik",
+            evidence: "",
+            explanation: "AI tidak mendeteksi distorsi kognitif spesifik pada sesi ini.",
+          },
+        ];
+
+    const aiRecommendations = formatAiRecommendations(report.rekomendasi);
+
+    const tags = report.distorsi_terdeteksi
+      ? Array.from(new Set(report.distorsi_terdeteksi.map(d => d.tipe_distorsi).filter(Boolean))) as string[]
+      : [];
+
+    const aiSeverity: SeverityLevel = report.indikator_urgensi === "critical" || report.indikator_urgensi === "high" || report.indikator_urgensi === "tinggi"
+      ? "merah"
+      : report.indikator_urgensi === "medium" || report.indikator_urgensi === "sedang"
+        ? "kuning"
+        : "hijau";
+
+    return {
+      name: report.nama_pasien || "Pasien Anonim",
+      topic: report.konteks_pemicu || "Jurnal",
+      topicTone,
+      relativeTime,
+      dialogText: report.dialog_jurnal || report.ringkasan_kondisi || "Tidak ada sesi dialog yang tersimpan.",
+      aiSummary,
+      aiRecommendations,
+      tags,
+      aiSeverity,
+      aiScore: report.skor_keparahan || 0,
+    };
+  }, [report]);
 
   const remaining = 500 - feedbackText.length;
-  const canSubmit = feedbackText.trim().length >= 20 && aiAccuracy !== null;
+  const canSubmit = feedbackText.trim().length >= 20 && aiAccuracy !== null && !submitting;
 
   const handleSaveDraft = () => {
     setSavedDraft(true);
     setTimeout(() => setSavedDraft(false), 1800);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!canSubmit) return;
-    setMode("view");
+    setSubmitting(true);
+    setError("");
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+      }
+      await submitPreAssessmentFeedback(accessToken, Number(id), {
+        feedback_psikolog: feedbackText,
+        status_validasi: "selesai",
+      });
+      setMode("view");
+      await loadReport();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal menyimpan feedback.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEdit = () => {
     setMode("compose");
   };
 
-  const handleDelete = () => {
-    setMode("compose");
-    setFeedbackText("");
-    setInternalNotes("");
-    setAiAccuracy(null);
-    setRecommendation("lanjutkan");
-    setSeverityFinal(data.aiSeverity);
+  const handleDelete = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+      }
+      await submitPreAssessmentFeedback(accessToken, Number(id), {
+        feedback_psikolog: "",
+        status_validasi: "sedang_direview",
+      });
+      setMode("compose");
+      setFeedbackText("");
+      setInternalNotes("");
+      setAiAccuracy(null);
+      await loadReport();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal menghapus feedback.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <DashboardLayout
       title="Feedback"
       navItems={getPsikologNav("feedback")}
-      user={psikologUser}
+      user={displayUser}
       profileHref={psikologProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
@@ -258,421 +365,489 @@ export default function FeedbackDetailPage({
           </span>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-          <DashboardCard className="overflow-hidden border-transparent bg-[#7d75a1] px-7 py-7 text-white shadow-[0_24px_48px_-24px_rgba(45,33,64,0.55)]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                  Analisis AI CogniScan
-                </span>
-
-                <h2 className="mt-4 text-[20px] font-bold text-white">
-                  {data.name}
-                </h2>
-
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span
-                    className={cn(
-                      "inline-flex h-7 items-center rounded-full border px-3 text-[11px] font-bold uppercase tracking-widest",
-                      topicToneClass[data.topicTone],
-                    )}
-                  >
-                    {data.topic}
-                  </span>
-
-                  <span className="text-[13px] text-white/80">
-                    {data.relativeTime}
-                  </span>
-                </div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[24px] border border-outline-variant shadow-sm">
+            <Loader2 className="h-10 w-10 animate-spin text-[#6f5794]" />
+            <p className="mt-4 text-sm text-on-surface-muted">Memuat detail feedback...</p>
+          </div>
+        ) : error && !report ? (
+          <div className="rounded-[24px] bg-white border border-red-200 p-8 text-center max-w-[600px] mx-auto mt-10 shadow-sm">
+            <p className="text-sm font-semibold text-red-800 mb-4">{error}</p>
+            <button
+              onClick={loadReport}
+              className="inline-flex h-10 items-center justify-center rounded-full bg-red-100 px-5 text-sm font-semibold text-red-800 hover:bg-red-200 transition-colors"
+            >
+              Coba Lagi
+            </button>
+          </div>
+        ) : displayData ? (
+          <>
+            {error && (
+              <div className="rounded-[12px] border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {error}
               </div>
+            )}
 
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20">
-                <Brain className="h-6 w-6" aria-hidden="true" />
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-[18px] bg-white/10 p-5 ring-1 ring-white/10">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
-                Pesan Pasien
-              </p>
-
-              <p className="mt-2 text-[15px] leading-7 text-white">
-                {data.message}
-              </p>
-            </div>
-
-            <div className="mt-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
-                Ringkasan AI
-              </p>
-
-              <ul className="mt-3 space-y-2">
-                {data.aiSummary.map((point) => (
-                  <li
-                    key={point}
-                    className="flex items-start gap-2 text-[14px] text-white"
-                  >
-                    <span className="mt-2 inline-block h-1.5 w-1.5 rounded-full bg-white" />
-                    <span>{point}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="mt-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
-                Rekomendasi AI
-              </p>
-
-              <ol className="mt-3 space-y-2">
-                {data.aiRecommendations.map((rec, idx) => (
-                  <li
-                    key={rec}
-                    className="flex items-start gap-3 rounded-[12px] bg-white/10 px-3 py-2 text-[14px] text-white ring-1 ring-white/10"
-                  >
-                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20 text-[11px] font-bold text-white">
-                      {idx + 1}
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+              <DashboardCard className="overflow-hidden border-transparent bg-[#7d75a1] px-7 py-7 text-white shadow-[0_24px_48px_-24px_rgba(45,33,64,0.55)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
+                      <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                      Analisis AI CogniScan
                     </span>
 
-                    <span>{rec}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
+                    <h2 className="mt-4 text-[20px] font-bold text-white">
+                      {displayData.name}
+                    </h2>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              {data.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full bg-white/10 px-3 py-1 text-[12px] font-medium text-white ring-1 ring-white/10"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[14px] bg-white/10 p-4 ring-1 ring-white/10">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
-                  Severity AI
-                </p>
-
-                <p
-                  className={cn(
-                    "mt-2 inline-flex items-center gap-2 text-[15px] font-semibold",
-                    data.aiSeverity === "hijau" && "text-[#c7f1c6]",
-                    data.aiSeverity === "kuning" && "text-[#ffe29a]",
-                    data.aiSeverity === "merah" && "text-[#ffb5b2]",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "h-2.5 w-2.5 rounded-full",
-                      severityDot[data.aiSeverity],
-                    )}
-                  />
-
-                  {severityLabel[data.aiSeverity]}
-                </p>
-              </div>
-
-              <div className="rounded-[14px] bg-white/10 p-4 ring-1 ring-white/10">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
-                  Score
-                </p>
-
-                <p className="mt-2 text-[20px] font-bold text-white">
-                  {data.aiScore}%
-                </p>
-              </div>
-            </div>
-          </DashboardCard>
-
-          {mode === "compose" ? (
-            <DashboardCard className="px-7 py-7">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
-                  Konfirmasi Akurasi AI
-                </p>
-                <p className="mt-1 text-[13px] text-on-surface-variant">
-                  Seberapa akurat analisis AI dibandingkan penilaian Anda?
-                </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  {(
-                    [
-                      {
-                        value: "sangat-akurat",
-                        label: "Sangat Akurat",
-                        icon: CheckCircle2,
-                        activeClass:
-                          "border-[#3f5a3f] bg-[#dfeedf] text-[#3f5a3f]",
-                      },
-                      {
-                        value: "sebagian-akurat",
-                        label: "Sebagian Akurat",
-                        icon: PauseCircle,
-                        activeClass:
-                          "border-[#d37300] bg-[#fbe8c5] text-[#a35a1a]",
-                      },
-                      {
-                        value: "tidak-akurat",
-                        label: "Tidak Akurat",
-                        icon: XCircle,
-                        activeClass:
-                          "border-[#d13a31] bg-[#fbd6d4] text-[#a3372e]",
-                      },
-                    ] as const
-                  ).map((opt) => {
-                    const Icon = opt.icon;
-                    const active = aiAccuracy === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setAiAccuracy(opt.value)}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span
                         className={cn(
-                          "inline-flex items-center justify-center gap-2 rounded-[14px] border px-3 py-2.5 text-[13px] font-semibold transition",
-                          active
-                            ? opt.activeClass
-                            : "border-outline-variant bg-white text-on-surface-variant hover:border-primary",
+                          "inline-flex h-7 items-center rounded-full border px-3 text-[11px] font-bold uppercase tracking-widest",
+                          topicToneClass[displayData.topicTone],
                         )}
                       >
-                        <Icon className="h-4 w-4" aria-hidden="true" />
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                        {displayData.topic}
+                      </span>
 
-              <div className="mt-6">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
-                  Severity Final
-                </p>
-                <p className="mt-1 text-[13px] text-on-surface-variant">
-                  Tentukan tingkat keparahan akhir setelah meninjau.
-                </p>
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  {(["hijau", "kuning", "merah"] as SeverityLevel[]).map(
-                    (level) => {
-                      const active = severityFinal === level;
-                      return (
-                        <button
-                          key={level}
-                          type="button"
-                          onClick={() => setSeverityFinal(level)}
-                          aria-pressed={active}
+                      <span className="text-[13px] text-white/80">
+                        {displayData.relativeTime}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20">
+                    <Brain className="h-6 w-6" aria-hidden="true" />
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-[20px] bg-[#efe7f6] p-5 text-[#2f2841] shadow-[0_18px_36px_-28px_rgba(20,16,35,0.85)] ring-1 ring-white/25">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[12px] font-bold uppercase text-[#6f5794]">
+                        Ringkasan AI
+                      </p>
+                      <h3 className="mt-1 text-[17px] font-bold text-[#2f2841]">
+                        Distorsi kognitif yang perlu ditinjau
+                      </h3>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-bold",
+                          displayData.aiSeverity === "hijau" && "bg-[#dfeedf] text-[#3f5a3f]",
+                          displayData.aiSeverity === "kuning" && "bg-[#fff1c7] text-[#9a5800]",
+                          displayData.aiSeverity === "merah" && "bg-[#ffe0de] text-[#a3372e]",
+                        )}
+                      >
+                        <span
                           className={cn(
-                            "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[13px] font-semibold transition",
-                            active
-                              ? cn(
-                                  severityBg[level],
-                                  severityText[level],
-                                  "border-transparent",
-                                )
-                              : "border-outline-variant bg-white text-on-surface-variant hover:border-primary",
+                            "h-2 w-2 rounded-full",
+                            severityDot[displayData.aiSeverity],
                           )}
-                        >
-                          <span
-                            className={cn(
-                              "h-3 w-3 rounded-full",
-                              severityDot[level],
-                            )}
-                          />
-                          {severityLabel[level]}
-                        </button>
-                      );
-                    },
-                  )}
+                        />
+                        {severityLabel[displayData.aiSeverity]}
+                      </span>
+
+                      <span className="rounded-full bg-[#f3edf7] px-3 py-1.5 text-[12px] font-bold text-[#6f5794]">
+                        Skor {displayData.aiScore}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <ul className="mt-5 space-y-3">
+                    {displayData.aiSummary.map((item, index) => (
+                      <li
+                        key={item.id}
+                        className="rounded-[14px] border border-[#d8cce8] bg-[#f8f3fc] p-4"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#7d75a1] text-[12px] font-bold text-white">
+                            {index + 1}
+                          </span>
+                          <div>
+                            <p className="text-[14px] font-bold text-[#2f2841]">
+                              {item.type}
+                            </p>
+                            <p className="mt-1 text-[13px] leading-5 text-[#5d556f]">
+                              {item.explanation}
+                            </p>
+                          </div>
+                        </div>
+
+                        {item.evidence ? (
+                          <div className="mt-3 rounded-[10px] border-l-4 border-[#7d75a1] bg-[#eee7f5] px-3 py-2">
+                            <p className="text-[11px] font-bold uppercase text-[#6f5794]">
+                              Kalimat bukti
+                            </p>
+                            <p className="mt-1 text-[13px] leading-5 text-[#4d465f]">
+                              &quot;{item.evidence}&quot;
+                            </p>
+                          </div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
 
-              <div className="mt-6">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
-                  Rekomendasi
-                </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {(["lanjutkan", "tidak-perlu"] as Recommendation[]).map(
-                    (opt) => {
-                      const active = recommendation === opt;
-                      return (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => setRecommendation(opt)}
-                          className={cn(
-                            "rounded-[14px] border px-4 py-3 text-left text-[13px] font-semibold transition",
-                            active
-                              ? "border-[#3f5a3f] bg-[#dfeedf] text-[#3f5a3f]"
-                              : "border-outline-variant bg-white text-on-surface-variant hover:border-primary",
-                          )}
-                        >
-                          {recommendationLabel[opt]}
-                        </button>
-                      );
-                    },
-                  )}
-                </div>
-              </div>
+                <div className="mt-4 rounded-[16px] bg-white/10 p-4 ring-1 ring-white/10">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
+                        Sesi Dialog Pasien
+                      </p>
+                      <p className="mt-1 text-[13px] leading-5 text-white/75">
+                        Dialog disembunyikan agar ringkasan AI tetap mudah ditinjau.
+                      </p>
+                    </div>
 
-              <div className="mt-6">
-                <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="feedback-text"
-                    className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted"
-                  >
-                    Feedback untuk Pasien
-                  </label>
-                  <span
-                    className={cn(
-                      "text-[12px] font-medium",
-                      remaining < 0
-                        ? "text-[#d13a31]"
-                        : "text-on-surface-muted",
-                    )}
-                  >
-                    {feedbackText.length}/500
-                  </span>
-                </div>
-                <textarea
-                  id="feedback-text"
-                  value={feedbackText}
-                  onChange={(e) =>
-                    setFeedbackText(e.target.value.slice(0, 500))
-                  }
-                  rows={5}
-                  placeholder="Tulis tanggapan empatik dan terstruktur untuk pasien…"
-                  className="mt-2 w-full resize-none rounded-[14px] border border-outline-variant bg-white px-4 py-3 text-[14px] leading-6 text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div className="mt-5">
-                <label
-                  htmlFor="internal-notes"
-                  className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted"
-                >
-                  Catatan Internal
-                </label>
-                <textarea
-                  id="internal-notes"
-                  value={internalNotes}
-                  onChange={(e) => setInternalNotes(e.target.value)}
-                  rows={3}
-                  placeholder="Catatan pribadi (tidak ditampilkan ke pasien)"
-                  className="mt-2 w-full resize-none rounded-[14px] border border-outline-variant bg-white px-4 py-3 text-[14px] leading-6 text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
-                {savedDraft ? (
-                  <span className="inline-flex h-11 items-center gap-2 rounded-full bg-[#dfeedf] px-4 text-[13px] font-semibold text-[#3f5a3f]">
-                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                    Draft tersimpan
-                  </span>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={handleSaveDraft}
-                  className="inline-flex h-11 items-center gap-2 rounded-full border border-outline-variant bg-white px-5 text-[14px] font-semibold text-on-surface-variant transition hover:border-primary hover:text-primary"
-                >
-                  <Save className="h-4 w-4" aria-hidden="true" />
-                  Simpan Draft
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={!canSubmit}
-                  className={cn(
-                    "inline-flex h-11 items-center gap-2 rounded-full px-6 text-[14px] font-semibold text-white transition",
-                    canSubmit
-                      ? "bg-[#3f5a3f] hover:bg-[#324a32]"
-                      : "bg-[#3f5a3f]/40 cursor-not-allowed",
-                  )}
-                >
-                  <Send className="h-4 w-4" aria-hidden="true" />
-                  Kirim Feedback ke Pasien
-                </button>
-              </div>
-            </DashboardCard>
-          ) : (
-            <DashboardCard className="px-7 py-7">
-              <div className="flex items-center gap-2 rounded-full bg-[#dfeedf] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[#3f5a3f] w-fit">
-                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                Feedback Terkirim
-              </div>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[14px] border border-outline-variant px-4 py-3">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-surface-muted">
-                    Severity Final
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-2 inline-flex items-center gap-2 text-[15px] font-semibold",
-                      severityText[severityFinal],
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "h-2.5 w-2.5 rounded-full",
-                        severityDot[severityFinal],
+                    <button
+                      type="button"
+                      onClick={() => setShowDialog((current) => !current)}
+                      className="inline-flex h-10 items-center gap-2 rounded-full bg-[#f3edf7] px-4 text-[13px] font-semibold text-[#6f5794] transition hover:bg-[#e8ddf2]"
+                    >
+                      {showDialog ? (
+                        <EyeOff className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <Eye className="h-4 w-4" aria-hidden="true" />
                       )}
+                      {showDialog ? "Sembunyikan Dialog" : "Tampilkan Dialog"}
+                    </button>
+                  </div>
+
+                  {showDialog ? (
+                    <div className="mt-4 max-h-[320px] overflow-y-auto rounded-[14px] bg-white/10 p-4 ring-1 ring-white/10">
+                      <p className="whitespace-pre-wrap text-[14px] leading-7 text-white">
+                        {displayData.dialogText}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="mt-5 rounded-[16px] bg-white/10 p-4 ring-1 ring-white/10">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/70">
+                    Rekomendasi Psikoedukasi AI
+                  </p>
+                  <p className="mt-1 text-[13px] leading-5 text-white/75">
+                    Bahan awal untuk membantu psikolog menyusun feedback kepada pasien.
+                  </p>
+
+                  <ol className="mt-4 space-y-3">
+                    {displayData.aiRecommendations.map((rec, idx) => (
+                      <li
+                        key={`${idx}-${rec}`}
+                        className="rounded-[12px] bg-[#efe7f6] px-4 py-3 text-[#2f2841] ring-1 ring-white/20"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#7d75a1] text-[12px] font-bold text-white">
+                            {idx + 1}
+                          </span>
+
+                          <div>
+                            <p className="text-[14px] leading-6 text-[#4d465f]">
+                              {rec}
+                            </p>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center gap-2">
+                  {displayData.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-white/10 px-3 py-1 text-[12px] font-medium text-white ring-1 ring-white/10"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+
+              </DashboardCard>
+
+              {mode === "compose" ? (
+                <DashboardCard className="px-7 py-7 lg:sticky lg:top-6">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
+                      1. Akurasi Hasil Analisis AI
+                    </p>
+                    <p className="mt-1 text-[13px] text-on-surface-variant">
+                      Menurut Anda, seberapa akurat hasil screening AI di samping?
+                    </p>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      {(
+                        ["sangat-akurat", "sebagian-akurat", "tidak-akurat"] as const
+                      ).map((opt) => {
+                        const active = aiAccuracy === opt;
+                        const labels = {
+                          "sangat-akurat": "Sangat Akurat",
+                          "sebagian-akurat": "Sebagian Akurat",
+                          "tidak-akurat": "Tidak Akurat",
+                        };
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setAiAccuracy(opt)}
+                            className={cn(
+                              "inline-flex h-11 items-center justify-center rounded-full border text-[13px] font-semibold transition",
+                              active
+                                ? "border-[#3f5a3f] bg-[#dfeedf] text-[#3f5a3f]"
+                                : "border-outline-variant bg-white text-on-surface hover:border-primary",
+                            )}
+                          >
+                            {labels[opt]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
+                      2. Tingkat Keparahan Akhir (Validasi)
+                    </p>
+                    <p className="mt-1 text-[13px] text-on-surface-variant">
+                      Sesuaikan tingkat keparahan berdasarkan penilaian klinis Anda.
+                    </p>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      {(["hijau", "kuning", "merah"] as const).map((opt) => {
+                        const active = severityFinal === opt;
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setSeverityFinal(opt)}
+                            className={cn(
+                              "inline-flex h-11 items-center justify-center gap-2 rounded-full border text-[13px] font-semibold transition",
+                              active
+                                ? "border-transparent text-white"
+                                : "border-outline-variant bg-white text-on-surface hover:border-primary",
+                              active && opt === "hijau" && "bg-[#3f5a3f]",
+                              active && opt === "kuning" && "bg-[#d37300]",
+                              active && opt === "merah" && "bg-[#d13a31]",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "h-2 w-2 rounded-full",
+                                active
+                                  ? "bg-white"
+                                  : opt === "hijau"
+                                    ? "bg-[#3f5a3f]"
+                                    : opt === "kuning"
+                                      ? "bg-[#d37300]"
+                                      : "bg-[#d13a31]",
+                              )}
+                            />
+                            {severityLabel[opt]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
+                      3. Rekomendasi Tindak Lanjut
+                    </p>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {(["lanjutkan", "tidak-perlu"] as const).map((opt) => {
+                        const active = recommendation === opt;
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setRecommendation(opt)}
+                            className={cn(
+                              "rounded-[14px] border px-4 py-3 text-left text-[13px] font-semibold transition",
+                              active
+                                ? "border-[#3f5a3f] bg-[#dfeedf] text-[#3f5a3f]"
+                                : "border-outline-variant bg-white text-on-surface-variant hover:border-primary",
+                            )}
+                          >
+                            {recommendationLabel[opt]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="feedback-text"
+                        className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted"
+                      >
+                        Feedback untuk Pasien
+                      </label>
+                      <span
+                        className={cn(
+                          "text-[12px] font-medium",
+                          remaining < 0
+                            ? "text-[#d13a31]"
+                            : "text-on-surface-muted",
+                        )}
+                      >
+                        {feedbackText.length}/500
+                      </span>
+                    </div>
+                    <textarea
+                      id="feedback-text"
+                      value={feedbackText}
+                      onChange={(e) =>
+                        setFeedbackText(e.target.value.slice(0, 500))
+                      }
+                      rows={5}
+                      placeholder="Tulis tanggapan empatik dan terstruktur untuk pasien…"
+                      className="mt-2 w-full resize-none rounded-[14px] border border-outline-variant bg-white px-4 py-3 text-[14px] leading-6 text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
-                    {severityLabel[severityFinal]}
-                  </p>
-                </div>
-                <div className="rounded-[14px] border border-outline-variant px-4 py-3">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-surface-muted">
-                    Rekomendasi
-                  </p>
-                  <p className="mt-2 text-[14px] font-semibold text-on-surface">
-                    {recommendationLabel[recommendation]}
-                  </p>
-                </div>
-              </div>
+                  </div>
 
-              <div className="mt-5 rounded-[14px] bg-surface-container/60 p-5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
-                  Catatan untuk Pasien
-                </p>
-                <p className="mt-2 text-[15px] leading-7 text-on-surface-variant">
-                  {feedbackText}
-                </p>
-              </div>
+                  <div className="mt-5">
+                    <label
+                      htmlFor="internal-notes"
+                      className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted"
+                    >
+                      Catatan Internal (Opsional)
+                    </label>
+                    <textarea
+                      id="internal-notes"
+                      value={internalNotes}
+                      onChange={(e) => setInternalNotes(e.target.value)}
+                      rows={3}
+                      placeholder="Catatan pribadi (tidak ditampilkan ke pasien)"
+                      className="mt-2 w-full resize-none rounded-[14px] border border-outline-variant bg-white px-4 py-3 text-[14px] leading-6 text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
 
-              {internalNotes ? (
-                <div className="mt-4 rounded-[14px] border border-dashed border-outline-variant px-5 py-4">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
-                    Catatan Internal
-                  </p>
-                  <p className="mt-2 text-[14px] leading-6 text-on-surface-variant">
-                    {internalNotes}
-                  </p>
-                </div>
-              ) : null}
+                  <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+                    {savedDraft ? (
+                      <span className="inline-flex h-11 items-center gap-2 rounded-full bg-[#dfeedf] px-4 text-[13px] font-semibold text-[#3f5a3f]">
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                        Draft tersimpan
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={handleSaveDraft}
+                      className="inline-flex h-11 items-center gap-2 rounded-full border border-outline-variant bg-white px-5 text-[14px] font-semibold text-on-surface-variant transition hover:border-primary hover:text-primary"
+                    >
+                      <Save className="h-4 w-4" aria-hidden="true" />
+                      Simpan Draft
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={!canSubmit}
+                      className={cn(
+                        "inline-flex h-11 items-center gap-2 rounded-full px-6 text-[14px] font-semibold text-white transition",
+                        canSubmit
+                          ? "bg-[#3f5a3f] hover:bg-[#324a32]"
+                          : "bg-[#3f5a3f]/40 cursor-not-allowed",
+                      )}
+                    >
+                      {submitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin animate-infinite" aria-hidden="true" />
+                      ) : (
+                        <Send className="h-4 w-4" aria-hidden="true" />
+                      )}
+                      {submitting ? "Mengirim..." : "Kirim Feedback ke Pasien"}
+                    </button>
+                  </div>
+                </DashboardCard>
+              ) : (
+                <DashboardCard className="px-7 py-7 lg:sticky lg:top-6">
+                  <div className="flex items-center gap-2 rounded-full bg-[#dfeedf] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[#3f5a3f] w-fit">
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    Feedback Terkirim
+                  </div>
 
-              <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="inline-flex h-11 items-center gap-2 rounded-full border border-[#d13a31]/40 bg-white px-5 text-[14px] font-semibold text-[#a3372e] transition hover:border-[#d13a31]"
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  Hapus
-                </button>
-                <button
-                  type="button"
-                  onClick={handleEdit}
-                  className="inline-flex h-11 items-center gap-2 rounded-full bg-[#3f5a3f] px-6 text-[14px] font-semibold text-white transition hover:bg-[#324a32]"
-                >
-                  <Edit3 className="h-4 w-4" aria-hidden="true" />
-                  Edit Feedback
-                </button>
-              </div>
-            </DashboardCard>
-          )}
-        </div>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-[14px] border border-outline-variant px-4 py-3">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-surface-muted">
+                        Severity Final
+                      </p>
+                      <p
+                        className={cn(
+                          "mt-2 inline-flex items-center gap-2 text-[15px] font-semibold",
+                          severityText[severityFinal],
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "h-2.5 w-2.5 rounded-full",
+                            severityDot[severityFinal],
+                          )}
+                        />
+                        {severityLabel[severityFinal]}
+                      </p>
+                    </div>
+                    <div className="rounded-[14px] border border-outline-variant px-4 py-3">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-surface-muted">
+                        Rekomendasi
+                      </p>
+                      <p className="mt-2 text-[14px] font-semibold text-on-surface">
+                        {recommendationLabel[recommendation]}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-[14px] bg-surface-container/60 p-5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
+                      Catatan untuk Pasien
+                    </p>
+                    <p className="mt-2 text-[15px] leading-7 text-on-surface-variant whitespace-pre-wrap">
+                      {feedbackText}
+                    </p>
+                  </div>
+
+                  {internalNotes ? (
+                    <div className="mt-4 rounded-[14px] border border-dashed border-outline-variant px-5 py-4">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
+                        Catatan Internal
+                      </p>
+                      <p className="mt-2 text-[14px] leading-6 text-on-surface-variant whitespace-pre-wrap">
+                        {internalNotes}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={submitting}
+                      className="inline-flex h-11 items-center gap-2 rounded-full border border-[#d13a31]/40 bg-white px-5 text-[14px] font-semibold text-[#a3372e] transition hover:border-[#d13a31] disabled:opacity-50"
+                    >
+                      {submitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-[#a3372e]" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      )}
+                      Hapus
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleEdit}
+                      className="inline-flex h-11 items-center gap-2 rounded-full bg-[#3f5a3f] px-6 text-[14px] font-semibold text-white transition hover:bg-[#324a32]"
+                    >
+                      <Edit3 className="h-4 w-4" aria-hidden="true" />
+                      Edit Feedback
+                    </button>
+                  </div>
+                </DashboardCard>
+              )}
+            </div>
+          </>
+        ) : null}
       </div>
     </DashboardLayout>
   );

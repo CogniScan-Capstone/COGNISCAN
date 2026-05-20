@@ -211,20 +211,6 @@ export default function SignUpPage() {
 
             <label className="block">
               <span className="mb-2 block text-[15px] font-semibold leading-none text-[#343832]">
-                Tanggal Lahir
-              </span>
-              <input
-                className="h-12 w-full rounded-[10px] border border-[#c9cec4] bg-[#fdfcf9] px-4 pr-3 text-[15px] text-on-surface outline-none transition placeholder:text-[#737c8f] focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
-                type="date"
-                value={dateOfBirth}
-                onChange={(event) => setDateOfBirth(event.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className="space-y-5">
-            <label className="block">
-              <span className="mb-2 block text-[15px] font-semibold leading-none text-[#343832]">
                 Konfirmasi Password
               </span>
               <span className="relative block">
@@ -250,6 +236,20 @@ export default function SignUpPage() {
                   )}
                 </button>
               </span>
+            </label>
+          </div>
+
+          <div className="space-y-5">
+            <label className="block">
+              <span className="mb-2 block text-[15px] font-semibold leading-none text-[#343832]">
+                Tanggal Lahir
+              </span>
+              <input
+                className="h-12 w-full rounded-[10px] border border-[#c9cec4] bg-[#fdfcf9] px-4 pr-3 text-[15px] text-on-surface outline-none transition placeholder:text-[#737c8f] focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
+                type="date"
+                value={dateOfBirth}
+                onChange={(event) => setDateOfBirth(event.target.value)}
+              />
             </label>
 
             <fieldset>

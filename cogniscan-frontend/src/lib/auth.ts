@@ -93,6 +93,8 @@ export type PreAssessment = {
   id_sesi_jurnal?: number | null;
   id_psikolog?: number | null;
   nama_psikolog?: string | null;
+  nama_pasien?: string | null;
+  dialog_jurnal?: string | null;
   konteks_pemicu?: string | null;
   indikator_urgensi?: string | null;
   skor_keparahan?: number | null;
@@ -136,13 +138,35 @@ export type AvailablePsychologist = {
   tgl_kadaluarsa_sip?: string | null;
 };
 
+export type PatientLatestScreeningStatus = {
+  id_pra_asesmen: number;
+  id_sesi_jurnal?: number | null;
+  id_psikolog?: number | null;
+  nama_psikolog?: string | null;
+  konteks_pemicu?: string | null;
+  status:
+    | "menunggu_pilih_psikolog"
+    | "menunggu_review"
+    | "sedang_direview"
+    | "feedback_tersedia"
+    | "perlu_eskalasi"
+    | string;
+  status_validasi?: string | null;
+  indikator_urgensi?: string | null;
+  skor_keparahan?: number | null;
+  feedback_tersedia: boolean;
+  dibuat_pada?: string | null;
+  divalidasi_pada?: string | null;
+};
+
 export type PatientDashboardSummary = {
   pesan_baru: number;
   total_konsultasi: number;
+  screening_terakhir?: PatientLatestScreeningStatus | null;
 };
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
 
 const pendingPatientProfileKeyPrefix = "cogniscan:pending-patient-profile:";
 
@@ -209,11 +233,40 @@ export async function getApiErrorMessage(response: Response) {
   return `Request gagal dengan status ${response.status}`;
 }
 
+function getLocalBackendFallback(input: RequestInfo | URL) {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === "localhost") {
+      parsed.hostname = "127.0.0.1";
+      return parsed.toString();
+    }
+    if (parsed.hostname === "127.0.0.1") {
+      parsed.hostname = "localhost";
+      return parsed.toString();
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 async function fetchApi(input: RequestInfo | URL, init?: RequestInit) {
   try {
     return await fetch(input, init);
   } catch (error) {
     if (error instanceof TypeError) {
+      const fallbackUrl = getLocalBackendFallback(input);
+      if (fallbackUrl) {
+        try {
+          return await fetch(fallbackUrl, init);
+        } catch {
+          // Keep the stable user-facing message below.
+        }
+      }
+
       throw new Error(
         "Tidak bisa menghubungi backend. Pastikan backend aktif, sudah direstart, dan frontend memakai URL API yang benar.",
       );
@@ -449,6 +502,30 @@ export async function fetchAvailablePsychologists(
   return response.json() as Promise<AvailablePsychologist[]>;
 }
 
+export async function assignPreAssessmentPsychologist(
+  accessToken: string,
+  idPraAsesmen: number,
+  idPsikolog: number,
+): Promise<PreAssessment> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/pre-assessment/reports/${idPraAsesmen}/assign-psikolog`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id_psikolog: idPsikolog }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PreAssessment>;
+}
+
 export async function fetchPatientDashboardSummary(
   accessToken: string,
 ): Promise<PatientDashboardSummary> {
@@ -465,6 +542,39 @@ export async function fetchPatientDashboardSummary(
   return response.json() as Promise<PatientDashboardSummary>;
 }
 
+export type PsikologRecentReport = {
+  id_pra_asesmen: number;
+  nama_pasien?: string | null;
+  konteks_pemicu?: string | null;
+  indikator_urgensi?: string | null;
+  status_validasi?: string | null;
+  feedback_tersedia: boolean;
+  dibuat_pada?: string | null;
+};
+
+export type PsikologDashboardSummary = {
+  feedback_belum_direspon: number;
+  feedback_sudah_direspon: number;
+  total_laporan: number;
+  laporan_terbaru: PsikologRecentReport[];
+};
+
+export async function fetchPsikologDashboardSummary(
+  accessToken: string,
+): Promise<PsikologDashboardSummary> {
+  const response = await fetchApi(`${API_BASE_URL}/api/dashboard/psikolog/summary`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PsikologDashboardSummary>;
+}
+
 export function dashboardPathForRole(role: BackendUser["peran"]) {
   if (role === "admin") return "/admin/dashboard";
   if (role === "psikolog") return "/psikolog/dashboard";
@@ -477,4 +587,67 @@ export function entryPathForUser(user: BackendUser) {
   }
 
   return dashboardPathForRole(user.peran);
+}
+
+export async function fetchPsikologPreAssessments(
+  accessToken: string,
+): Promise<PreAssessment[]> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/pre-assessment/psikolog/reports`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PreAssessment[]>;
+}
+
+export async function fetchPsikologPreAssessmentReport(
+  accessToken: string,
+  idPraAsesmen: number,
+): Promise<PreAssessment> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/pre-assessment/psikolog/reports/${idPraAsesmen}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PreAssessment>;
+}
+
+export async function submitPreAssessmentFeedback(
+  accessToken: string,
+  idPraAsesmen: number,
+  payload: { feedback_psikolog: string; status_validasi?: string },
+): Promise<PreAssessment> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/pre-assessment/psikolog/reports/${idPraAsesmen}/feedback`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PreAssessment>;
 }

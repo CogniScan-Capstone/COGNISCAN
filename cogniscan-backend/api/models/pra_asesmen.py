@@ -57,3 +57,16 @@ class PraAsesmen(Base):
     @property
     def konteks_pemicu(self) -> str | None:
         return self.sesi_jurnal.konteks_pemicu if self.sesi_jurnal else None
+
+    @property
+    def nama_pasien(self) -> str | None:
+        return self.sesi_jurnal.pasien.nama_lengkap if self.sesi_jurnal and self.sesi_jurnal.pasien else None
+
+    @property
+    def dialog_jurnal(self) -> str | None:
+        if not self.sesi_jurnal or not self.sesi_jurnal.jawaban:
+            return None
+        lines = []
+        for jw in self.sesi_jurnal.jawaban:
+            lines.append(f"Q: {jw.teks_pertanyaan}\nA: {jw.teks_jawaban}")
+        return "\n\n".join(lines)

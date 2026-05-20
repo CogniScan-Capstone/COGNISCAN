@@ -19,7 +19,14 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1):\d+$"
+    allow_origin_regex=(
+        r"^https?://("
+        r"localhost|127\.0\.0\.1|\[::1\]|"
+        r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+        r"192\.168\.\d{1,3}\.\d{1,3}|"
+        r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}"
+        r"):\d+$"
+    )
     if settings.DEBUG
     else None,
     allow_credentials=True,

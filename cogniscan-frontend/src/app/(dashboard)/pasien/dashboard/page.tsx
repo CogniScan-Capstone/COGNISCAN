@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { BriefcaseMedical, MessagesSquare, Info } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowRight,
+  BriefcaseMedical,
+  Info,
+  MessagesSquare,
+} from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import {
   getPatientNav,
@@ -9,9 +14,13 @@ import {
   patientUser as defaultPatientUser,
   ScreeningTopicCard,
 } from "@/components/patient";
-import { fetchPatientDashboardSummary, type PatientDashboardSummary } from "@/lib/auth";
-import { supabase } from "@/lib/supabase/client";
+import {
+  fetchPatientDashboardSummary,
+  type PatientDashboardSummary,
+  type PatientLatestScreeningStatus,
+} from "@/lib/auth";
 import { useBackendUser } from "@/lib/useBackendUser";
+import { useCachedApi } from "@/lib/useCachedApi";
 
 const topics = [
   {
@@ -52,42 +61,54 @@ const topics = [
   },
 ];
 
+const topicLabels: Record<string, string> = {
+  pendidikan: "Pendidikan",
+  keluarga: "Keluarga",
+  hubungan: "Hubungan",
+  keuangan: "Keuangan",
+  "diri-sendiri": "Diri Sendiri",
+  kesehatan: "Kesehatan",
+};
+
+function topicName(slug?: string | null) {
+  if (!slug) return "Screening";
+  return topicLabels[slug] || slug.replace(/-/g, " ");
+}
+
+function screeningStatusText(latest: PatientLatestScreeningStatus) {
+  if (latest.status === "feedback_tersedia") return "Selesai review";
+  if (latest.status === "sedang_direview") return "Sedang direview";
+  if (latest.status === "menunggu_review") return "Menunggu review";
+  if (latest.status === "perlu_eskalasi") return "Perlu dukungan segera";
+  return "Menunggu pilih psikolog";
+}
+
+function formatShortDate(dateStr?: string | null) {
+  if (!dateStr) return null;
+  try {
+    return new Date(dateStr).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
 export default function PasienDashboardPage() {
   const backendUser = useBackendUser();
-  const [summary, setSummary] = useState<PatientDashboardSummary | null>(null);
+  const { data: summary } = useCachedApi<PatientDashboardSummary>(
+    "pasien-dashboard-summary",
+    fetchPatientDashboardSummary,
+  );
   const displayUser = {
     ...defaultPatientUser,
     name: backendUser?.nama_lengkap?.trim() || defaultPatientUser.name,
   };
   const patientUser = displayUser;
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadSummary() {
-      try {
-        const { data } = await supabase.auth.getSession();
-        const accessToken = data.session?.access_token;
-
-        if (!accessToken) {
-          throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
-        }
-
-        const result = await fetchPatientDashboardSummary(accessToken);
-        if (isMounted) setSummary(result);
-      } catch {
-        if (isMounted) {
-          setSummary({ pesan_baru: 0, total_konsultasi: 0 });
-        }
-      }
-    }
-
-    loadSummary();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const latestScreening = summary?.screening_terakhir ?? null;
+  const latestScreeningDate = formatShortDate(latestScreening?.dibuat_pada);
 
   return (
     <DashboardLayout
@@ -103,18 +124,38 @@ export default function PasienDashboardPage() {
     >
       <div className="space-y-8">
         <section className="grid gap-6 lg:grid-cols-2">
-          <DashboardCard className="flex min-h-[110px] items-center gap-4 px-7 py-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary-container text-[#6f5794]">
-              <MessagesSquare className="h-6 w-6" aria-hidden="true" />
+          <DashboardCard className="flex min-h-[150px] items-center justify-between gap-4 px-7 py-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary-container text-[#6f5794]">
+                <MessagesSquare className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-[16px] font-medium text-on-surface-variant">
+                  Pesan Baru
+                </p>
+                <p className="text-[16px] font-semibold text-[#6f5794]">
+                  {summary ? summary.pesan_baru : "-"}
+                </p>
+                {latestScreening ? (
+                  <p className="mt-2 max-w-[320px] text-[13px] leading-5 text-on-surface-muted">
+                    Screening terakhir:{" "}
+                    <span className="font-semibold text-on-surface-variant">
+                      {topicName(latestScreening.konteks_pemicu)}
+                    </span>
+                    {" - "}
+                    {screeningStatusText(latestScreening)}
+                    {latestScreeningDate ? ` - ${latestScreeningDate}` : ""}
+                  </p>
+                ) : null}
+              </div>
             </div>
-            <div>
-              <p className="text-[16px] font-medium text-on-surface-variant">
-                Pesan Baru
-              </p>
-              <p className="text-[16px] font-semibold text-[#6f5794]">
-                {summary ? summary.pesan_baru : "-"}
-              </p>
-            </div>
+            <Link
+              href="/pasien/pesan"
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full border border-[#6f5794] px-4 text-[13px] font-extrabold text-[#6f5794] transition hover:bg-secondary-container/50"
+            >
+              Lihat Pesan
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
           </DashboardCard>
 
           <DashboardCard className="flex min-h-[110px] items-center gap-4 px-7 py-6">
@@ -132,7 +173,7 @@ export default function PasienDashboardPage() {
           </DashboardCard>
         </section>
 
-        <section className="pb-5">
+        <section id="topik-screening" className="scroll-mt-24 pb-5">
           <h2 className="mb-7 text-[17px] font-semibold text-[#6f5794]">
             Pilih Topik Screening
           </h2>

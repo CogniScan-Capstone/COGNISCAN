@@ -1,21 +1,8 @@
 """
-CogniScan v2.0 - EXPERIMENTAL Gemini 3 Pro Test
-==================================================
+CogniScan v2.0 - Gemini 3 Flash analyzer.
 
-⚠️  PERINGATAN: Ini versi EKSPERIMEN saja, bukan production.
-    - Cost ~15-20x lebih mahal dari Gemini 2.5 Flash
-    - Latency lebih lambat (5-15s vs 1.4s)
-    - Model preview, bisa discontinued sewaktu-waktu
-    - Untuk hasil final, gunakan main.py (Gemini 2.5 Flash)
-
-Tujuan: Benchmark perbandingan Gemini 2.5 Flash vs Gemini 3 Pro
-        untuk task deteksi distorsi kognitif Bahasa Indonesia.
-
-Perbedaan dari main.py:
-1. Model: gemini-3-pro-preview (bukan gemini-3.0-pro yang error)
-2. Location: global (Gemini 3 hanya di global endpoint)
-3. Parameter: thinking_level (bukan thinking_budget yang deprecated)
-4. Output filename: results_gemini3 (terpisah dari hasil 2.5 Flash)
+Model utama: gemini-3-flash-preview.
+Catatan: Gemini 3 menggunakan thinking_level, bukan thinking_budget.
 """
 
 import os
@@ -49,15 +36,11 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # CONFIGURATION
 # ============================================================
-# Model Gemini 3 Pro (preview).
-# CATATAN: gemini-3.1-pro-preview adalah versi terbaru per Februari 2026.
-# Kalau gemini-3-pro-preview error, ganti ke gemini-3.1-pro-preview.
-MODEL_NAME = "gemini-3.1-pro-preview"
-
-# PENTING: Gemini 3 series HANYA tersedia di global endpoint.
-# Force override location ke "global" walaupun .env set ke us-central1/asia-southeast1.
+# Gemini 3 Flash model ID resmi untuk Gemini API / AI Studio.
+DEFAULT_MODEL_NAME = "gemini-3-flash-preview"
+LOCATION = "global"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL_NAME = os.getenv("GEMINI_MODEL", DEFAULT_MODEL_NAME)
 
 if not GEMINI_API_KEY:
       raise RuntimeError("GEMINI_API_KEY belum diset di .env")
@@ -105,7 +88,13 @@ class CognitiveDistortionAnalysis(BaseModel):
     severity_flag: Literal["low", "medium", "high", "critical"] = Field(default="low")
     crisis_indicators: CrisisIndicators = Field(default_factory=CrisisIndicators)
     requires_immediate_attention: bool = Field(default=False)
-    psychoeducation_message: str = Field(default="")
+    psychoeducation_message: str = Field(
+        default="",
+        description=(
+            "Two to three newline-separated practical psychoeducation "
+            "recommendations, not a summary."
+        ),
+    )
 
 
 # ============================================================
@@ -168,7 +157,7 @@ def analyze_narrative_with_retry(
     initial_delay: float = 1.0,
 ) -> CognitiveDistortionAnalysis:
     """
-    Analisis dengan Gemini 3 Pro.
+    Analisis dengan Gemini 3 Flash.
     
     KEY DIFFERENCE dari main.py:
     - thinking_level=LOW (bukan thinking_budget=0)
@@ -325,7 +314,7 @@ def analyze_narrative(text: str, prompt_version: str = "v2"):
 
 def print_analysis(result: CognitiveDistortionAnalysis):
     print("\n" + "=" * 60)
-    print("HASIL ANALISIS COGNISCAN (Gemini 3 Pro)")
+    print("HASIL ANALISIS COGNISCAN (Gemini 3 Flash)")
     print("=" * 60)
     print(f"\nRINGKASAN:\n   {result.summary}")
     print(f"\nSEVERITY: {result.severity_flag.upper()} (score: {result.severity_score}/10)")
@@ -395,7 +384,7 @@ if __name__ == "__main__":
             # Diagnostic untuk error umum
             if "404" in str(e) or "NOT_FOUND" in str(e):
                 print("\n  → Kemungkinan masalah:")
-                print("    1. Model name salah. Coba 'gemini-3.1-pro-preview'")
+                print("    1. Model name salah. Coba 'gemini-3-flash-preview'")
                 print("    2. Project belum diaktifkan untuk akses Gemini 3")
                 print("    3. Quota belum tersedia di project kamu")
             elif "permission" in str(e).lower() or "403" in str(e):
@@ -408,18 +397,18 @@ if __name__ == "__main__":
     
     # Summary
     print(f"\n{'=' * 60}")
-    print("SUMMARY EKSPERIMEN GEMINI 3 PRO")
+    print("SUMMARY EKSPERIMEN GEMINI 3 FLASH")
     print(f"{'=' * 60}")
     print(f"Success: {success_count}/{len(test_cases)}")
     print(f"Errors:  {error_count}/{len(test_cases)}")
     if success_count > 0:
         print(f"Avg latency: {total_latency/success_count:.2f}s")
-        print("\nUntuk perbandingan, Gemini 2.5 Flash latency rata-rata: 1.38s")
+        print("\nModel aktif memakai konfigurasi GEMINI_MODEL atau default Gemini 3 Flash.")
     
     print("\nLog file: cogniscan_gemini3.log")
     print(f"\n{'=' * 60}")
     print("KEPUTUSAN BERIKUTNYA:")
     print("- Jika 3/3 sukses -> bisa lanjut evaluate.py untuk full benchmark")
     print("- Jika ada error -> cek log dan diagnostic di atas")
-    print("- Jika latency > 10s -> pertimbangkan revert ke Gemini 2.5 Flash")
+    print("- Jika latency > 10s -> cek quota, network, dan parameter thinking_level")
     print(f"{'=' * 60}\n")

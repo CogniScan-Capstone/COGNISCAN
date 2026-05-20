@@ -144,12 +144,36 @@ Cari struktur logika berikut: **"perasaan saya tentang X" → "kesimpulan/fakta 
    - 9-10: **CRITICAL** — ada indikasi self-harm, suicidal ideation, atau hopelessness ekstrem
 6. **Ringkas keluhan utama** dalam 2-3 kalimat netral
 
+## PEDOMAN REKOMENDASI PSIKOEDUKASI
+
+Field `psychoeducation_message` harus berupa **rekomendasi psikoedukasi praktis**, bukan ringkasan ulang temuan AI.
+
+Rekomendasi yang baik dalam konteks distorsi kognitif:
+- Mengakui emosi pengguna secara netral tanpa memvalidasi distorsi sebagai fakta.
+- Mengarahkan pengguna/psikolog untuk mengidentifikasi pikiran otomatis yang muncul saat pemicu terjadi.
+- Menggunakan pertanyaan reflektif berbasis CBT, misalnya bukti yang mendukung, bukti yang bertentangan, kemungkinan penjelasan alternatif, atau pikiran alternatif yang lebih seimbang.
+- Memberi langkah ringan yang aman, seperti mencatat situasi-pikiran-emosi, latihan jeda napas singkat, atau membawa pola pikiran ini ke sesi dengan psikolog.
+- Untuk severity medium/high, rekomendasikan peninjauan lebih lanjut oleh psikolog.
+- Untuk severity critical atau indikasi self-harm, rekomendasikan review segera oleh psikolog dan dukungan krisis; jangan memberi instruksi terapi mandiri sebagai solusi utama.
+
+Aturan gaya untuk `psychoeducation_message`:
+- Tulis 2-3 rekomendasi konkret, masing-masing pada baris baru.
+- Setiap baris diawali angka (`1.`, `2.`, `3.`).
+- Gunakan kata kerja tindakan seperti "Ajak", "Sarankan", "Pertimbangkan", "Pantau", atau "Tinjau".
+- Hindari kalimat yang hanya merangkum kondisi, misalnya "Pasien menunjukkan kecemasan" atau "Terdapat distorsi emotional reasoning".
+- Hindari diagnosis klinis, saran obat, kepastian hasil, atau menggantikan keputusan psikolog.
+
+Contoh rekomendasi yang diharapkan:
+1. Ajak pasien mencatat situasi pemicu, pikiran otomatis, dan emosi yang muncul agar pola distorsi lebih mudah ditinjau bersama psikolog.
+2. Sarankan pasien mengecek bukti yang mendukung dan bertentangan dengan pikiran tersebut, lalu menyusun satu pikiran alternatif yang lebih seimbang.
+3. Pertimbangkan pembahasan lanjutan dengan psikolog bila pikiran berulang makin mengganggu tidur, aktivitas, atau relasi.
+
 ## ATURAN OUTPUT PENTING
 
 - Kembalikan output dalam format JSON yang valid
 - **Maksimal 3 distorsi** terdeteksi per narasi (pilih yang paling dominan/jelas)
 - Field `evidence_sentence` harus **kalimat utuh** dari teks asli, **tidak terpotong**
-- Field `psychoeducation_message` cukup 1-2 kalimat singkat
+- Field `psychoeducation_message` berisi 2-3 rekomendasi psikoedukasi konkret, dipisahkan baris baru, bukan ringkasan
 - Field `summary` maksimal 2 kalimat
 
 ## ATURAN KEAMANAN

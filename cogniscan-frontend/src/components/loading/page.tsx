@@ -28,8 +28,8 @@ const styles = `
 
   .spinner-wrapper {
     position: relative;
-    width: 140px;
-    height: 140px;
+    width: 110px;
+    height: 110px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -52,15 +52,15 @@ const styles = `
     border: 2px solid transparent;
     border-top-color: rgba(65, 87, 62, 0.88);
     border-right-color: rgba(169, 138, 214, 0.56);
-    animation: orbit-ring 1.45s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+    animation: orbit-ring 1.8s cubic-bezier(0.45, 0, 0.2, 1) infinite;
   }
 
   .mascot-container {
-    width: 112px;
-    height: 112px;
+    width: 86px;
+    height: 86px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.72);
-    box-shadow: 0 22px 55px -32px rgba(27, 28, 26, 0.42);
+    box-shadow: 0 16px 40px -24px rgba(27, 28, 26, 0.42);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -74,7 +74,7 @@ const styles = `
 
   @keyframes float {
     0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-6px); }
+    50% { transform: translateY(-4px); }
   }
 
   @keyframes orbit-ring {
@@ -147,8 +147,8 @@ export default function LoadingPage({
             <Image
               src="/ilustrasi.png"
               alt="Loading"
-              width={112}
-              height={112}
+              width={86}
+              height={86}
               priority
               className="mascot-image"
             />

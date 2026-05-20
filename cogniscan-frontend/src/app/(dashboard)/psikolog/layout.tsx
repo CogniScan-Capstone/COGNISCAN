@@ -1,8 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useEffect, useState } from "react";
-import LoadingPage from "@/components/loading/page";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { dashboardPathForRole, fetchCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 
@@ -10,12 +9,18 @@ export default function PsikologDashboardLayout({ children }: { children: ReactN
   const pathname = usePathname();
   const router = useRouter();
   const [isAllowed, setIsAllowed] = useState(false);
+  const verifiedRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
 
     async function verifyPsikologAccess() {
-      setIsAllowed(false);
+      // Skip re-verification if already verified — allows instant tab switching
+      if (verifiedRef.current) {
+        // Still check password-change redirect on route change
+        if (isMounted) setIsAllowed(true);
+        return;
+      }
 
       const { data } = await supabase.auth.getSession();
       const accessToken = data.session?.access_token;
@@ -45,6 +50,7 @@ export default function PsikologDashboardLayout({ children }: { children: ReactN
           return;
         }
 
+        verifiedRef.current = true;
         if (isMounted) setIsAllowed(true);
       } catch {
         await supabase.auth.signOut();
@@ -60,7 +66,9 @@ export default function PsikologDashboardLayout({ children }: { children: ReactN
   }, [pathname, router]);
 
   if (!isAllowed) {
-    return <LoadingPage text="" />;
+    // Render nothing instead of a heavy LoadingPage overlay — pages have
+    // their own lightweight loading states so the user sees content faster.
+    return null;
   }
 
   return children;

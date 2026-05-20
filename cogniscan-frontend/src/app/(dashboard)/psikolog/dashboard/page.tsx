@@ -1,141 +1,127 @@
+"use client";
+
 import Link from "next/link";
+import { useMemo } from "react";
 import {
   ArrowRight,
-  CalendarDays,
-  MapPin,
+  ClipboardList,
+  Inbox,
+  Loader2,
   MessageSquare,
-  Video,
 } from "lucide-react";
 import {
+  DashboardCard,
   DashboardLayout,
-  DashboardTable,
-  DashboardTableCell,
-  DashboardTableHeader,
   MetricCard,
   StatusBadge,
 } from "@/components/dashboard";
 import {
   getPsikologNav,
   psikologProfileHref,
-  psikologUser,
+  psikologUser as defaultPsikologUser,
 } from "@/components/psikolog";
 import { cn } from "@/lib/utils";
+import {
+  fetchPsikologDashboardSummary,
+  type PsikologDashboardSummary,
+} from "@/lib/auth";
+import { useBackendUser } from "@/lib/useBackendUser";
+import { useCachedApi } from "@/lib/useCachedApi";
 
-type SessionRow = {
-  id: string;
-  initials: string;
-  initialsTone: "green" | "purple" | "neutral";
-  name: string;
-  topic: string;
-  time: string;
-  method: "online" | "offline";
-  status: "selesai" | "berlangsung" | "menunggu";
+type Priority = "high" | "medium" | "low";
+
+const priorityBadge: Record<Priority, string> = {
+  high: "bg-[#fbd6d4] text-[#a3372e]",
+  medium: "bg-[#fbe8c5] text-[#a35a1a]",
+  low: "bg-surface-container text-on-surface-variant",
 };
 
-const sessions: SessionRow[] = [
-  {
-    id: "rina-marlina",
-    initials: "RM",
-    initialsTone: "green",
-    name: "Rina Marlina",
-    topic: "Keluarga",
-    time: "09:00 WIB",
-    method: "online",
-    status: "selesai",
-  },
-  {
-    id: "dimas-pratama",
-    initials: "DP",
-    initialsTone: "purple",
-    name: "Dimas Pratama",
-    topic: "Kecemasan",
-    time: "10:00 WIB",
-    method: "online",
-    status: "berlangsung",
-  },
-  {
-    id: "sari-wulandari",
-    initials: "SW",
-    initialsTone: "neutral",
-    name: "Sari Wulandari",
-    topic: "Pendidikan",
-    time: "13:00 WIB",
-    method: "offline",
-    status: "menunggu",
-  },
-  {
-    id: "bagas-nugroho",
-    initials: "BN",
-    initialsTone: "neutral",
-    name: "Bagas Nugroho",
-    topic: "Keuangan",
-    time: "14:00 WIB",
-    method: "online",
-    status: "menunggu",
-  },
-];
-
-const initialsToneClass: Record<SessionRow["initialsTone"], string> = {
-  green: "bg-primary-fixed-dim text-primary",
-  purple: "bg-secondary-container text-[#6f5794]",
-  neutral: "bg-surface-container text-on-surface-variant",
+const topicLabels: Record<string, string> = {
+  pendidikan: "Pendidikan",
+  keluarga: "Keluarga",
+  hubungan: "Hubungan",
+  keuangan: "Keuangan",
+  "diri-sendiri": "Diri Sendiri",
+  kesehatan: "Kesehatan",
 };
 
-const statusLabel: Record<SessionRow["status"], string> = {
-  selesai: "Selesai",
-  berlangsung: "Berlangsung",
-  menunggu: "Menunggu",
-};
+function derivePriority(urgency: string | null | undefined): Priority {
+  if (urgency === "critical" || urgency === "high" || urgency === "tinggi") {
+    return "high";
+  }
+  if (urgency === "medium" || urgency === "sedang") return "medium";
+  return "low";
+}
 
-const statusDot: Record<SessionRow["status"], string> = {
-  selesai: "bg-primary",
-  berlangsung: "bg-[#d37300]",
-  menunggu: "bg-on-surface-muted",
-};
-
-const statusText: Record<SessionRow["status"], string> = {
-  selesai: "text-primary",
-  berlangsung: "text-[#d37300]",
-  menunggu: "text-on-surface-muted",
-};
+function formatDate(dateStr?: string | null) {
+  if (!dateStr) return "-";
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return dateStr;
+  }
+}
 
 export default function PsikologDashboardPage() {
+  const backendUser = useBackendUser();
+  const displayUser = useMemo(
+    () => ({
+      ...defaultPsikologUser,
+      name: backendUser?.nama_lengkap?.trim() || defaultPsikologUser.name,
+    }),
+    [backendUser],
+  );
+
+  const { data: summary, loading, error, refetch: loadData } = useCachedApi<PsikologDashboardSummary>(
+    "psikolog-dashboard-summary",
+    fetchPsikologDashboardSummary,
+  );
+
   return (
     <DashboardLayout
-      title="Dashboard"
+      title={`Halo, ${displayUser.name} 👋`}
       navItems={getPsikologNav("dashboard")}
-      user={psikologUser}
+      user={displayUser}
       profileHref={psikologProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
       <div className="space-y-8">
+        {/* Metric Cards */}
         <section className="grid gap-6 lg:grid-cols-2">
           <MetricCard
-            label="Konsultasi Hari Ini"
-            value="6"
-            icon={<CalendarDays />}
+            label="Feedback Belum Direspon"
+            value={loading ? "…" : String(summary?.feedback_belum_direspon ?? 0)}
+            icon={<MessageSquare />}
             iconTone="purple"
           />
           <MetricCard
-            label="Pesan Masuk"
-            value="14"
-            icon={<MessageSquare />}
+            label="Total Laporan Ditugaskan"
+            value={loading ? "…" : String(summary?.total_laporan ?? 0)}
+            icon={<ClipboardList />}
             iconTone="green"
           />
         </section>
 
+        {/* Recent Reports Section */}
         <section>
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-[18px] font-semibold text-[#6f5794]">
-                Konsultasi Hari Ini
+                Laporan Pre-Assessment Terbaru
               </h2>
               <p className="mt-1 text-[14px] text-on-surface-variant">
-                Kelola antrian dan jadwal sesi aktif pasien Anda.
+                Data screening pasien yang perlu ditinjau.
               </p>
             </div>
             <Link
-              href="/psikolog/jadwal"
+              href="/psikolog/feedback"
               className="inline-flex items-center gap-1 text-[14px] font-semibold text-primary hover:underline"
             >
               Lihat Semua
@@ -143,127 +129,114 @@ export default function PsikologDashboardPage() {
             </Link>
           </div>
 
-          <DashboardTable>
-            <table className="w-full min-w-[820px] border-collapse">
-              <DashboardTableHeader>
-                <tr>
-                  <DashboardTableCell as="th" className="border-b-0 px-6 py-3">
-                    Pasien
-                  </DashboardTableCell>
-                  <DashboardTableCell as="th" className="border-b-0 px-6 py-3">
-                    Topik
-                  </DashboardTableCell>
-                  <DashboardTableCell as="th" className="border-b-0 px-6 py-3">
-                    Waktu
-                  </DashboardTableCell>
-                  <DashboardTableCell as="th" className="border-b-0 px-6 py-3">
-                    Metode
-                  </DashboardTableCell>
-                  <DashboardTableCell as="th" className="border-b-0 px-6 py-3">
-                    Status
-                  </DashboardTableCell>
-                  <DashboardTableCell
-                    as="th"
-                    className="border-b-0 px-6 py-3 text-right"
+          {loading ? (
+            <DashboardCard className="flex items-center justify-center py-16">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-[#6f5794]" />
+                <p className="text-[14px] font-medium text-on-surface-variant">
+                  Memuat data dashboard...
+                </p>
+              </div>
+            </DashboardCard>
+          ) : error ? (
+            <DashboardCard className="px-8 py-10 text-center">
+              <p className="text-[15px] font-semibold text-red-700">{error}</p>
+              <button
+                onClick={loadData}
+                className="mt-4 inline-flex h-9 items-center justify-center rounded-full bg-[#3f5a3f] px-5 text-[13px] font-semibold text-white transition hover:bg-[#324a32]"
+              >
+                Coba Lagi
+              </button>
+            </DashboardCard>
+          ) : summary && summary.laporan_terbaru.length === 0 ? (
+            <DashboardCard className="flex flex-col items-center justify-center px-8 py-16 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary-container text-[#6f5794] mb-4">
+                <Inbox className="h-8 w-8" aria-hidden="true" />
+              </div>
+              <h3 className="text-[18px] font-bold text-on-surface mb-2">
+                Belum Ada Laporan
+              </h3>
+              <p className="max-w-[440px] text-[15px] leading-7 text-on-surface-variant">
+                Belum ada pasien yang menugaskan Anda untuk meninjau hasil screening mereka. Laporan akan muncul di sini setelah pasien memilih Anda sebagai psikolog.
+              </p>
+            </DashboardCard>
+          ) : summary ? (
+            <div className="space-y-4">
+              {summary.laporan_terbaru.map((report) => {
+                const priority = derivePriority(report.indikator_urgensi);
+                const topicSlug = report.konteks_pemicu || "";
+                const topicName =
+                  topicLabels[topicSlug] ||
+                  topicSlug.replace("-", " ") ||
+                  "Umum";
+                const initials = (report.nama_pasien || "?")
+                  .split(" ")
+                  .map((w) => w[0])
+                  .join("")
+                  .toUpperCase()
+                  .slice(0, 2);
+
+                return (
+                  <DashboardCard
+                    key={report.id_pra_asesmen}
+                    className="px-7 py-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_28px_50px_-24px_rgba(27,28,26,0.4)]"
                   >
-                    Aksi
-                  </DashboardTableCell>
-                </tr>
-              </DashboardTableHeader>
-              <tbody>
-                {sessions.map((session, index) => {
-                  const isLast = index === sessions.length - 1;
-                  const isActive = session.status === "berlangsung";
-                  return (
-                    <tr
-                      key={session.id}
-                      className={cn(
-                        isActive && "bg-primary-container/10",
-                        "transition-colors hover:bg-surface-container/60",
-                      )}
-                    >
-                      <DashboardTableCell
-                        className={cn("font-semibold", isLast && "border-b-0")}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={cn(
-                              "flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold",
-                              initialsToneClass[session.initialsTone],
-                            )}
-                          >
-                            {session.initials}
-                          </span>
-                          <span className="text-on-surface">{session.name}</span>
-                        </div>
-                      </DashboardTableCell>
-                      <DashboardTableCell className={cn(isLast && "border-b-0")}>
-                        <StatusBadge tone="purple">{session.topic}</StatusBadge>
-                      </DashboardTableCell>
-                      <DashboardTableCell
-                        className={cn("font-medium", isLast && "border-b-0")}
-                      >
-                        {session.time}
-                      </DashboardTableCell>
-                      <DashboardTableCell className={cn(isLast && "border-b-0")}>
-                        <span className="inline-flex items-center gap-2 text-on-surface-variant">
-                          {session.method === "online" ? (
-                            <Video className="h-4 w-4" aria-hidden="true" />
-                          ) : (
-                            <MapPin className="h-4 w-4" aria-hidden="true" />
-                          )}
-                          {session.method === "online" ? "Online" : "Offline"}
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary-container text-[12px] font-bold text-[#6f5794]">
+                          {initials}
                         </span>
-                      </DashboardTableCell>
-                      <DashboardTableCell className={cn(isLast && "border-b-0")}>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <h3 className="text-[16px] font-bold text-on-surface">
+                              {report.nama_pasien || "Pasien Anonim"}
+                            </h3>
+                            <StatusBadge tone="purple" className="text-[11px]">
+                              {topicName}
+                            </StatusBadge>
+                          </div>
+                          <p className="mt-1 text-[13px] text-on-surface-muted">
+                            {formatDate(report.dibuat_pada)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3">
                         <span
                           className={cn(
-                            "inline-flex items-center gap-2 font-semibold",
-                            statusText[session.status],
+                            "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold uppercase tracking-widest",
+                            priorityBadge[priority],
                           )}
                         >
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full",
-                              statusDot[session.status],
-                            )}
-                          />
-                          {statusLabel[session.status]}
+                          {priority} priority
                         </span>
-                      </DashboardTableCell>
-                      <DashboardTableCell
-                        className={cn(
-                          "text-right",
-                          isLast && "border-b-0",
-                        )}
-                      >
-                        {session.status === "berlangsung" ? (
-                          <Link
-                            href={`/psikolog/feedback/${session.id}`}
-                            className="inline-flex h-9 items-center justify-center rounded-full bg-[#3f5a3f] px-5 text-sm font-semibold text-white transition hover:bg-[#324a32]"
-                          >
-                            Masuk Sesi
-                          </Link>
-                        ) : (
-                          <Link
-                            href={`/psikolog/feedback/${session.id}`}
-                            className={cn(
-                              "text-sm font-semibold transition-colors",
-                              session.status === "selesai"
-                                ? "text-on-surface hover:text-primary"
-                                : "text-on-surface-muted hover:text-on-surface",
-                            )}
-                          >
-                            Lihat Detail
-                          </Link>
-                        )}
-                      </DashboardTableCell>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </DashboardTable>
+
+                        <span
+                          className={cn(
+                            "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold uppercase tracking-widest",
+                            report.feedback_tersedia
+                              ? "bg-[#dfeedf] text-[#3f5a3f]"
+                              : "bg-surface-container text-on-surface-variant",
+                          )}
+                        >
+                          {report.feedback_tersedia
+                            ? "Sudah Direspon"
+                            : "Belum Direspon"}
+                        </span>
+
+                        <Link
+                          href={`/psikolog/feedback/${report.id_pra_asesmen}`}
+                          className="inline-flex h-9 items-center justify-center rounded-full border border-outline-variant px-5 text-[13px] font-semibold text-on-surface transition hover:border-primary hover:text-primary"
+                        >
+                          Lihat Detail
+                        </Link>
+                      </div>
+                    </div>
+                  </DashboardCard>
+                );
+              })}
+            </div>
+          ) : null}
         </section>
       </div>
     </DashboardLayout>

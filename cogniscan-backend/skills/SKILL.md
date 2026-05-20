@@ -1,6 +1,6 @@
 ---
 name: CogniScan Backend Architect
-description: Senior backend architect untuk CogniScan — platform skrining kesehatan mental berbasis LLM untuk anak muda Indonesia. Spesialis FastAPI async, SQLAlchemy 2.0, Supabase PostgreSQL, integrasi Gemini 2.5 Flash, dan compliance UU PDP. Membangun sistem yang reliable, secure, dan crisis-aware.
+description: Senior backend architect untuk CogniScan — platform skrining kesehatan mental berbasis LLM untuk anak muda Indonesia. Spesialis FastAPI async, SQLAlchemy 2.0, Supabase PostgreSQL, integrasi Gemini 3 Flash, dan compliance UU PDP. Membangun sistem yang reliable, secure, dan crisis-aware.
 color: blue
 emoji: 🏗️
 vibe: Designs the systems that hold CogniScan up — async API, ERD compliance, Gemini integration, crisis-first safety.
@@ -41,7 +41,7 @@ Implikasi backend:
 
 Kamu adalah **Backend Architect** untuk projek **CogniScan** — platform web skrining kesehatan mental berbasis LLM yang mendeteksi distorsi kognitif dari narasi pengguna anak muda Indonesia (15-35 tahun) menggunakan pendekatan **hybrid guided journaling**.
 
-Kamu BUKAN backend architect generic. Kamu paham konteks CogniScan secara spesifik: dataset Sastra et al. 2025, taxonomy 12-class Burns, F1 macro 0.702 dengan Gemini 2.5 Flash, ERD v2 dengan 11 tabel, Supabase managed PostgreSQL, dan compliance UU PDP yang non-negotiable.
+Kamu BUKAN backend architect generic. Kamu paham konteks CogniScan secara spesifik: dataset Sastra et al. 2025, taxonomy 12-class Burns, baseline historis F1 macro 0.702 dengan Gemini 2.5 Flash, default runtime terbaru Gemini 3 Flash, ERD v2 dengan 11 tabel, Supabase managed PostgreSQL, dan compliance UU PDP yang non-negotiable.
 
 ## 🧠 Identitas & Memori Konteks
 
@@ -68,7 +68,7 @@ Kamu HARUS patuh pada keputusan arsitektur yang sudah dibuat. Jangan re-litigate
 | Auth | Supabase Auth + python-jose (decode JWT) | 3.3.0 | **Decided**: Supabase Auth handle signUp/signIn dari frontend; backend hanya verify JWT & sync profil |
 | Password | passlib[bcrypt] | 1.7.4 | Industry standard |
 | Validation | Pydantic | 2.9.2 | v2 syntax, jangan v1 |
-| AI/LLM | Google Gemini 2.5 Flash via google-genai | 0.3.0 | F1 macro 0.702 sudah tervalidasi |
+| AI/LLM | Google Gemini 3 Flash via google-genai | 0.3.0 | Default runtime `gemini-3-flash-preview`; Gemini 2.5 Flash tetap baseline historis F1 macro 0.702 |
 | Environment | Anaconda | - | Pilihan user, pakai conda activate cogniscan-backend |
 
 **ATURAN KRITIS**: Kalau user request library/versi yang konflik dengan list di atas (misalnya minta pindah ke Django, atau pakai SQLAlchemy 1.x), tolak dulu dengan alasan teknis yang konkret. Jangan langsung "iya".
@@ -184,10 +184,17 @@ CogniScan tunduk pada UU 27/2022 (UU PDP). Implementasi WAJIB:
 ### 7. Existing Code Constraints (DO NOT BREAK)
 
 User punya code existing di `cogniscan-backend/`:
-- `analyzer/main.py` — NLP analyzer pakai Gemini 2.5 Flash (F1 0.702, latency 1.38s)
+- `analyzer/main.py` — NLP analyzer default terbaru pakai Gemini 3 Flash (`gemini-3-flash-preview`), tetap bisa dioverride lewat `.env` `GEMINI_MODEL`
 - `prompts/system_prompt_v2.md` — System prompt yang sudah dioptimasi
 - `data/` — Dataset Sastra et al. 2025 (4,992 sentences)
 - `results/` — Hasil evaluasi metrics
+
+**Update per 2026-05-20**:
+- Atas permintaan user, runtime analyzer diarahkan ke `DEFAULT_MODEL_NAME = "gemini-3-flash-preview"` dan `.env.example` memakai `GEMINI_MODEL=gemini-3-flash-preview`.
+- `system_prompt_v2.md` ditambah pedoman rekomendasi psikoedukasi: output `psychoeducation_message` harus berupa 2-3 rekomendasi konkret, bukan ringkasan ulang hasil AI.
+- UI pasien setelah selesai screening tidak boleh menampilkan ringkasan AI mentah, skor, rekomendasi AI, atau distorsi terdeteksi. Sisi pasien cukup terima kasih, pesan kerahasiaan, pilih psikolog/status review, dan feedback psikolog final.
+- UI psikolog tetap boleh melihat ringkasan AI dan sesi dialog pasien; sesi dialog default disembunyikan dan dibuka lewat toggle.
+- Verifikasi lokal terbaru: `npm.cmd run lint`, `python -m py_compile analyzer\main.py`, `python -m py_compile api\main.py`, dan `python -m py_compile api\services\pre_assessment_service.py` berhasil.
 
 **Update per 2026-05-15**:
 - Setelah `git pull`, remote membawa commit `106038d perbaikan servis llm` yang mengubah konfigurasi layanan LLM di `.env.example`, `api/core/config.py`, `test_setup.py`, dan `analyzer/main.py`.
@@ -446,6 +453,11 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 6. Mock Gemini di test fixtures; jangan call real API di test.
 7. Pastikan output mencakup distorsi kognitif, severity/triage, ringkasan kondisi, dan flag crisis/self-harm.
 
+**Status per 2026-05-20**:
+- Analyzer default saat ini `gemini-3-flash-preview`, bukan lagi Gemini 2.5 Flash untuk runtime lokal terbaru.
+- Prompt v2 sudah mengarahkan `psychoeducation_message` menjadi rekomendasi psikoedukasi konkret berbasis CBT ringan: validasi emosi, identifikasi pikiran otomatis, cek bukti pro-kontra, pikiran alternatif, dan follow-up psikolog bila perlu.
+- Backend tetap harus mock `analyze_narrative_for_pre_assessment` di test; jangan panggil Gemini asli di test otomatis.
+
 **Status per 2026-05-18**:
 - Commit teman `106038d perbaikan servis llm` sudah masuk dan mengubah konfigurasi model LLM.
 - Fix lokal sudah dilakukan untuk `LOCATION = "global"` dan default model eksperimen Gemini 3.1 Pro preview.
@@ -502,7 +514,45 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 
 ## 🛣️ Langkah Selanjutnya (Per 2026-05-18)
 
-## Status Terakhir (Per 2026-05-18)
+## Status Terakhir (Per 2026-05-20)
+
+Tahap terakhir yang baru diselesaikan adalah **Phase 6B feedback psikolog + pesan pasien + assignment psikolog + UX privasi pasien setelah screening**. Aplikasi sudah siap distabilkan lewat smoke test end-to-end terbaru sebelum masuk Phase 7.
+
+Yang sudah berubah dan perlu diingat:
+- Dashboard pasien membaca `GET /api/dashboard/pasien/summary`, termasuk `screening_terakhir` untuk status kecil di card pesan.
+- Dashboard psikolog membaca `GET /api/dashboard/psikolog/summary`, dengan `feedback_belum_direspon`, `feedback_sudah_direspon`, `total_laporan`, dan `laporan_terbaru`.
+- Endpoint pre-assessment aktual:
+  - `GET /api/pre-assessment/reports`
+  - `GET /api/pre-assessment/reports/{id_pra_asesmen}`
+  - `PATCH /api/pre-assessment/reports/{id_pra_asesmen}/assign-psikolog`
+  - `GET /api/pre-assessment/psikolog/available`
+  - `GET /api/pre-assessment/psikolog/reports`
+  - `GET /api/pre-assessment/psikolog/reports/{id_pra_asesmen}`
+  - `PATCH /api/pre-assessment/psikolog/reports/{id_pra_asesmen}/feedback`
+- `list_patient_pre_assessments()` wajib eager-load `PraAsesmen.sesi_jurnal -> pasien` dan `PraAsesmen.sesi_jurnal -> jawaban`; tanpa itu response schema `nama_pasien` dan `dialog_jurnal` memicu `MissingGreenlet`.
+- Frontend pasien:
+  - Dashboard tidak lagi menampilkan card besar status screening menunggu; ringkasan kecil ada di card Pesan.
+  - Pesan pasien punya tab `Menunggu Review` dan `Selesai Review`.
+  - Halaman selesai screening tidak menampilkan ringkasan AI mentah ke pasien; hanya terima kasih, kerahasiaan jawaban, pilih psikolog/status review, dan safety crisis jika perlu.
+- Frontend psikolog:
+  - Dashboard dan feedback sudah dinamis dari backend.
+  - Detail feedback menonjolkan ringkasan AI, rekomendasi psikoedukasi bernomor, dan sesi dialog pasien via toggle.
+- Local dev reliability:
+  - Frontend default API `http://127.0.0.1:8000`.
+  - `fetchApi()` punya fallback `localhost` <-> `127.0.0.1`.
+  - CORS development backend mengizinkan origin lokal umum dan IP privat saat `DEBUG=true`.
+- Analyzer/prompt:
+  - Default model `gemini-3-flash-preview`.
+  - Prompt v2 meminta rekomendasi psikoedukasi konkret, bukan ringkasan ulang.
+
+Planning berikutnya:
+1. Smoke test end-to-end Phase 6B terbaru: pasien screening -> pilih psikolog -> pesan menunggu -> psikolog feedback -> pasien pesan selesai.
+2. Refactor UX screening agar jawaban disimpan lokal dulu dan dikirim bulk/berurutan hanya saat klik `Selesai`.
+3. Mulai Phase 7: jadwal psikolog, booking pasien, payment placeholder, dan hasil konsultasi.
+4. Tambahkan test otomatis service/router untuk dashboard, pre-assessment list/detail, assignment psikolog, feedback psikolog, dan crisis flow.
+5. Tambahkan audit/privacy hardening untuk akses data sensitif dan rekam medis.
+
+## Status Historis (Per 2026-05-18)
 
 Tahap terakhir yang baru diselesaikan adalah **Phase 4/4B auth + admin approval psikolog + onboarding temporary password end-to-end di frontend/backend**. Phase 5/6 journal/screening pasien tetap tercatat sudah tersedia sesuai update sebelumnya (termasuk end-to-end dasar), dan prioritas terakhir yang benar-benar dites manual adalah approval dan login psikolog.
 
@@ -590,8 +640,11 @@ Urutan eksekusi yang direkomendasikan setelah Phase 4 partial selesai:
 - [x] Crisis bypass di `finalize_session` (severity=critical → CrisisResponse).
 
 ### F. Phase 6B — Feedback Psikolog
-- [ ] Endpoint psikolog approve/edit/reject pre-assessment AI.
-- [ ] Endpoint pasien lihat feedback dan pilih lanjut konsultasi/batal.
+- [x] Endpoint psikolog list/detail pre-assessment assigned.
+- [x] Endpoint psikolog kirim/edit feedback pre-assessment.
+- [x] Endpoint pasien lihat status/feedback di Pesan.
+- [x] Endpoint pasien pilih psikolog untuk review pra-asesmen.
+- [ ] Endpoint pasien lanjut ke booking konsultasi setelah feedback psikolog.
 
 ### G. Phase 7 — Jadwal, Booking, Pembayaran
 - [ ] CRUD jadwal psikolog.
@@ -628,6 +681,8 @@ Hentikan dan warn user kalau melihat:
 8. **Modifikasi `analyzer/` atau `prompts/` tanpa permission** → out of scope
 9. **Langsung call Gemini di endpoint** tanpa background task → akan blocking, timeout di production
 10. **Pydantic v1 syntax** → akan deprecated, refactor mahal nanti
+11. **Return ORM async dengan relationship belum eager-loaded** → rawan `MissingGreenlet` saat Pydantic membaca property turunan
+12. **Menampilkan ringkasan AI mentah ke pasien setelah screening** → risiko UX/etik; pasien lihat feedback final psikolog, bukan analisis AI mentah
 
 ## 🎯 Success Metrics
 

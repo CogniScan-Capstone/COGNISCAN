@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, X, Loader2 } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import {
   getPsikologNav,
   psikologProfileHref,
-  psikologUser,
+  psikologUser as defaultPsikologUser,
 } from "@/components/psikolog";
 import { cn } from "@/lib/utils";
+import { fetchPsikologPreAssessments, type PreAssessment } from "@/lib/auth";
+import { useBackendUser } from "@/lib/useBackendUser";
+import { useCachedApi } from "@/lib/useCachedApi";
 
 type Priority = "high" | "medium" | "low";
 type ResponseStatus = "belum-direspon" | "sudah-direspon";
@@ -28,72 +31,7 @@ type FeedbackItem = {
   italic?: boolean;
 };
 
-const feedback: FeedbackItem[] = [
-  {
-    id: "rina-marlina",
-    name: "Rina Marlina",
-    topic: "Keluarga",
-    topicTone: "peach",
-    relativeTime: "2 jam yang lalu",
-    createdAt: Date.now() - 1000 * 60 * 60 * 2,
-    priority: "high",
-    status: "belum-direspon",
-    message:
-      "Saya merasa kesulitan untuk berkomunikasi dengan anak saya belakangan ini. Setiap kali saya mencoba berbicara, dia justru menjauh. Mohon arahannya untuk sesi minggu depan apakah kita bisa fokus pada topik ini?",
-  },
-  {
-    id: "sari-wulandari",
-    name: "Sari Wulandari",
-    topic: "Pendidikan",
-    topicTone: "orange",
-    relativeTime: "Kemarin, 14:20",
-    createdAt: Date.now() - 1000 * 60 * 60 * 24,
-    priority: "low",
-    status: "sudah-direspon",
-    message:
-      "Terima kasih atas sarannya dokter, saya sudah mulai menerapkan jadwal belajar baru dan merasa jauh lebih tenang.",
-    italic: true,
-  },
-  {
-    id: "dimas-pratama",
-    name: "Dimas Pratama",
-    topic: "Kecemasan",
-    topicTone: "lilac",
-    relativeTime: "Kemarin, 09:15",
-    createdAt: Date.now() - 1000 * 60 * 60 * 28,
-    priority: "high",
-    status: "belum-direspon",
-    message:
-      "Beberapa hari ini saya susah tidur dan jantung sering berdebar kencang menjelang ujian. Saya butuh strategi cepat untuk menenangkan diri sebelum sesi ujian besok.",
-  },
-  {
-    id: "bagas-nugroho",
-    name: "Bagas Nugroho",
-    topic: "Keuangan",
-    topicTone: "green",
-    relativeTime: "2 hari lalu",
-    createdAt: Date.now() - 1000 * 60 * 60 * 50,
-    priority: "medium",
-    status: "belum-direspon",
-    message:
-      "Pekerjaan saya sedang tidak stabil dan saya merasa cemas memikirkan tagihan bulan depan. Apakah ada teknik untuk mengelola pikiran berulang seperti ini?",
-  },
-  {
-    id: "lina-marlina",
-    name: "Lina Marlina",
-    topic: "Hubungan",
-    topicTone: "blue",
-    relativeTime: "3 hari lalu",
-    createdAt: Date.now() - 1000 * 60 * 60 * 74,
-    priority: "medium",
-    status: "sudah-direspon",
-    message:
-      "Saya dan pasangan sudah mencoba teknik komunikasi yang dokter sarankan, perlahan terasa lebih lega. Terima kasih banyak.",
-    italic: true,
-  },
-];
-
-const PAGE_SIZE = 2;
+const PAGE_SIZE = 5;
 
 const topicToneClass: Record<FeedbackItem["topicTone"], string> = {
   peach: "border-[#f1d2c5] bg-[#fce6dc] text-[#a3553c]",
@@ -140,15 +78,84 @@ const sortLabel: Record<SortKey, string> = {
 };
 
 export default function PsikologFeedbackPage() {
+  const backendUser = useBackendUser();
+  const displayUser = useMemo(() => ({
+    ...defaultPsikologUser,
+    name: backendUser?.nama_lengkap?.trim() || defaultPsikologUser.name,
+  }), [backendUser]);
+
+
   const [priorityFilter, setPriorityFilter] = useState<Priority | "all">(
-    "high",
+    "all",
   );
   const [statusFilter, setStatusFilter] = useState<ResponseStatus | "all">(
-    "belum-direspon",
+    "all",
   );
   const [sort, setSort] = useState<SortKey>("terbaru");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+
+  const { data: fetchedReports, loading, error, refetch: loadData } = useCachedApi<PreAssessment[]>(
+    "psikolog-feedback-list",
+    fetchPsikologPreAssessments,
+  );
+  const reports = useMemo(() => fetchedReports ?? [], [fetchedReports]);
+
+  const feedback = useMemo<FeedbackItem[]>(() => {
+    return reports.map((item) => {
+      const priorityMap: Record<string, Priority> = {
+        critical: "high",
+        high: "high",
+        tinggi: "high",
+        medium: "medium",
+        sedang: "medium",
+        low: "low",
+        rendah: "low",
+      };
+      const priority = priorityMap[item.indikator_urgensi || "low"] || "low";
+
+      const status = (item.feedback_psikolog && item.feedback_psikolog.trim().length > 0) || item.status_validasi === "selesai"
+        ? "sudah-direspon"
+        : "belum-direspon";
+
+      let relativeTime = "Baru saja";
+      let createdAt = 0;
+      if (item.dibuat_pada) {
+        const d = new Date(item.dibuat_pada);
+        createdAt = d.getTime();
+        relativeTime = d.toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      }
+
+      const topicToneMap: Record<string, "peach" | "orange" | "lilac" | "green" | "blue"> = {
+        pendidikan: "orange",
+        keluarga: "peach",
+        hubungan: "blue",
+        keuangan: "green",
+        "diri-sendiri": "lilac",
+        kesehatan: "lilac",
+      };
+      const topic = item.konteks_pemicu || "Jurnal";
+      const topicTone = topicToneMap[item.konteks_pemicu?.toLowerCase() || ""] || "blue";
+
+      return {
+        id: String(item.id_pra_asesmen),
+        name: item.nama_pasien || "Pasien Anonim",
+        topic,
+        topicTone,
+        relativeTime,
+        createdAt,
+        priority,
+        status,
+        message: item.ringkasan_kondisi || "Belum ada ringkasan kondisi.",
+      };
+    });
+  }, [reports]);
 
   const filtered = useMemo(() => {
     const list = feedback.filter((item) => {
@@ -183,7 +190,7 @@ export default function PsikologFeedbackPage() {
     });
 
     return list;
-  }, [priorityFilter, statusFilter, sort, search]);
+  }, [feedback, priorityFilter, statusFilter, sort, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -204,7 +211,7 @@ export default function PsikologFeedbackPage() {
     <DashboardLayout
       title="Feedback"
       navItems={getPsikologNav("feedback")}
-      user={psikologUser}
+      user={displayUser}
       profileHref={psikologProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
@@ -283,121 +290,144 @@ export default function PsikologFeedbackPage() {
           </div>
         </DashboardCard>
 
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <p className="text-[14px] text-on-surface-variant">
-            Menampilkan {filtered.length} hasil
-          </p>
-
-          <Dropdown
-            label="Sort"
-            value={sortLabel[sort]}
-            valueClassName="text-on-surface"
-            inline
-            items={[
-              { value: "terbaru", label: "Terbaru" },
-              { value: "terlama", label: "Terlama" },
-              { value: "prioritas", label: "Prioritas Tinggi" },
-            ]}
-            onChange={(v) => setSort(v as SortKey)}
-          />
-        </div>
-
-        <div className="space-y-5">
-          {visible.length === 0 ? (
-            <DashboardCard className="px-8 py-14 text-center">
-              <p className="text-[15px] text-on-surface-variant">
-                Tidak ada feedback yang cocok dengan filter ini.
+        {loading ? (
+          <DashboardCard className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-[#3f5a3f]" />
+              <p className="text-[14px] font-medium text-on-surface-variant">
+                Memuat data pre-assessment...
               </p>
-            </DashboardCard>
-          ) : (
-            visible.map((item) => (
-              <DashboardCard key={item.id} className="px-7 py-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="text-[17px] font-bold text-on-surface">
-                        {item.name}
-                      </h3>
-                      <span
+            </div>
+          </DashboardCard>
+        ) : error ? (
+          <DashboardCard className="px-8 py-10 text-center border-destructive/20 bg-destructive/5">
+            <p className="text-[15px] font-semibold text-destructive">{error}</p>
+            <button
+              onClick={loadData}
+              className="mt-4 inline-flex h-9 items-center justify-center rounded-full bg-[#3f5a3f] px-5 text-[13px] font-semibold text-white transition hover:bg-[#324a32]"
+            >
+              Coba Lagi
+            </button>
+          </DashboardCard>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <p className="text-[14px] text-on-surface-variant">
+                Menampilkan {filtered.length} hasil
+              </p>
+
+              <Dropdown
+                label="Sort"
+                value={sortLabel[sort]}
+                valueClassName="text-on-surface"
+                inline
+                items={[
+                  { value: "terbaru", label: "Terbaru" },
+                  { value: "terlama", label: "Terlama" },
+                  { value: "prioritas", label: "Prioritas Tinggi" },
+                ]}
+                onChange={(v) => setSort(v as SortKey)}
+              />
+            </div>
+
+            <div className="space-y-5">
+              {visible.length === 0 ? (
+                <DashboardCard className="px-8 py-14 text-center">
+                  <p className="text-[15px] text-on-surface-variant">
+                    Tidak ada feedback yang cocok dengan filter ini.
+                  </p>
+                </DashboardCard>
+              ) : (
+                visible.map((item) => (
+                  <DashboardCard key={item.id} className="px-7 py-6">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h3 className="text-[17px] font-bold text-on-surface">
+                            {item.name}
+                          </h3>
+                          <span
+                            className={cn(
+                              "inline-flex h-7 items-center rounded-full border px-3 text-[11px] font-bold uppercase tracking-widest",
+                              topicToneClass[item.topicTone] || "border-[#c7d5ec] bg-[#e8effb] text-[#47658f]",
+                            )}
+                          >
+                            {item.topic}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-[13px] text-on-surface-muted">
+                          {item.relativeTime}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold uppercase tracking-widest",
+                            priorityBadge[item.priority],
+                          )}
+                        >
+                          {item.priority} Priority
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold uppercase tracking-widest",
+                            statusBadge[item.status],
+                          )}
+                        >
+                          {statusLabel[item.status]}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-5">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
+                        Pesan Pasien:
+                      </p>
+                      <p
                         className={cn(
-                          "inline-flex h-7 items-center rounded-full border px-3 text-[11px] font-bold uppercase tracking-widest",
-                          topicToneClass[item.topicTone],
+                          "mt-2 text-[15px] leading-7 text-on-surface-variant",
+                          item.italic && "italic",
                         )}
                       >
-                        {item.topic}
-                      </span>
+                        {item.italic ? `"${item.message}"` : item.message}
+                      </p>
                     </div>
-                    <p className="mt-2 text-[13px] text-on-surface-muted">
-                      {item.relativeTime}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={cn(
-                        "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold uppercase tracking-widest",
-                        priorityBadge[item.priority],
+
+                    <hr className="my-6 border-outline-variant/70" />
+
+                    <div>
+                      {item.status === "belum-direspon" ? (
+                        <Link
+                          href={`/psikolog/feedback/${item.id}`}
+                          className="inline-flex h-10 items-center justify-center rounded-full bg-[#3f5a3f] px-6 text-[14px] font-semibold text-white transition hover:bg-[#324a32]"
+                        >
+                          Tulis Respon
+                        </Link>
+                      ) : (
+                        <Link
+                          href={`/psikolog/feedback/${item.id}`}
+                          className="inline-flex h-10 items-center justify-center rounded-full border border-outline-variant px-6 text-[14px] font-semibold text-on-surface transition hover:border-primary hover:text-primary"
+                        >
+                          Lihat Respon
+                        </Link>
                       )}
-                    >
-                      {item.priority} Priority
-                    </span>
-                    <span
-                      className={cn(
-                        "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold uppercase tracking-widest",
-                        statusBadge[item.status],
-                      )}
-                    >
-                      {statusLabel[item.status]}
-                    </span>
-                  </div>
-                </div>
+                    </div>
+                  </DashboardCard>
+                ))
+              )}
+            </div>
 
-                <div className="mt-5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
-                    Pesan Pasien:
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-2 text-[15px] leading-7 text-on-surface-variant",
-                      item.italic && "italic",
-                    )}
-                  >
-                    {item.italic ? `"${item.message}"` : item.message}
-                  </p>
-                </div>
-
-                <hr className="my-6 border-outline-variant/70" />
-
-                <div>
-                  {item.status === "belum-direspon" ? (
-                    <Link
-                      href={`/psikolog/feedback/${item.id}`}
-                      className="inline-flex h-10 items-center justify-center rounded-full bg-[#3f5a3f] px-6 text-[14px] font-semibold text-white transition hover:bg-[#324a32]"
-                    >
-                      Tulis Respon
-                    </Link>
-                  ) : (
-                    <Link
-                      href={`/psikolog/feedback/${item.id}`}
-                      className="inline-flex h-10 items-center justify-center rounded-full border border-outline-variant px-6 text-[14px] font-semibold text-on-surface transition hover:border-primary hover:text-primary"
-                    >
-                      Lihat Respon
-                    </Link>
-                  )}
-                </div>
-              </DashboardCard>
-            ))
-          )}
-        </div>
-
-        {totalPages > 1 ? (
-          <div className="pt-2">
-            <FeedbackPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onChange={setPage}
-            />
-          </div>
-        ) : null}
+            {totalPages > 1 ? (
+              <div className="pt-2">
+                <FeedbackPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onChange={setPage}
+                />
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
     </DashboardLayout>
   );
