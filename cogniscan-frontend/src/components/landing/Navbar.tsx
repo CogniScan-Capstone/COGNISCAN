@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
 export default function Navbar() {
   return (
@@ -22,17 +23,14 @@ export default function Navbar() {
         }}
       >
         {/* Logo */}
-        <Link
-          href="#"
-          className="font-serif no-underline"
-          style={{
-            fontSize: "26px",
-            fontWeight: 600,
-            letterSpacing: "-0.02em",
-            color: "var(--on-surface)",
-          }}
-        >
-          Cogni<em className="italic" style={{ color: "var(--primary)", fontWeight: 500 }}>Scan</em>
+        <Link href="#" className="no-underline">
+          <Image
+            src="/logo.png"
+            alt="CogniScan Logo"
+            width={150}
+            height={40}
+            priority
+          />
         </Link>
 
         {/* Nav links */}
@@ -40,14 +38,22 @@ export default function Navbar() {
           <Link
             href="#cara-kerja"
             className="hidden md:inline no-underline transition-colors hover:text-primary"
-            style={{ color: "var(--on-surface-variant)", fontSize: "14px", fontWeight: 500 }}
+            style={{
+              color: "var(--on-surface-variant)",
+              fontSize: "14px",
+              fontWeight: 500,
+            }}
           >
             Cara Kerja
           </Link>
           <Link
             href="#fitur"
             className="hidden md:inline no-underline transition-colors hover:text-primary"
-            style={{ color: "var(--on-surface-variant)", fontSize: "14px", fontWeight: 500 }}
+            style={{
+              color: "var(--on-surface-variant)",
+              fontSize: "14px",
+              fontWeight: 500,
+            }}
           >
             Fitur
           </Link>
@@ -55,19 +61,25 @@ export default function Navbar() {
           <Link
             href="#faq"
             className="hidden md:inline no-underline transition-colors hover:text-primary"
-            style={{ color: "var(--on-surface-variant)", fontSize: "14px", fontWeight: 500 }}
+            style={{
+              color: "var(--on-surface-variant)",
+              fontSize: "14px",
+              fontWeight: 500,
+            }}
           >
             Pertanyaan
           </Link>
-            <Link
-
+          <Link
             href="#untuk-siapa"
             className="hidden md:inline no-underline transition-colors hover:text-primary"
-            style={{ color: "var(--on-surface-variant)", fontSize: "14px", fontWeight: 500 }}
+            style={{
+              color: "var(--on-surface-variant)",
+              fontSize: "14px",
+              fontWeight: 500,
+            }}
           >
             Daftar Sebagai Psikolog
           </Link>
-
         </div>
       </div>
     </nav>
