@@ -24,6 +24,8 @@ import {
 import { cn } from "@/lib/utils";
 import {
   fetchPsikologPreAssessmentReport,
+  savePreAssessmentFeedbackDraft,
+  type JournalAnswer,
   submitPreAssessmentFeedback,
   type PreAssessment,
 } from "@/lib/auth";
@@ -66,6 +68,16 @@ const recommendationLabel: Record<Recommendation, string> = {
   "tidak-perlu": "Tidak Perlu Konsultasi Lanjutan",
 };
 
+const aiAccuracyOptions: AiAccuracy[] = [
+  "sangat-akurat",
+  "sebagian-akurat",
+  "tidak-akurat",
+];
+
+const severityOptions: SeverityLevel[] = ["hijau", "kuning", "merah"];
+
+const recommendationOptions: Recommendation[] = ["lanjutkan", "tidak-perlu"];
+
 const recommendationFallback = [
   "Pertimbangkan psikoedukasi singkat yang membantu pasien memahami pola pikirnya dan memantau emosi harian.",
 ];
@@ -98,6 +110,63 @@ function formatAiRecommendations(value?: string | null) {
     : recommendationFallback;
 }
 
+function buildDialogText(answers?: JournalAnswer[] | null, fallback?: string | null) {
+  const filledAnswers = (answers ?? [])
+    .filter((answer) => (answer.teks_jawaban ?? "").trim().length > 0)
+    .sort((a, b) => (a.urutan_pertanyaan ?? 0) - (b.urutan_pertanyaan ?? 0));
+
+  if (filledAnswers.length > 0) {
+    return filledAnswers
+      .map((answer, index) => {
+        const order = answer.urutan_pertanyaan ?? index + 1;
+        const question = answer.teks_pertanyaan?.trim() || `Pertanyaan ${order}`;
+        const response = answer.teks_jawaban?.trim() || "-";
+        return `Pertanyaan ${order}: ${question}\nJawaban: ${response}`;
+      })
+      .join("\n\n");
+  }
+
+  return fallback?.trim() || "Tidak ada sesi dialog yang tersimpan.";
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "";
+
+  return new Date(value).toLocaleDateString("id-ID", {
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function hasFinalFeedback(report: PreAssessment) {
+  return Boolean(
+    report.status_validasi === "selesai" &&
+      report.divalidasi_pada &&
+      report.feedback_psikolog?.trim(),
+  );
+}
+
+function isAiAccuracy(value?: string | null): value is AiAccuracy {
+  return aiAccuracyOptions.includes(value as AiAccuracy);
+}
+
+function isSeverityLevel(value?: string | null): value is SeverityLevel {
+  return severityOptions.includes(value as SeverityLevel);
+}
+
+function isRecommendation(value?: string | null): value is Recommendation {
+  return recommendationOptions.includes(value as Recommendation);
+}
+
+function severityFromUrgency(value?: string | null): SeverityLevel {
+  if (value === "critical" || value === "high" || value === "tinggi") return "merah";
+  if (value === "medium" || value === "sedang") return "kuning";
+  return "hijau";
+}
+
 export default function FeedbackDetailPage({
   params,
 }: {
@@ -114,6 +183,7 @@ export default function FeedbackDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const [mode, setMode] = useState<Mode>("compose");
   const [aiAccuracy, setAiAccuracy] = useState<AiAccuracy | null>(null);
@@ -122,7 +192,55 @@ export default function FeedbackDetailPage({
   const [feedbackText, setFeedbackText] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
   const [savedDraft, setSavedDraft] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [showDialog, setShowDialog] = useState(false);
+
+  function hydrateFeedbackForm(dataReport: PreAssessment) {
+    const hasFeedback = hasFinalFeedback(dataReport);
+
+    if (hasFeedback) {
+      setMode("view");
+      setFeedbackText(dataReport.feedback_psikolog || "");
+      setInternalNotes(dataReport.catatan_internal_psikolog || "");
+      setAiAccuracy(
+        isAiAccuracy(dataReport.akurasi_ai_psikolog)
+          ? dataReport.akurasi_ai_psikolog
+          : null,
+      );
+      setSeverityFinal(
+        isSeverityLevel(dataReport.severity_final_psikolog)
+          ? dataReport.severity_final_psikolog
+          : severityFromUrgency(dataReport.indikator_urgensi),
+      );
+      setRecommendation(
+        isRecommendation(dataReport.rekomendasi_tindak_lanjut_psikolog)
+          ? dataReport.rekomendasi_tindak_lanjut_psikolog
+          : "lanjutkan",
+      );
+      setDraftSavedAt(dataReport.draft_disimpan_pada ?? null);
+      return;
+    }
+
+    setMode("compose");
+    setFeedbackText(dataReport.draft_feedback_psikolog || "");
+    setInternalNotes(dataReport.draft_catatan_internal || "");
+    setAiAccuracy(
+      isAiAccuracy(dataReport.draft_akurasi_ai)
+        ? dataReport.draft_akurasi_ai
+        : null,
+    );
+    setSeverityFinal(
+      isSeverityLevel(dataReport.draft_severity_final)
+        ? dataReport.draft_severity_final
+        : severityFromUrgency(dataReport.indikator_urgensi),
+    );
+    setRecommendation(
+      isRecommendation(dataReport.draft_rekomendasi_tindak_lanjut)
+        ? dataReport.draft_rekomendasi_tindak_lanjut
+        : "lanjutkan",
+    );
+    setDraftSavedAt(dataReport.draft_disimpan_pada ?? null);
+  }
 
   const loadReport = async () => {
     setLoading(true);
@@ -135,26 +253,7 @@ export default function FeedbackDetailPage({
       }
       const dataReport = await fetchPsikologPreAssessmentReport(accessToken, Number(id));
       setReport(dataReport);
-
-      const hasFeedback = (dataReport.feedback_psikolog && dataReport.feedback_psikolog.trim().length > 0) || dataReport.status_validasi === "selesai";
-      if (hasFeedback) {
-        setMode("view");
-        setFeedbackText(dataReport.feedback_psikolog || "");
-      } else {
-        setMode("compose");
-        setFeedbackText("");
-      }
-
-      const severityMap: Record<string, SeverityLevel> = {
-        critical: "merah",
-        tinggi: "merah",
-        high: "merah",
-        sedang: "kuning",
-        medium: "kuning",
-        rendah: "hijau",
-        low: "hijau",
-      };
-      setSeverityFinal(severityMap[dataReport.indikator_urgensi || "rendah"] || "hijau");
+      hydrateFeedbackForm(dataReport);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal memuat detail feedback.");
     } finally {
@@ -178,29 +277,7 @@ export default function FeedbackDetailPage({
         if (!isMounted) return;
 
         setReport(dataReport);
-
-        const hasExistingFeedback =
-          (dataReport.feedback_psikolog &&
-            dataReport.feedback_psikolog.trim().length > 0) ||
-          dataReport.status_validasi === "selesai";
-        if (hasExistingFeedback) {
-          setMode("view");
-          setFeedbackText(dataReport.feedback_psikolog || "");
-        } else {
-          setMode("compose");
-          setFeedbackText("");
-        }
-
-        const severityMap: Record<string, SeverityLevel> = {
-          critical: "merah",
-          tinggi: "merah",
-          high: "merah",
-          sedang: "kuning",
-          medium: "kuning",
-          rendah: "hijau",
-          low: "hijau",
-        };
-        setSeverityFinal(severityMap[dataReport.indikator_urgensi || "rendah"] || "hijau");
+        hydrateFeedbackForm(dataReport);
       } catch (err) {
         if (isMounted) {
           setError(err instanceof Error ? err.message : "Gagal memuat detail feedback.");
@@ -273,25 +350,65 @@ export default function FeedbackDetailPage({
       topic: report.konteks_pemicu || "Jurnal",
       topicTone,
       relativeTime,
-      dialogText: report.dialog_jurnal || report.ringkasan_kondisi || "Tidak ada sesi dialog yang tersimpan.",
+      dialogText: buildDialogText(report.jawaban_jurnal, report.dialog_jurnal),
       aiSummary,
       aiRecommendations,
       tags,
       aiSeverity,
-      aiScore: report.skor_keparahan || 0,
+      aiScore: report.skor_keparahan ?? null,
+      answerCount: report.jawaban_jurnal?.filter(
+        (answer) => (answer.teks_jawaban ?? "").trim().length > 0,
+      ).length ?? 0,
     };
   }, [report]);
 
   const remaining = 500 - feedbackText.length;
-  const canSubmit = feedbackText.trim().length >= 20 && aiAccuracy !== null && !submitting;
+  const feedbackReady = feedbackText.trim().length >= 10;
+  const canClickSubmit = !submitting && !savingDraft;
 
-  const handleSaveDraft = () => {
-    setSavedDraft(true);
-    setTimeout(() => setSavedDraft(false), 1800);
+  const handleSaveDraft = async () => {
+    if (savingDraft || submitting) return;
+
+    setSavingDraft(true);
+    setError("");
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+      }
+
+      const updatedReport = await savePreAssessmentFeedbackDraft(
+        accessToken,
+        Number(id),
+        {
+          draft_feedback_psikolog: feedbackText,
+          draft_catatan_internal: internalNotes,
+          draft_akurasi_ai: aiAccuracy,
+          draft_severity_final: severityFinal,
+          draft_rekomendasi_tindak_lanjut: recommendation,
+        },
+      );
+
+      setReport(updatedReport);
+      setDraftSavedAt(updatedReport.draft_disimpan_pada ?? null);
+      setSavedDraft(true);
+      setTimeout(() => setSavedDraft(false), 1800);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal menyimpan draft.");
+    } finally {
+      setSavingDraft(false);
+    }
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canClickSubmit) return;
+
+    if (!feedbackReady) {
+      setError("Feedback untuk pasien minimal 10 karakter sebelum bisa dikirim.");
+      return;
+    }
+
     setSubmitting(true);
     setError("");
     try {
@@ -303,6 +420,10 @@ export default function FeedbackDetailPage({
       await submitPreAssessmentFeedback(accessToken, Number(id), {
         feedback_psikolog: feedbackText,
         status_validasi: "selesai",
+        catatan_internal_psikolog: internalNotes,
+        akurasi_ai_psikolog: aiAccuracy,
+        severity_final_psikolog: severityFinal,
+        rekomendasi_tindak_lanjut_psikolog: recommendation,
       });
       setMode("view");
       await loadReport();
@@ -330,6 +451,10 @@ export default function FeedbackDetailPage({
       await submitPreAssessmentFeedback(accessToken, Number(id), {
         feedback_psikolog: "",
         status_validasi: "sedang_direview",
+        catatan_internal_psikolog: null,
+        akurasi_ai_psikolog: null,
+        severity_final_psikolog: null,
+        rekomendasi_tindak_lanjut_psikolog: null,
       });
       setMode("compose");
       setFeedbackText("");
@@ -452,7 +577,9 @@ export default function FeedbackDetailPage({
                       </span>
 
                       <span className="rounded-full bg-[#f3edf7] px-3 py-1.5 text-[12px] font-bold text-[#6f5794]">
-                        Skor {displayData.aiScore}%
+                        {displayData.aiScore === null
+                          ? "Skor belum tersedia"
+                          : `Skor ${displayData.aiScore}/10`}
                       </span>
                     </div>
                   </div>
@@ -499,7 +626,9 @@ export default function FeedbackDetailPage({
                         Sesi Dialog Pasien
                       </p>
                       <p className="mt-1 text-[13px] leading-5 text-white/75">
-                        Dialog disembunyikan agar ringkasan AI tetap mudah ditinjau.
+                        {displayData.answerCount > 0
+                          ? `${displayData.answerCount} jawaban pasien tersedia.`
+                          : "Belum ada jawaban pasien yang tersimpan untuk laporan ini."}
                       </p>
                     </div>
 
@@ -571,6 +700,17 @@ export default function FeedbackDetailPage({
 
               {mode === "compose" ? (
                 <DashboardCard className="px-7 py-7 lg:sticky lg:top-6">
+                  <div className="mb-6 rounded-[14px] border border-[#d8c5f1] bg-secondary-container/35 px-4 py-3">
+                    <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#6f5794]">
+                      Draft Feedback
+                    </p>
+                    <p className="mt-1 text-[13px] leading-5 text-on-surface-variant">
+                      {draftSavedAt
+                        ? `Draft terakhir disimpan ${formatDateTime(draftSavedAt)}. Draft belum terlihat oleh pasien.`
+                        : "Draft belum disimpan. Pasien hanya akan melihat feedback setelah Anda mengirim versi final."}
+                    </p>
+                  </div>
+
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-muted">
                       1. Akurasi Hasil Analisis AI
@@ -738,20 +878,25 @@ export default function FeedbackDetailPage({
                     <button
                       type="button"
                       onClick={handleSaveDraft}
-                      className="inline-flex h-11 items-center gap-2 rounded-full border border-outline-variant bg-white px-5 text-[14px] font-semibold text-on-surface-variant transition hover:border-primary hover:text-primary"
+                      disabled={savingDraft || submitting}
+                      className="inline-flex h-11 items-center gap-2 rounded-full border border-outline-variant bg-white px-5 text-[14px] font-semibold text-on-surface-variant transition hover:border-primary hover:text-primary disabled:cursor-wait disabled:opacity-60"
                     >
-                      <Save className="h-4 w-4" aria-hidden="true" />
-                      Simpan Draft
+                      {savingDraft ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Save className="h-4 w-4" aria-hidden="true" />
+                      )}
+                      {savingDraft ? "Menyimpan Draft..." : "Simpan Draft"}
                     </button>
                     <button
                       type="button"
                       onClick={handleSubmit}
-                      disabled={!canSubmit}
+                      disabled={!canClickSubmit}
                       className={cn(
                         "inline-flex h-11 items-center gap-2 rounded-full px-6 text-[14px] font-semibold text-white transition",
-                        canSubmit
+                        canClickSubmit
                           ? "bg-[#3f5a3f] hover:bg-[#324a32]"
-                          : "bg-[#3f5a3f]/40 cursor-not-allowed",
+                          : "bg-[#3f5a3f]/40 cursor-wait",
                       )}
                     >
                       {submitting ? (

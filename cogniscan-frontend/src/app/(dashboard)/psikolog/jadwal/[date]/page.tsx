@@ -1,23 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   Clock,
   ExternalLink,
+  Loader2,
   Mail,
   MapPin,
   Search,
   User,
   Video,
 } from "lucide-react";
+
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import {
   getPsikologNav,
   psikologProfileHref,
-  psikologUser,
+  psikologUser as defaultPsikologUser,
 } from "@/components/psikolog";
+import {
+  fetchPsikologScheduleBookings,
+  type PsikologScheduleBooking,
+} from "@/lib/auth";
+import { supabase } from "@/lib/supabase/client";
+import { useBackendUser } from "@/lib/useBackendUser";
 import { cn } from "@/lib/utils";
 
 type SessionMethod = "online" | "offline";
@@ -27,128 +36,16 @@ type MethodFilter = "semua" | "online" | "offline";
 type Session = {
   id: string;
   time: string;
+  endTime?: string | null;
   name: string;
   email: string;
   topic: string;
   topicTone: "peach" | "orange" | "lilac" | "green" | "blue";
   method: SessionMethod;
-  meetLink?: string;
-  location?: string;
+  meetLink?: string | null;
+  location?: string | null;
   status: SessionStatus;
 };
-
-const sessions: Session[] = [
-  {
-    id: "s-1",
-    time: "08:00",
-    name: "Rina Marlina",
-    email: "rina.marlina@mail.com",
-    topic: "Keluarga",
-    topicTone: "peach",
-    method: "online",
-    meetLink: "meet.google.com/abc-defg-hij",
-    status: "selesai",
-  },
-  {
-    id: "s-2",
-    time: "09:00",
-    name: "Dimas Pratama",
-    email: "dimas.p@mail.com",
-    topic: "Kecemasan",
-    topicTone: "lilac",
-    method: "online",
-    meetLink: "meet.google.com/xyz-uvwq-rst",
-    status: "berlangsung",
-  },
-  {
-    id: "s-3",
-    time: "10:00",
-    name: "Sari Wulandari",
-    email: "sari.w@mail.com",
-    topic: "Pendidikan",
-    topicTone: "orange",
-    method: "offline",
-    location: "Klinik CogniScan, Lt. 3 Ruang A",
-    status: "terjadwal",
-  },
-  {
-    id: "s-4",
-    time: "11:00",
-    name: "Bagas Nugroho",
-    email: "bagas.n@mail.com",
-    topic: "Keuangan",
-    topicTone: "green",
-    method: "online",
-    meetLink: "meet.google.com/jkl-mnop-qrs",
-    status: "terjadwal",
-  },
-  {
-    id: "s-5",
-    time: "13:00",
-    name: "Lina Marlina",
-    email: "lina.m@mail.com",
-    topic: "Hubungan",
-    topicTone: "blue",
-    method: "offline",
-    location: "Klinik CogniScan, Lt. 3 Ruang B",
-    status: "terjadwal",
-  },
-  {
-    id: "s-6",
-    time: "14:00",
-    name: "Andi Pranoto",
-    email: "andi.p@mail.com",
-    topic: "Kesehatan",
-    topicTone: "green",
-    method: "online",
-    meetLink: "meet.google.com/tuv-wxyz-123",
-    status: "terjadwal",
-  },
-  {
-    id: "s-7",
-    time: "15:00",
-    name: "Maya Hapsari",
-    email: "maya.h@mail.com",
-    topic: "Tubuh",
-    topicTone: "peach",
-    method: "online",
-    meetLink: "meet.google.com/aaa-bbbb-ccc",
-    status: "terjadwal",
-  },
-  {
-    id: "s-8",
-    time: "16:00",
-    name: "Toni Hartono",
-    email: "toni.h@mail.com",
-    topic: "Keluarga",
-    topicTone: "peach",
-    method: "offline",
-    location: "Klinik CogniScan, Lt. 3 Ruang A",
-    status: "terjadwal",
-  },
-  {
-    id: "s-9",
-    time: "17:00",
-    name: "Nadya Putri",
-    email: "nadya.p@mail.com",
-    topic: "Pendidikan",
-    topicTone: "orange",
-    method: "online",
-    meetLink: "meet.google.com/zzz-yyyy-xxx",
-    status: "terjadwal",
-  },
-  {
-    id: "s-10",
-    time: "19:00",
-    name: "Rendi Saputra",
-    email: "rendi.s@mail.com",
-    topic: "Hubungan",
-    topicTone: "blue",
-    method: "online",
-    meetLink: "meet.google.com/mmm-nnnn-ooo",
-    status: "terjadwal",
-  },
-];
 
 const topicToneClass: Record<Session["topicTone"], string> = {
   peach: "border-[#f1d2c5] bg-[#fce6dc] text-[#a3553c]",
@@ -208,20 +105,103 @@ function formatDateId(dateStr: string) {
   return `${days[date.getDay()]}, ${d} ${months[m - 1]} ${y}`;
 }
 
+function topicTone(topic?: string | null): Session["topicTone"] {
+  const normalized = topic?.toLowerCase() || "";
+  if (normalized.includes("keluarga")) return "peach";
+  if (normalized.includes("pendidikan")) return "orange";
+  if (normalized.includes("keuangan")) return "green";
+  if (normalized.includes("hubungan")) return "blue";
+  if (normalized.includes("kesehatan")) return "green";
+  return "lilac";
+}
+
+function normalizeMethod(value?: string | null): SessionMethod {
+  return value === "offline" ? "offline" : "online";
+}
+
+function normalizeStatus(value?: string | null): SessionStatus {
+  if (value === "selesai") return "selesai";
+  if (value === "berlangsung") return "berlangsung";
+  return "terjadwal";
+}
+
+function toSession(booking: PsikologScheduleBooking): Session {
+  const topic = booking.konteks_pemicu?.trim() || "Konsultasi";
+  return {
+    id: String(booking.id_pemesanan_konsultasi),
+    time: booking.waktu_mulai || "-",
+    endTime: booking.waktu_selesai,
+    name: booking.nama_pasien || "Pasien CogniScan",
+    email: booking.email_pasien || "-",
+    topic,
+    topicTone: topicTone(topic),
+    method: normalizeMethod(booking.mode_konsultasi),
+    meetLink: booking.link_pertemuan,
+    location: booking.lokasi_konsultasi || "Alamat praktik belum diatur",
+    status: normalizeStatus(booking.status_konsultasi),
+  };
+}
+
 export default function JadwalDetailPage({
   params,
 }: {
   params: Promise<{ date: string }>;
 }) {
   const { date } = use(params);
+  const backendUser = useBackendUser();
+  const displayUser = {
+    ...defaultPsikologUser,
+    name: backendUser?.nama_lengkap?.trim() || defaultPsikologUser.name,
+  };
+
   const [query, setQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState<MethodFilter>("semua");
+  const [bookings, setBookings] = useState<PsikologScheduleBooking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadBookings() {
+      setLoading(true);
+      setError("");
+      try {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (!accessToken) {
+          throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+        }
+
+        const dataBookings = await fetchPsikologScheduleBookings(accessToken, {
+          startDate: date,
+          endDate: date,
+        });
+        if (mounted) setBookings(dataBookings);
+      } catch (err) {
+        if (mounted) {
+          setError(err instanceof Error ? err.message : "Gagal memuat jadwal pasien.");
+          setBookings([]);
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadBookings();
+
+    return () => {
+      mounted = false;
+    };
+  }, [date]);
+
+  const sessions = useMemo(() => bookings.map(toSession), [bookings]);
 
   const counts = useMemo(() => {
     const online = sessions.filter((s) => s.method === "online").length;
     const offline = sessions.filter((s) => s.method === "offline").length;
     return { total: sessions.length, online, offline };
-  }, []);
+  }, [sessions]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -234,13 +214,13 @@ export default function JadwalDetailPage({
         s.email.toLowerCase().includes(q)
       );
     });
-  }, [query, methodFilter]);
+  }, [methodFilter, query, sessions]);
 
   return (
     <DashboardLayout
       title="Jadwal"
       navItems={getPsikologNav("jadwal")}
-      user={psikologUser}
+      user={displayUser}
       profileHref={psikologProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
@@ -265,11 +245,11 @@ export default function JadwalDetailPage({
                 {formatDateId(date)}
               </h2>
               <p className="mt-1 text-[14px] text-on-surface-variant">
-                Daftar lengkap sesi konsultasi pada hari ini.
+                Daftar pasien yang sudah membayar konsultasi pada tanggal ini.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <StatPill label="Total Slot" value={`${counts.total}/${counts.total}`} />
+              <StatPill label="Total Pasien" value={String(counts.total)} />
               <StatPill label="Online" value={String(counts.online)} icon={Video} />
               <StatPill
                 label="Offline"
@@ -290,7 +270,7 @@ export default function JadwalDetailPage({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Cari nama pasien, email, atau topik…"
+              placeholder="Cari nama pasien, email, atau topik..."
               className="h-10 w-full rounded-full border border-outline-variant bg-white pl-10 pr-4 text-[14px] text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
@@ -313,11 +293,24 @@ export default function JadwalDetailPage({
           </div>
         </DashboardCard>
 
+        {error ? (
+          <DashboardCard className="px-8 py-6">
+            <p className="text-[15px] font-medium text-red-700">{error}</p>
+          </DashboardCard>
+        ) : null}
+
         <div className="space-y-4">
-          {visible.length === 0 ? (
+          {loading ? (
+            <DashboardCard className="px-8 py-12 text-center">
+              <Loader2 className="mx-auto h-9 w-9 animate-spin text-primary" aria-hidden="true" />
+              <p className="mt-4 text-[15px] font-medium text-on-surface-variant">
+                Memuat jadwal pasien...
+              </p>
+            </DashboardCard>
+          ) : visible.length === 0 ? (
             <DashboardCard className="px-8 py-12 text-center">
               <p className="text-[15px] text-on-surface-variant">
-                Tidak ada sesi yang cocok dengan filter ini.
+                Belum ada pasien berbayar pada tanggal ini.
               </p>
             </DashboardCard>
           ) : (
@@ -333,7 +326,9 @@ export default function JadwalDetailPage({
                       <p className="text-[20px] font-bold text-on-surface">
                         {s.time}
                       </p>
-                      <p className="text-[12px] text-on-surface-muted">WIB</p>
+                      <p className="text-[12px] text-on-surface-muted">
+                        {s.endTime ? `s.d. ${s.endTime}` : "WIB"}
+                      </p>
                     </div>
                   </div>
 
@@ -356,24 +351,30 @@ export default function JadwalDetailPage({
                         <Mail className="h-3.5 w-3.5" aria-hidden="true" />
                         {s.email}
                       </p>
-                      {s.method === "online" && s.meetLink ? (
+                      {s.method === "online" ? (
                         <p className="inline-flex items-center gap-1.5">
                           <Video className="h-3.5 w-3.5" aria-hidden="true" />
-                          <a
-                            href={`https://${s.meetLink}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-medium text-primary hover:underline"
-                          >
-                            {s.meetLink}
-                          </a>
-                          <ExternalLink
-                            className="h-3 w-3 text-on-surface-muted"
-                            aria-hidden="true"
-                          />
+                          {s.meetLink ? (
+                            <>
+                              <a
+                                href={s.meetLink.startsWith("http") ? s.meetLink : `https://${s.meetLink}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-primary hover:underline"
+                              >
+                                {s.meetLink.replace(/^https?:\/\//, "")}
+                              </a>
+                              <ExternalLink
+                                className="h-3 w-3 text-on-surface-muted"
+                                aria-hidden="true"
+                              />
+                            </>
+                          ) : (
+                            <span>Link meeting belum dibuat</span>
+                          )}
                         </p>
                       ) : null}
-                      {s.method === "offline" && s.location ? (
+                      {s.method === "offline" ? (
                         <p className="inline-flex items-center gap-1.5">
                           <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
                           {s.location}
@@ -423,7 +424,7 @@ function StatPill({
 }: {
   label: string;
   value: string;
-  icon?: typeof User;
+  icon?: LucideIcon;
 }) {
   return (
     <div className="rounded-[14px] bg-white/85 px-4 py-3 text-center">
@@ -433,7 +434,9 @@ function StatPill({
       <p className="mt-1 inline-flex items-center justify-center gap-1.5 text-[18px] font-bold text-on-surface">
         {Icon ? (
           <Icon className="h-4 w-4 text-[#6f5794]" aria-hidden="true" />
-        ) : null}
+        ) : (
+          <User className="h-4 w-4 text-[#6f5794]" aria-hidden="true" />
+        )}
         {value}
       </p>
     </div>

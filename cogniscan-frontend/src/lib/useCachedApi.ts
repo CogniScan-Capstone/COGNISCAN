@@ -24,7 +24,7 @@ export function useCachedApi<T>(
   const ttlMs = options?.ttlMs ?? 30_000;
   const enabled = options?.enabled ?? true;
 
-  const cached = getCached<T>(cacheKey);
+  const cached = ttlMs === 0 ? null : getCached<T>(cacheKey);
   const [data, setData] = useState<T | null>(cached);
   const [loading, setLoading] = useState(cached === null);
   const [error, setError] = useState("");

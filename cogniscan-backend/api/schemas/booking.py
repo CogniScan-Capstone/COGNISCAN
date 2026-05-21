@@ -1,0 +1,60 @@
+from __future__ import annotations
+
+from datetime import date, datetime, time
+from decimal import Decimal
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+ConsultationMode = Literal["online", "offline"]
+
+
+class BookingCheckoutRequest(BaseModel):
+    tanggal_konsultasi: date
+    waktu_konsultasi: time
+    mode_konsultasi: ConsultationMode
+    id_pra_asesmen: int | None = Field(default=None, gt=0)
+
+
+class BookingCheckoutResponse(BaseModel):
+    id_pemesanan_konsultasi: int
+    id_transaksi_pembayaran: int
+    id_pra_asesmen: int
+    id_psikolog: int
+    nama_psikolog: str | None = None
+    tanggal_konsultasi: date
+    waktu_konsultasi: str
+    mode_konsultasi: ConsultationMode
+    order_id: str
+    snap_token: str
+    redirect_url: str
+    client_key: str
+    snap_script_url: str
+    jumlah_bayar: Decimal
+    status_transaksi: str | None = None
+    status_konsultasi: str | None = None
+    status_pembayaran: str | None = None
+
+
+class BookingReceiptResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_pemesanan_konsultasi: int
+    id_pra_asesmen: int | None = None
+    id_transaksi_pembayaran: int | None = None
+    order_id: str | None = None
+    nama_psikolog: str | None = None
+    tanggal_konsultasi: date | None = None
+    waktu_konsultasi: str | None = None
+    waktu_selesai: str | None = None
+    mode_konsultasi: str | None = None
+    link_pertemuan: str | None = None
+    platform_pertemuan: str | None = None
+    lokasi_konsultasi: str | None = None
+    jumlah_bayar: Decimal | None = None
+    metode_pembayaran: str | None = None
+    status_transaksi: str | None = None
+    status_konsultasi: str | None = None
+    status_pembayaran: str | None = None
+    tanggal_booking: datetime | None = None

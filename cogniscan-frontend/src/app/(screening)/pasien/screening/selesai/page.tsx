@@ -59,7 +59,12 @@ function urgencyLabel(value: string | null | undefined) {
 }
 
 function hasFeedback(report: PreAssessment | null) {
-  return Boolean(report?.feedback_psikolog && report.feedback_psikolog.trim().length > 0);
+  return Boolean(
+    report?.status_validasi === "selesai" &&
+      report.divalidasi_pada &&
+      report.feedback_psikolog &&
+      report.feedback_psikolog.trim().length > 0,
+  );
 }
 
 export default function ScreeningCompletePage() {
@@ -70,6 +75,7 @@ export default function ScreeningCompletePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAssigning, setIsAssigning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [noticeMessage, setNoticeMessage] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -77,6 +83,7 @@ export default function ScreeningCompletePage() {
     async function loadScreeningResult() {
       setIsLoading(true);
       setErrorMessage("");
+      setNoticeMessage("");
 
       const searchParams = new URLSearchParams(window.location.search);
       const idPraAsesmen = Number(searchParams.get("id_pra_asesmen"));
@@ -116,8 +123,6 @@ export default function ScreeningCompletePage() {
 
         const shouldLoadPsychologists =
           !reportResult.id_psikolog &&
-          reportResult.status_validasi !== "perlu_eskalasi" &&
-          reportResult.indikator_urgensi !== "critical" &&
           !hasFeedback(reportResult);
 
         if (!shouldLoadPsychologists) return;
@@ -131,7 +136,7 @@ export default function ScreeningCompletePage() {
         } catch {
           if (!isMounted) return;
           setPsychologists([]);
-          setErrorMessage(
+          setNoticeMessage(
             "Daftar psikolog belum bisa dimuat. Hasil screening tetap tersimpan dan bisa dipilih ulang dari halaman ini nanti.",
           );
         }
@@ -164,7 +169,7 @@ export default function ScreeningCompletePage() {
   const isAssignedToPsychologist = Boolean(report?.id_psikolog);
   const isFeedbackAvailable = hasFeedback(report);
   const shouldShowPsychologistPicker =
-    Boolean(report) && !isCrisis && !isAssignedToPsychologist && !isFeedbackAvailable;
+    Boolean(report) && !isAssignedToPsychologist && !isFeedbackAvailable;
   const selectedPsychologist = psychologists.find(
     (psychologist) => psychologist.id_psikolog === selectedId,
   );
@@ -173,17 +178,22 @@ export default function ScreeningCompletePage() {
   async function handleContinue() {
     if (
       !report ||
-      isCrisis ||
       isAssignedToPsychologist ||
       isFeedbackAvailable ||
-      !selectedPsychologist
+      (shouldShowPsychologistPicker && psychologists.length === 0)
     ) {
       router.push("/pasien/dashboard");
       return;
     }
 
+    if (!selectedPsychologist) {
+      setErrorMessage("Pilih psikolog terlebih dahulu agar hasil screening masuk antrean review.");
+      return;
+    }
+
     setIsAssigning(true);
     setErrorMessage("");
+    setNoticeMessage("");
 
     try {
       const { data, error } = await supabase.auth.getSession();
@@ -231,7 +241,7 @@ export default function ScreeningCompletePage() {
             Kamu sudah menyelesaikan semua pertanyaan screening.
           </p>
           <p className="mx-auto mt-2 max-w-115 text-[15px] leading-6 text-on-surface-muted">
-            Jawabanmu sudah tersimpan dengan aman dan akan ditinjau oleh psikolog yang kamu pilih.
+            Jawabanmu sudah tersimpan dengan aman. Pilih psikolog agar hasil screening bisa masuk antrean review.
           </p>
         </div>
 
@@ -261,6 +271,12 @@ export default function ScreeningCompletePage() {
         {!isLoading && errorMessage ? (
           <div className="rounded-[16px] border border-red-200 bg-red-50 px-5 py-5 text-sm leading-6 text-red-700">
             {errorMessage}
+          </div>
+        ) : null}
+
+        {!isLoading && noticeMessage ? (
+          <div className="rounded-[16px] border border-[#f0d99f] bg-[#fff8e6] px-5 py-5 text-sm leading-6 text-[#74520f]">
+            {noticeMessage}
           </div>
         ) : null}
 
@@ -437,20 +453,18 @@ export default function ScreeningCompletePage() {
           }
           className={`mt-8 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full px-8 text-[18px] font-medium text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition ${
             canAssignPsychologist ||
-            isCrisis ||
             isAssignedToPsychologist ||
             isFeedbackAvailable ||
-            psychologists.length === 0
+            (shouldShowPsychologistPicker && psychologists.length === 0)
               ? "bg-primary-container hover:-translate-y-0.5 hover:bg-[#4d734d]"
               : "bg-primary-container/45"
           } disabled:cursor-not-allowed disabled:hover:translate-y-0`}
         >
           {isAssigning
             ? "Menyimpan pilihan..."
-            : isCrisis ||
-                isAssignedToPsychologist ||
+            : isAssignedToPsychologist ||
                 isFeedbackAvailable ||
-                psychologists.length === 0
+                (shouldShowPsychologistPicker && psychologists.length === 0)
               ? "Kembali ke Dashboard"
               : "Simpan Pilihan Psikolog"}
           {isAssigning ? (

@@ -114,7 +114,9 @@ export default function PsikologFeedbackPage() {
       };
       const priority = priorityMap[item.indikator_urgensi || "low"] || "low";
 
-      const status = (item.feedback_psikolog && item.feedback_psikolog.trim().length > 0) || item.status_validasi === "selesai"
+      const status = item.status_validasi === "selesai" &&
+        Boolean(item.divalidasi_pada) &&
+        Boolean(item.feedback_psikolog?.trim())
         ? "sudah-direspon"
         : "belum-direspon";
 

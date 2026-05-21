@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CalendarDays,
   Check,
@@ -17,6 +18,8 @@ import {
   patientUser,
 } from "@/components/patient";
 
+import { createBookingCheckout } from "@/lib/auth";
+import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const weekdays = ["S", "M", "T", "W", "T", "F", "S"];
@@ -78,6 +81,23 @@ const methods = [
 ] as const;
 
 type Method = (typeof methods)[number]["id"];
+
+type SnapResult = Record<string, unknown>;
+
+type SnapPayOptions = {
+  onSuccess?: (result: SnapResult) => void;
+  onPending?: (result: SnapResult) => void;
+  onError?: (result: SnapResult) => void;
+  onClose?: () => void;
+};
+
+declare global {
+  interface Window {
+    snap?: {
+      pay: (token: string, options?: SnapPayOptions) => void;
+    };
+  }
+}
 
 type DayCell = {
   year: number;
@@ -150,16 +170,94 @@ function formatDateKey(year: number, month: number, day: number) {
   )}-${String(day).padStart(2, "0")}`;
 }
 
+function formatDatePayload(date: Date) {
+  return formatDateKey(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function startOfDay(date: Date) {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function dateFromCell(cell: DayCell) {
+  return new Date(cell.year, cell.month, cell.day);
+}
+
+function isPastDate(date: Date, today: Date) {
+  return startOfDay(date).getTime() < today.getTime();
+}
+
+function slotDateTime(date: Date, time: string) {
+  const [hours, minutes] = time.split(":").map(Number);
+  const value = new Date(date);
+  value.setHours(hours, minutes, 0, 0);
+  return value;
+}
+
+function isPastTimeSlot(date: Date, time: string, now: Date) {
+  return slotDateTime(date, time).getTime() <= now.getTime();
+}
+
+function availableTimesForDate(date: Date, now: Date) {
+  return times.filter((time) => !isPastTimeSlot(date, time, now));
+}
+
+function getIdPraAsesmenParam() {
+  if (typeof window === "undefined") return null;
+
+  const value = new URLSearchParams(window.location.search).get("id_pra_asesmen");
+  if (!value) return null;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function loadMidtransSnap(scriptUrl: string, clientKey: string) {
+  return new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      "script[data-midtrans-snap='true']",
+    );
+
+    if (window.snap && existing?.dataset.clientKey === clientKey) {
+      resolve();
+      return;
+    }
+
+    existing?.remove();
+    window.snap = undefined;
+
+    const script = document.createElement("script");
+    script.src = scriptUrl;
+    script.async = true;
+    script.dataset.midtransSnap = "true";
+    script.dataset.clientKey = clientKey;
+    script.setAttribute("data-client-key", clientKey);
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Gagal memuat tampilan pembayaran Midtrans."));
+
+    document.body.appendChild(script);
+  });
+}
+
 export default function PatientBookingSchedulePage() {
-  const [viewDate, setViewDate] = useState(() => new Date(2026, 4, 1));
+  const router = useRouter();
+  const [viewDate, setViewDate] = useState(() => {
+    const current = new Date();
+    return new Date(current.getFullYear(), current.getMonth(), 1);
+  });
 
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-  const [selectedTime, setSelectedTime] = useState<string>("11:00");
+  const [selectedTime, setSelectedTime] = useState<string>("");
 
   const [selectedMethod, setSelectedMethod] = useState<Method>("online");
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [error, setError] = useState("");
+  const [paymentNotice, setPaymentNotice] = useState("");
+  const [now, setNow] = useState(() => new Date());
 
   const [today] = useState(() => {
     const current = new Date();
@@ -188,7 +286,106 @@ export default function PatientBookingSchedulePage() {
     return () => document.removeEventListener("mousedown", handler);
   }, [pickerOpen]);
 
+  useEffect(() => {
+    const timerId = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timerId);
+  }, []);
+
   const cells = buildCalendarDays(viewDate.getFullYear(), viewDate.getMonth());
+  const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const previousMonthUnavailable =
+    new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1).getTime() <
+    currentMonth.getTime();
+
+  function canSelectDate(date: Date) {
+    if (isPastDate(date, today)) return false;
+    if (fullDates.includes(formatDatePayload(date))) return false;
+    if (isSameYMD(
+      { year: date.getFullYear(), month: date.getMonth(), day: date.getDate() },
+      today,
+    )) {
+      return availableTimesForDate(date, now).length > 0;
+    }
+    return true;
+  }
+
+  function handleSelectDate(date: Date) {
+    if (!canSelectDate(date)) return;
+
+    const availableTimes = availableTimesForDate(date, now);
+    setSelectedDate(date);
+    setSelectedTime((currentTime) =>
+      currentTime && !isPastTimeSlot(date, currentTime, now)
+        ? currentTime
+        : availableTimes[0] ?? "",
+    );
+  }
+
+  async function handleConfirmBooking() {
+    if (!selectedDate || !selectedTime || isConfirming) return;
+
+    if (!canSelectDate(selectedDate) || isPastTimeSlot(selectedDate, selectedTime, now)) {
+      setError("Pilih tanggal dan waktu konsultasi yang belum lewat.");
+      return;
+    }
+
+    setIsConfirming(true);
+    setError("");
+    setPaymentNotice("");
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+      }
+
+      const checkout = await createBookingCheckout(accessToken, {
+        tanggal_konsultasi: formatDatePayload(selectedDate),
+        waktu_konsultasi: selectedTime,
+        mode_konsultasi: selectedMethod,
+        id_pra_asesmen: getIdPraAsesmenParam(),
+      });
+
+      try {
+        await loadMidtransSnap(checkout.snap_script_url, checkout.client_key);
+      } catch {
+        window.location.href = checkout.redirect_url;
+        return;
+      }
+
+      if (!window.snap) {
+        window.location.href = checkout.redirect_url;
+        return;
+      }
+
+      window.snap.pay(checkout.snap_token, {
+        onSuccess: () => {
+          router.push(
+            `/pasien/booking/receipt/detail?order_id=${encodeURIComponent(checkout.order_id)}`,
+          );
+        },
+        onPending: () => {
+          router.push(
+            `/pasien/booking/receipt/detail?order_id=${encodeURIComponent(checkout.order_id)}`,
+          );
+        },
+        onError: () => {
+          setError("Pembayaran Midtrans gagal diproses. Silakan coba buat pembayaran lagi.");
+          setIsConfirming(false);
+        },
+        onClose: () => {
+          setPaymentNotice(
+            "Pembayaran belum selesai. Booking sudah dibuat dengan status menunggu pembayaran.",
+          );
+          setIsConfirming(false);
+        },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal membuat booking.");
+      setIsConfirming(false);
+    }
+  }
 
   return (
     <DashboardLayout
@@ -250,6 +447,7 @@ export default function PatientBookingSchedulePage() {
               <div className="flex items-center gap-4">
                 <button
                   type="button"
+                  disabled={previousMonthUnavailable}
                   onClick={() =>
                     setViewDate(
                       new Date(
@@ -259,7 +457,7 @@ export default function PatientBookingSchedulePage() {
                       ),
                     )
                   }
-                  className="rounded-md p-1 transition-colors hover:bg-surface-container"
+                  className="rounded-md p-1 transition-colors hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
@@ -293,6 +491,7 @@ export default function PatientBookingSchedulePage() {
                 <div className="mb-3 flex items-center justify-between">
                   <button
                     type="button"
+                    disabled={viewDate.getFullYear() <= today.getFullYear()}
                     onClick={() =>
                       setViewDate(
                         new Date(
@@ -302,7 +501,7 @@ export default function PatientBookingSchedulePage() {
                         ),
                       )
                     }
-                    className="rounded-md p-1 transition-colors hover:bg-surface-container"
+                    className="rounded-md p-1 transition-colors hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
@@ -331,12 +530,17 @@ export default function PatientBookingSchedulePage() {
                 <div className="grid grid-cols-3 gap-2">
                   {monthShort.map((month, index) => {
                     const active = index === viewDate.getMonth();
+                    const disabledMonth =
+                      viewDate.getFullYear() === today.getFullYear() &&
+                      index < today.getMonth();
 
                     return (
                       <button
                         key={month}
                         type="button"
+                        disabled={disabledMonth}
                         onClick={() => {
+                          if (disabledMonth) return;
                           setViewDate(
                             new Date(viewDate.getFullYear(), index, 1),
                           );
@@ -347,6 +551,8 @@ export default function PatientBookingSchedulePage() {
                           "rounded-full px-3 py-2 text-[13px] font-medium transition-colors",
                           active
                             ? "bg-[#7a9479] text-white"
+                            : disabledMonth
+                              ? "cursor-not-allowed text-outline-variant opacity-45"
                             : "text-on-surface hover:bg-surface-container",
                         )}
                       >
@@ -378,18 +584,20 @@ export default function PatientBookingSchedulePage() {
                 const isFull = fullDates.includes(
                   formatDateKey(cell.year, cell.month, cell.day),
                 );
+                const cellDate = dateFromCell(cell);
+                const isPast = isPastDate(cellDate, today);
+                const isUnavailableToday = isToday && availableTimesForDate(cellDate, now).length === 0;
+                const isDisabled = isFull || isPast || isUnavailableToday;
 
                 return (
                   <button
                     key={`${cell.year}-${cell.month}-${cell.day}-${index}`}
                     type="button"
-                    disabled={isFull}
+                    disabled={isDisabled}
                     onClick={() => {
-                      if (isFull) return;
+                      if (isDisabled) return;
 
-                      setSelectedDate(
-                        new Date(cell.year, cell.month, cell.day),
-                      );
+                      handleSelectDate(cellDate);
 
                       if (cell.muted) {
                         setViewDate(new Date(cell.year, cell.month, 1));
@@ -400,9 +608,9 @@ export default function PatientBookingSchedulePage() {
 
                       cell.muted && "text-outline-variant",
 
-                      isFull && "bg-gray-200 text-gray-400 cursor-not-allowed",
+                      isDisabled && "bg-gray-200 text-gray-400 cursor-not-allowed",
 
-                      !isFull &&
+                      !isDisabled &&
                         !cell.muted &&
                         "text-black hover:bg-primary-container/15",
 
@@ -436,16 +644,21 @@ export default function PatientBookingSchedulePage() {
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {times.map((time) => {
                     const active = selectedTime === time;
+                    const isUnavailable = selectedDate
+                      ? isPastTimeSlot(selectedDate, time, now)
+                      : false;
 
                     return (
                       <button
                         key={time}
                         type="button"
+                        disabled={isUnavailable}
                         onClick={() => setSelectedTime(time)}
                         className={cn(
-                          "h-10 rounded-full border border-outline-variant bg-white text-[15px] font-medium transition-colors hover:border-primary hover:text-primary",
+                          "h-10 rounded-full border border-outline-variant bg-white text-[15px] font-medium transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 disabled:hover:border-outline-variant",
 
                           active &&
+                            !isUnavailable &&
                             "border-[#7a9479] bg-[#7a9479] text-white hover:border-[#7a9479] hover:text-white",
                         )}
                       >
@@ -503,11 +716,28 @@ export default function PatientBookingSchedulePage() {
               {/* BUTTON */}
               <button
                 type="button"
-                className="mt-8 inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#7a9479] px-8 text-[16px] font-semibold text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition hover:-translate-y-0.5 hover:bg-[#6a8669]"
+                onClick={handleConfirmBooking}
+                disabled={
+                  isConfirming ||
+                  !selectedDate ||
+                  !selectedTime ||
+                  isPastTimeSlot(selectedDate, selectedTime, now)
+                }
+                className="mt-8 inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#7a9479] px-8 text-[16px] font-semibold text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition hover:-translate-y-0.5 hover:bg-[#6a8669] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
               >
-                Konfirmasi Booking
+                {isConfirming ? "Mengonfirmasi..." : "Konfirmasi Booking"}
                 <ChevronRight className="h-5 w-5" />
               </button>
+              {error ? (
+                <p className="mt-4 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  {error}
+                </p>
+              ) : null}
+              {paymentNotice ? (
+                <p className="mt-4 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                  {paymentNotice}
+                </p>
+              ) : null}
             </DashboardCard>
           )}
         </div>

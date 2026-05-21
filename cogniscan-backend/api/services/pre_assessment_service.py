@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -12,6 +12,14 @@ from api.models.pra_asesmen import PraAsesmen
 from api.models.psikolog import Psikolog
 from api.models.sesi_jurnal import SesiJurnal
 from api.services.analyzer_service import AnalyzerServiceResult
+
+
+def _clean_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    normalized = value.strip()
+    return normalized or None
 
 
 def _status_validasi_awal(analysis: AnalyzerServiceResult) -> str:
@@ -136,15 +144,6 @@ async def assign_psikolog_to_pre_assessment(
         id_pra_asesmen=id_pra_asesmen,
     )
 
-    if (
-        pra_asesmen.status_validasi == "perlu_eskalasi"
-        or pra_asesmen.indikator_urgensi == "critical"
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Pra asesmen krisis tidak dapat masuk antrean review normal",
-        )
-
     if pra_asesmen.feedback_psikolog and pra_asesmen.feedback_psikolog.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -155,7 +154,6 @@ async def assign_psikolog_to_pre_assessment(
         select(Psikolog).where(
             Psikolog.id_psikolog == id_psikolog,
             Psikolog.status_akun == "terverifikasi",
-            Psikolog.apakah_sudah_ganti_password.is_(True),
         )
     )
     psikolog = psikolog_result.scalar_one_or_none()
@@ -166,7 +164,11 @@ async def assign_psikolog_to_pre_assessment(
         )
 
     pra_asesmen.id_psikolog = psikolog.id_psikolog
-    if pra_asesmen.status_validasi not in {"sedang_direview", "selesai"}:
+    if pra_asesmen.status_validasi not in {
+        "sedang_direview",
+        "selesai",
+        "perlu_eskalasi",
+    }:
         pra_asesmen.status_validasi = "menunggu"
 
     await db.commit()
@@ -185,7 +187,6 @@ async def list_available_psikolog(db: AsyncSession) -> list[Psikolog]:
         select(Psikolog)
         .where(
             Psikolog.status_akun == "terverifikasi",
-            Psikolog.apakah_sudah_ganti_password.is_(True),
         )
         .order_by(Psikolog.nama_lengkap.asc())
     )
@@ -289,11 +290,14 @@ async def submit_pre_assessment_feedback(
     id_pra_asesmen: int,
     feedback_psikolog: str,
     status_validasi: str = "selesai",
+    catatan_internal_psikolog: str | None = None,
+    akurasi_ai_psikolog: str | None = None,
+    severity_final_psikolog: str | None = None,
+    rekomendasi_tindak_lanjut_psikolog: str | None = None,
 ) -> PraAsesmen:
     """
     Simpan feedback psikolog pada pra-asesmen.
     """
-    from sqlalchemy import func
     pra_asesmen = await get_psikolog_pre_assessment(db, current_user, id_pra_asesmen)
 
     normalized_feedback = feedback_psikolog.strip()
@@ -305,11 +309,66 @@ async def submit_pre_assessment_feedback(
             detail="Feedback psikolog minimal 10 karakter untuk menyelesaikan review",
         )
 
-    pra_asesmen.feedback_psikolog = normalized_feedback or None
-    pra_asesmen.status_validasi = normalized_status
-    pra_asesmen.divalidasi_pada = func.now() if normalized_feedback else None
+    if normalized_status == "selesai":
+        pra_asesmen.feedback_psikolog = normalized_feedback
+        pra_asesmen.catatan_internal_psikolog = _clean_optional_text(catatan_internal_psikolog)
+        pra_asesmen.akurasi_ai_psikolog = _clean_optional_text(akurasi_ai_psikolog)
+        pra_asesmen.severity_final_psikolog = _clean_optional_text(severity_final_psikolog)
+        pra_asesmen.rekomendasi_tindak_lanjut_psikolog = _clean_optional_text(
+            rekomendasi_tindak_lanjut_psikolog
+        )
+        pra_asesmen.status_validasi = "selesai"
+        pra_asesmen.divalidasi_pada = func.now()
+        pra_asesmen.draft_feedback_psikolog = None
+        pra_asesmen.draft_catatan_internal = None
+        pra_asesmen.draft_akurasi_ai = None
+        pra_asesmen.draft_severity_final = None
+        pra_asesmen.draft_rekomendasi_tindak_lanjut = None
+        pra_asesmen.draft_disimpan_pada = None
+    else:
+        pra_asesmen.feedback_psikolog = None
+        pra_asesmen.catatan_internal_psikolog = None
+        pra_asesmen.akurasi_ai_psikolog = None
+        pra_asesmen.severity_final_psikolog = None
+        pra_asesmen.rekomendasi_tindak_lanjut_psikolog = None
+        pra_asesmen.status_validasi = normalized_status
+        pra_asesmen.divalidasi_pada = None
 
     await db.commit()
 
     # Reload and return
+    return await get_psikolog_pre_assessment(db, current_user, id_pra_asesmen)
+
+
+async def save_pre_assessment_feedback_draft(
+    db: AsyncSession,
+    current_user: Pengguna,
+    id_pra_asesmen: int,
+    draft_feedback_psikolog: str | None = None,
+    draft_catatan_internal: str | None = None,
+    draft_akurasi_ai: str | None = None,
+    draft_severity_final: str | None = None,
+    draft_rekomendasi_tindak_lanjut: str | None = None,
+) -> PraAsesmen:
+    """
+    Simpan draft feedback psikolog.
+
+    Draft hanya dikembalikan lewat endpoint psikolog. Pasien tetap hanya melihat
+    status review sampai feedback final dikirim.
+    """
+    pra_asesmen = await get_psikolog_pre_assessment(db, current_user, id_pra_asesmen)
+
+    pra_asesmen.draft_feedback_psikolog = _clean_optional_text(draft_feedback_psikolog)
+    pra_asesmen.draft_catatan_internal = _clean_optional_text(draft_catatan_internal)
+    pra_asesmen.draft_akurasi_ai = _clean_optional_text(draft_akurasi_ai)
+    pra_asesmen.draft_severity_final = _clean_optional_text(draft_severity_final)
+    pra_asesmen.draft_rekomendasi_tindak_lanjut = _clean_optional_text(
+        draft_rekomendasi_tindak_lanjut
+    )
+    pra_asesmen.draft_disimpan_pada = func.now()
+
+    if pra_asesmen.status_validasi not in {"selesai", "perlu_eskalasi"}:
+        pra_asesmen.status_validasi = "sedang_direview"
+
+    await db.commit()
     return await get_psikolog_pre_assessment(db, current_user, id_pra_asesmen)

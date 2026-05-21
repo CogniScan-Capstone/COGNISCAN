@@ -1,12 +1,32 @@
 # Progress CogniScan
 
-Tanggal update: 2026-05-20 (Session 3)
+Tanggal update: 2026-05-22 (Session 4)
 
-Dokumen ini menyimpan konteks kerja terbaru untuk sesi berikutnya. Fokus utama saat ini adalah stabilisasi Phase 6B end-to-end, lalu masuk Phase 7 (Jadwal, Booking, Konsultasi).
+Dokumen ini menyimpan konteks kerja terbaru untuk sesi berikutnya. Fokus utama saat ini adalah stabilisasi alur end-to-end setelah feedback psikolog: voice screening, assignment psikolog, booking jadwal, pembayaran Midtrans, tab konsultasi dinamis, dan perbaikan status pesan pasien.
 
 ## Ringkasan Status
 
-Aplikasi sudah melewati Phase 6B (Feedback Psikolog) dan sebagian besar fitur dashboard/feedback sudah dinamis dan terhubung backend. Status aplikasi siap masuk Phase 7.
+Status terkini (2026-05-22):
+- Aplikasi sudah melewati Phase 6B dan sebagian besar Phase 7 MVP sudah tersambung: feedback psikolog, pesan pasien, booking, pembayaran, jadwal psikolog, dan tab konsultasi pasien sudah dinamis.
+- Sisa utama sekarang adalah hardening, validasi E2E, reminder/reschedule konsultasi, rekam medis/hasil konsultasi, dan manajemen slot jadwal psikolog yang lebih lengkap.
+
+Fitur yang baru diselesaikan (2026-05-22):
+- **Midtrans payment flow**: backend memiliki service pembayaran/Midtrans, transaksi menyimpan field Snap/order/payment/status Midtrans, frontend booking memakai Snap UI, receipt/detail membaca status pembayaran dinamis, dan webhook/status sync tersedia.
+- **Booking konsultasi**: pasien bisa lanjut booking dari feedback final, memilih tanggal/waktu/metode online/offline, checkout membuat booking + transaksi Midtrans, dan booking aktif hanya setelah pembayaran berhasil.
+- **Proteksi duplikasi booking**: feedback yang sudah punya booking aktif/pending/paid tidak lagi menampilkan alur "Lanjut Konsultasi" yang sama; jika pending diarahkan lanjut pembayaran, jika paid diarahkan lihat jadwal.
+- **Jadwal tidak boleh masa lalu**: frontend men-disable tanggal/bulan/waktu yang sudah lewat dan backend menolak jadwal lampau dengan timezone `Asia/Jakarta`.
+- **Tab konsultasi pasien dinamis**: data konsultasi mengambil paid booking, menampilkan tanggal/waktu, metode, link/platform online, atau alamat praktik offline.
+- **Jadwal psikolog dinamis**: halaman jadwal psikolog membaca booking pasien yang sudah dibuat/terbayar, bukan placeholder statis.
+- **Voice note screening dengan Gemini 3 Flash**: pasien bisa menjawab dengan suara; audio diproses di memory tanpa Supabase Storage, hasil AI hanya disimpan sebagai teks ringkasan/transkrip untuk psikolog, dan pasien langsung lanjut pertanyaan berikutnya tanpa melihat output AI.
+- **Voice answer guard**: pertanyaan yang sudah dijawab dengan voice tidak bisa ditimpa teks biasa; pasien bisa rekam ulang jika perlu.
+- **Assignment psikolog setelah voice/crisis**: halaman selesai screening tetap membuka pilihan psikolog jika belum assigned, termasuk kasus `perlu_eskalasi`; assignment tidak lagi ditolak hanya karena status krisis.
+- **Tab pesan pasien lebih akurat**: "Selesai Review" hanya muncul jika `status_validasi = selesai`, `divalidasi_pada` ada, dan `feedback_psikolog` tidak kosong. Data pesan tidak memakai cache stale saat mount.
+- **Feedback draft psikolog**: psikolog bisa menyimpan draft feedback, draft tidak terlihat pasien/admin sebagai feedback final, dan submit final membersihkan draft.
+- **Skor pasien**: tampilan persentase score di sisi pasien dihapus; skor diperlakukan sebagai nilai diskrit/internal sesuai kebutuhan psikolog.
+
+Catatan historis 2026-05-20 yang masih berlaku:
+
+Pada 2026-05-20, aplikasi sudah melewati Phase 6B (Feedback Psikolog) dan sebagian besar fitur dashboard/feedback sudah dinamis. Saat itu Phase 7 baru akan dimulai; status terbaru Phase 7 ada di bagian 2026-05-22 di atas.
 
 Fitur yang baru diselesaikan (2026-05-20):
 - **Dashboard Psikolog** sudah memakai data dinamis dari backend (`GET /api/dashboard/psikolog/summary`).
@@ -112,6 +132,7 @@ Status: tersedia dan sudah terhubung frontend.
 Endpoint:
 - `POST /api/journal/sessions/start`
 - `POST /api/journal/sessions/{id_sesi_jurnal}/answers`
+- `POST /api/journal/sessions/{id_sesi_jurnal}/voice-answer`
 - `GET /api/journal/sessions/{id_sesi_jurnal}`
 - `POST /api/journal/sessions/{id_sesi_jurnal}/finalize`
 
@@ -120,6 +141,9 @@ Yang sudah ada:
 - Submit answer melakukan upsert jawaban per nomor pertanyaan.
 - Finalize memvalidasi jawaban lengkap, menjalankan analyzer, dan membuat pra-asesmen.
 - Crisis case dikembalikan dengan kontak bantuan.
+- Voice answer memproses audio via Gemini 3 Flash tanpa menyimpan file audio mentah ke Supabase Storage/database.
+- Response voice answer ke pasien hanya status diterima; transkrip/ringkasan klinis disimpan sebagai teks jawaban untuk psikolog.
+- Frontend otomatis lanjut ke pertanyaan berikutnya setelah voice selesai diproses dan mengunci input teks agar jawaban voice tidak tertimpa.
 
 Fix terbaru:
 - `start_journal_session()` sebelumnya return ORM `SesiJurnal` mentah dan memicu `MissingGreenlet` saat FastAPI membaca relationship `jawaban`.
@@ -184,6 +208,45 @@ Fitur:
 - Status validasi di-update ke `selesai` setelah feedback dikirim.
 - Pasien bisa melihat feedback di halaman Pesan.
 
+Tambahan terbaru:
+- Endpoint draft tersedia di `PATCH /api/pre-assessment/psikolog/reports/{id_pra_asesmen}/draft`.
+- Draft feedback psikolog tidak tampil sebagai feedback final di sisi pasien.
+- Submit feedback final membersihkan draft dan baru membuat pasien masuk tab `Selesai Review`.
+- Predicate feedback final wajib: `status_validasi = selesai`, `divalidasi_pada` ada, dan `feedback_psikolog` tidak kosong.
+
+### Phase 7: Jadwal, Booking, Pembayaran, Konsultasi
+
+Status: MVP aktif dan terhubung frontend.
+
+Endpoint dan service utama:
+- `POST /api/booking/checkout` membuat booking + transaksi Midtrans dari feedback final.
+- `GET /api/booking/me` membaca booking pasien.
+- Router pembayaran menangani pembuatan Snap transaction, status/receipt, dan webhook Midtrans.
+- Router jadwal membaca jadwal/booking pasien untuk sisi psikolog.
+
+File penting:
+- `cogniscan-backend/api/services/booking_service.py`
+- `cogniscan-backend/api/services/pembayaran_service.py`
+- `cogniscan-backend/api/services/midtrans_service.py`
+- `cogniscan-backend/api/services/jadwal_service.py`
+- `cogniscan-backend/api/schemas/booking.py`
+- `cogniscan-backend/api/schemas/pembayaran.py`
+- `cogniscan-backend/api/schemas/jadwal.py`
+- `cogniscan-frontend/src/lib/booking.ts`
+
+Yang sudah ada:
+- Checkout booking membuat `pemesanan_konsultasi` dan `transaksi_pembayaran`.
+- Transaksi pembayaran menyimpan field Midtrans seperti order id, transaction id, snap token, redirect URL, fraud/status, expiry, dan raw response seperlunya.
+- Booking terkait `id_pra_asesmen`, sehingga satu feedback tidak bisa dipakai untuk membuat booking aktif berulang.
+- Status booking/konsultasi bergantung pada pembayaran berhasil, bukan hanya tombol dari pesan.
+- Online booking membawa platform/link meeting; offline booking membawa alamat praktik psikolog.
+- Frontend menolak pilihan tanggal/waktu lampau dan backend tetap melakukan validasi akhir.
+
+Belum ideal:
+- Slot jadwal psikolog masih perlu manajemen availability yang lebih kuat agar tidak bergantung pada daftar waktu statis frontend.
+- Reminder, reschedule, pembatalan, dan expiry booking belum menjadi flow lengkap.
+- Hasil konsultasi/rekam medis pasca-sesi masih perlu dilanjutkan.
+
 ## Frontend
 
 ### Auth
@@ -223,7 +286,7 @@ Yang sudah ada:
 
 ### Screening Pasien
 
-Status: berjalan, tetapi UX masih bisa ditingkatkan.
+Status: berjalan dengan input teks dan voice note.
 
 Yang sudah ada:
 - Halaman screening membuat journal session, submit jawaban, finalize, lalu redirect ke halaman selesai.
@@ -232,10 +295,13 @@ Yang sudah ada:
   - status `Menyimpan jawaban...`
   - status `Menganalisis jawaban...` pada pertanyaan terakhir
   - textarea/navigasi dikunci sementara
+- Voice note bisa dipakai sebagai jawaban pertanyaan.
+- Hasil proses AI voice tidak ditampilkan ke pasien; setelah selesai, UI lanjut ke pertanyaan berikutnya.
+- Jawaban voice mengunci input teks untuk pertanyaan yang sama agar tidak tertimpa. Pasien bisa rekam ulang jika ingin mengganti jawaban.
 
 Masalah UX tersisa:
-- Menyimpan tiap pertanyaan membuat perpindahan terasa lambat.
-- Rekomendasi: ubah flow agar tombol `Selanjutnya` hanya pindah lokal, lalu submit semua jawaban di akhir.
+- Flow teks masih menyimpan per pertanyaan, sehingga perpindahan bisa terasa lambat pada koneksi buruk.
+- Rekomendasi berikutnya: tambah bulk submit/draft lokal untuk jawaban teks, tanpa mengubah alur voice yang sudah memproses per rekaman.
 
 ### Halaman Selesai Screening
 
@@ -248,9 +314,8 @@ Yang sudah ada:
 - Loading mengikuti request backend.
 - Ringkasan kondisi AI, rekomendasi AI, urgensi/skor, dan distorsi terdeteksi disembunyikan dari sisi pasien setelah selesai menjawab.
 - UI menampilkan ucapan terima kasih, pesan kerahasiaan jawaban, pilihan psikolog, atau status review jika sudah assigned.
-
-Belum selesai:
-- Tombol lanjut konsultasi belum masuk flow booking nyata.
+- Pilihan psikolog tetap muncul untuk screening voice dan kasus `perlu_eskalasi` selama belum assigned/final feedback.
+- Tombol lanjut konsultasi tidak dipakai dari halaman selesai; konsultasi dibuka setelah feedback psikolog final di pesan.
 
 ### Pesan Pasien
 
@@ -261,8 +326,11 @@ Yang sudah ada:
 - Detail pesan membaca report spesifik.
 - Tab filter `Menunggu Review` dan `Selesai Review`.
 - Status menunggu review tampil sebagai pesan antrean peninjauan psikolog, bukan warning privilege.
+- Tab `Selesai Review` hanya berisi feedback final yang benar-benar sudah divalidasi psikolog.
+- Detail feedback menampilkan pilihan lanjut konsultasi hanya jika belum ada booking aktif untuk feedback tersebut.
+- Jika booking masih pending payment, pasien diarahkan lanjut pembayaran; jika sudah paid, tombol lanjut konsultasi hilang dan pasien diarahkan ke jadwal/konsultasi.
 - Loading sudah mengikuti request backend.
-- Cache stale-while-revalidate aktif.
+- Cache stale-while-revalidate aktif, tetapi `/pasien/pesan` memakai `ttlMs: 0` agar status review tidak stale saat baru selesai screening.
 - Fix backend `MissingGreenlet`: list report pasien eager-load `sesi_jurnal.pasien` dan `sesi_jurnal.jawaban`.
 
 ### Dashboard Psikolog Frontend
@@ -290,6 +358,35 @@ Yang sudah ada:
 - Kolom feedback sticky saat scroll (CSS `sticky`) agar selalu terlihat.
 - Grid `items-start` mencegah kolom kanan stretch.
 
+### Booking dan Pembayaran Pasien
+
+Status: terhubung ke backend dan Midtrans Snap.
+
+Yang sudah ada:
+- `/pasien/booking` membaca feedback final dan booking pasien untuk menentukan state eligible, pending payment, atau sudah terjadwal.
+- `/pasien/booking/jadwal` memilih tanggal, waktu, dan metode online/offline.
+- Konfirmasi booking memanggil checkout backend, membuat transaksi Midtrans, lalu membuka Snap UI.
+- Tanggal/bulan/waktu lampau tidak bisa dipilih di frontend.
+- `/pasien/booking/receipt` dan `/pasien/booking/receipt/detail` membaca data booking/pembayaran dinamis.
+
+Catatan:
+- Key Midtrans harus sepasang sesuai environment yang sama. Sandbox server key harus dipakai dengan sandbox client key, bukan dicampur production.
+- Jika transaksi ditolak `Access denied due to unauthorized transaction`, cek kembali `MIDTRANS_IS_PRODUCTION`, server key, dan client key.
+
+### Konsultasi Pasien dan Jadwal Psikolog
+
+Status: data utama sudah dinamis dari paid booking.
+
+Yang sudah ada:
+- `/pasien/konsultasi` menampilkan daftar konsultasi dari booking yang sudah dibayar.
+- Konsultasi online menampilkan platform dan link meeting.
+- Konsultasi offline menampilkan alamat praktik psikolog, hari, tanggal, dan waktu.
+- `/psikolog/jadwal` dan detail tanggal membaca booking pasien dari backend.
+
+Belum ideal:
+- Flow konsultasi terlewat perlu aturan product yang final: label `terlewat`, grace period, opsi reschedule berbayar/gratis, dan kebijakan akses link.
+- CRUD availability psikolog masih perlu dibuat agar slot tidak statis.
+
 ### Caching Frontend (Stale-While-Revalidate)
 
 Status: aktif di 4 halaman utama.
@@ -308,6 +405,7 @@ Perilaku:
 - Kunjungan pertama: loading spinner → fetch → simpan cache.
 - Kunjungan ulang: tampilkan cache instan (0ms) → refresh di background.
 - Cache valid 30 detik (configurable).
+- Jika halaman mengirim `ttlMs: 0`, cache dilewati saat mount. Ini dipakai untuk `/pasien/pesan` agar screening baru tidak salah masuk tab `Selesai Review` karena data lama.
 
 ### Loading Frontend
 
@@ -321,6 +419,66 @@ Perubahan terbaru:
 - Fallback timeout 5 detik jika React gagal mount.
 
 ## Fase Berikutnya
+
+### Prioritas 1: Smoke Test End-to-End Phase 7
+
+Tujuan:
+- Pastikan alur pasien dari screening sampai konsultasi tidak lagi bergantung pada placeholder atau tombol yang salah posisi.
+
+Urutan test manual:
+1. Login pasien, jalankan screening teks dan voice sampai selesai.
+2. Pastikan screening baru masuk tab `Menunggu Review`, bukan `Selesai Review`.
+3. Pilih psikolog dari halaman selesai screening.
+4. Login psikolog, cek feedback list/detail, pastikan jawaban voice terlihat sebagai teks ringkasan/transkrip.
+5. Simpan draft feedback, refresh, pastikan draft tetap ada tetapi belum muncul di pasien.
+6. Kirim feedback final.
+7. Login pasien, buka pesan detail feedback, pilih lanjut konsultasi.
+8. Booking tanggal/waktu/metode, pastikan tanggal/waktu lampau tidak bisa dipilih.
+9. Konfirmasi booking, bayar via Midtrans Snap sandbox.
+10. Pastikan feedback yang sama tidak bisa membuat booking kedua.
+11. Pastikan tab Booking dan Konsultasi menampilkan jadwal paid booking.
+12. Login psikolog, cek jadwal pasien muncul di tab Jadwal.
+
+### Prioritas 2: Availability Jadwal Psikolog
+
+Tujuan:
+- Mengganti daftar tanggal/waktu statis menjadi availability nyata dari psikolog.
+
+Yang perlu dibuat:
+- CRUD slot atau pola jadwal psikolog.
+- Validasi bentrok slot dan booking.
+- Endpoint list slot tersedia berdasarkan psikolog, tanggal, metode, dan durasi.
+- Frontend booking membaca slot tersedia dari backend, bukan array statis.
+
+### Prioritas 3: Kebijakan Konsultasi Terlewat, Reschedule, dan Cancel
+
+Tujuan:
+- Menangani kasus pasien lupa konsultasi tanpa membuat alur terasa rusak.
+
+Rekomendasi product:
+- Booking lewat waktu diberi label `terlewat`, bukan otomatis hilang.
+- Beri grace period akses link online singkat jika masih hari yang sama.
+- Sediakan request reschedule dengan aturan jelas, misalnya hanya sebelum H-1 atau butuh persetujuan psikolog/admin jika sudah lewat.
+- Jangan hapus riwayat booking; riwayat perlu tetap ada untuk audit dan rekam medis.
+
+### Prioritas 4: Hasil Konsultasi dan Rekam Medis
+
+Yang perlu dibuat:
+- Form hasil konsultasi sisi psikolog.
+- Simpan catatan, evaluasi, rekomendasi lanjutan, dan status follow-up.
+- Pasien melihat ringkasan yang sudah boleh dibagikan, bukan catatan internal mentah.
+
+### Prioritas 5: Testing dan Privacy Hardening
+
+Test yang paling perlu:
+- Booking checkout + duplicate prevention.
+- Midtrans status/webhook mapping.
+- Voice answer tanpa storage audio mentah.
+- Predicate feedback final di dashboard, pesan, booking, dan selesai screening.
+- Past-date booking backend/frontend.
+- Akses data sensitif dan audit log.
+
+## Fase Berikutnya Historis (2026-05-20)
 
 ### Prioritas 1: Smoke Test End-to-End Phase 6B
 
@@ -362,7 +520,7 @@ Opsional backend:
 Tujuan:
 - Membuat alur setelah feedback psikolog: pasien bisa memilih jadwal konsultasi dan psikolog bisa mengelola jadwal/hasil sesi.
 
-Status saat ini:
+Status saat itu (2026-05-20):
 - File router/service/schema untuk booking, jadwal, konsultasi, pembayaran masih kosong atau belum aktif penuh.
 - `pra_asesmen.id_psikolog` sudah terisi dari pilihan pasien dan bisa dipakai sebagai konteks awal booking.
 
@@ -370,7 +528,7 @@ Yang perlu dibuat:
 - CRUD jadwal psikolog.
 - List jadwal tersedia untuk pasien.
 - Booking konsultasi pasien.
-- Placeholder pembayaran untuk MVP.
+- Integrasi pembayaran (status terbaru 2026-05-22 sudah memakai Midtrans Snap).
 - Hasil konsultasi dari psikolog.
 
 Endpoint awal yang disarankan:
@@ -380,7 +538,7 @@ Endpoint awal yang disarankan:
 - `POST /api/booking`
 - `GET /api/booking/pasien`
 - `GET /api/booking/psikolog`
-- `PATCH /api/booking/{id}/payment-placeholder`
+- `POST /api/booking/checkout`
 - `POST /api/konsultasi/{id_booking}/hasil`
 
 ### Prioritas 4: Testing dan Hardening
@@ -417,8 +575,25 @@ Yang perlu dijaga:
 - Untuk endpoint yang return ORM dengan relationship, pakai `selectinload` atau response object eksplisit agar tidak kena `MissingGreenlet`.
 - Backend route baru perlu restart server FastAPI jika reload tidak menangkap perubahan.
 - Frontend env `NEXT_PUBLIC_API_BASE_URL` harus mengarah ke backend aktif, disarankan lokal memakai `http://127.0.0.1:8000`.
+- Voice note tidak boleh upload audio mentah ke Supabase Storage atau menyimpan audio di database; hanya teks hasil proses yang boleh disimpan.
+- Jangan gunakan `status_validasi = selesai` saja sebagai tanda feedback final. Harus ada `divalidasi_pada` dan `feedback_psikolog` non-kosong.
+- Midtrans sandbox/production key tidak boleh dicampur. Mismatch key menyebabkan Snap ditolak `Access denied due to unauthorized transaction`.
+- Validasi jadwal lampau wajib ada di backend walaupun frontend sudah men-disable pilihan.
 
 ## Verifikasi Terakhir
+
+Yang sudah dijalankan pada update 2026-05-22:
+- Backend syntax/import:
+  - `python -m py_compile` untuk file service/router/schema yang diubah.
+  - `python -c "from api.main import app; app.openapi(); print('openapi ok', len(app.routes))"` berhasil.
+- Frontend:
+  - `npx.cmd tsc --noEmit` berhasil.
+  - `npm.cmd run lint` berhasil.
+- Catatan: OpenAPI masih memberi warning duplicate operation ID dari router auth lama; tidak terkait perubahan booking/payment/voice.
+
+Yang belum dijalankan penuh pada update 2026-05-22:
+- E2E manual lengkap dengan pembayaran Midtrans sandbox dari screening voice/teks sampai jadwal psikolog.
+- Test otomatis terstruktur untuk payment webhook, duplicate booking, past-date booking, dan voice answer.
 
 Yang sudah dijalankan pada update terbaru:
 - Frontend lint: `npm.cmd run lint` berhasil setelah perubahan terakhir.
@@ -430,7 +605,7 @@ Yang sudah dijalankan pada update terbaru:
 
 Yang belum dijalankan penuh pada update terbaru:
 - E2E penuh terbaru setelah perubahan "sembunyikan AI pasien" dan fix `MissingGreenlet`.
-- E2E booking/konsultasi karena Phase 7 belum tersedia.
+- E2E booking/konsultasi pada catatan 2026-05-20 belum dijalankan karena Phase 7 saat itu belum tersedia.
 - Test otomatis terstruktur.
 
 ### Verifikasi Historis Sebelumnya
@@ -441,5 +616,5 @@ Yang sudah dijalankan:
 - E2E manual: pasien screening → pilih psikolog → psikolog login → lihat dashboard dinamis → buka feedback → kirim feedback → pasien lihat feedback di pesan.
 
 Yang belum dijalankan penuh:
-- E2E booking/konsultasi karena Phase 7 belum tersedia.
+- E2E booking/konsultasi pada catatan historis ini belum dijalankan karena Phase 7 saat itu belum tersedia.
 - Test otomatis terstruktur.

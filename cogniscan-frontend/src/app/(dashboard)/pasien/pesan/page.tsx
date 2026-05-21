@@ -28,10 +28,25 @@ const topicLabels: Record<string, string> = {
 };
 
 function hasFeedback(report: PreAssessment) {
-  return Boolean(report.feedback_psikolog && report.feedback_psikolog.trim().length > 0);
+  return Boolean(
+    report.status_validasi === "selesai" &&
+      report.divalidasi_pada &&
+      report.feedback_psikolog &&
+      report.feedback_psikolog.trim().length > 0,
+  );
 }
 
 function reportStatusCopy(report: PreAssessment) {
+  if (hasFeedback(report)) {
+    return {
+      badge: "Feedback Tersedia",
+      description: report.feedback_psikolog || "Feedback psikolog sudah tersedia.",
+      href: `/pasien/pesan/detail?id_pra_asesmen=${report.id_pra_asesmen}`,
+      icon: CheckCircle2,
+      tone: "success" as const,
+    };
+  }
+
   if (
     report.status_validasi === "perlu_eskalasi" ||
     report.indikator_urgensi === "critical"
@@ -43,16 +58,6 @@ function reportStatusCopy(report: PreAssessment) {
       href: `/pasien/screening/selesai?id_pra_asesmen=${report.id_pra_asesmen}`,
       icon: AlertTriangle,
       tone: "danger" as const,
-    };
-  }
-
-  if (hasFeedback(report)) {
-    return {
-      badge: "Feedback Tersedia",
-      description: report.feedback_psikolog || "Feedback psikolog sudah tersedia.",
-      href: `/pasien/pesan/detail?id_pra_asesmen=${report.id_pra_asesmen}`,
-      icon: CheckCircle2,
-      tone: "success" as const,
     };
   }
 
@@ -100,6 +105,7 @@ export default function PatientMessagesPage() {
   const { data: fetchedReports, loading, error, refetch: loadData } = useCachedApi<PreAssessment[]>(
     "pasien-messages-list",
     fetchPatientPreAssessments,
+    { ttlMs: 0 },
   );
   const reports = fetchedReports ?? [];
 

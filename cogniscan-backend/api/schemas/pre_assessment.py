@@ -17,6 +17,15 @@ class DistorsiTerdeteksiResponse(BaseModel):
     skor_keyakinan_ai: Decimal | None = None
 
 
+class JawabanJurnalPraAsesmenResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_jawaban_jurnal: int
+    urutan_pertanyaan: int | None = None
+    teks_pertanyaan: str | None = None
+    teks_jawaban: str | None = None
+
+
 class PraAsesmenPasienResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -26,6 +35,7 @@ class PraAsesmenPasienResponse(BaseModel):
     nama_psikolog: str | None = None
     nama_pasien: str | None = None
     dialog_jurnal: str | None = None
+    jawaban_jurnal: list[JawabanJurnalPraAsesmenResponse] = Field(default_factory=list)
     konteks_pemicu: str | None = None
     indikator_urgensi: str | None = None
     skor_keparahan: int | None = None
@@ -45,6 +55,31 @@ class PraAsesmenAssignPsikologRequest(BaseModel):
 class PraAsesmenFeedbackRequest(BaseModel):
     feedback_psikolog: str = ""
     status_validasi: str | None = "selesai"
+    catatan_internal_psikolog: str | None = None
+    akurasi_ai_psikolog: str | None = None
+    severity_final_psikolog: str | None = None
+    rekomendasi_tindak_lanjut_psikolog: str | None = None
+
+
+class PraAsesmenFeedbackDraftRequest(BaseModel):
+    draft_feedback_psikolog: str | None = None
+    draft_catatan_internal: str | None = None
+    draft_akurasi_ai: str | None = None
+    draft_severity_final: str | None = None
+    draft_rekomendasi_tindak_lanjut: str | None = None
+
+
+class PraAsesmenPsikologResponse(PraAsesmenPasienResponse):
+    catatan_internal_psikolog: str | None = None
+    akurasi_ai_psikolog: str | None = None
+    severity_final_psikolog: str | None = None
+    rekomendasi_tindak_lanjut_psikolog: str | None = None
+    draft_feedback_psikolog: str | None = None
+    draft_catatan_internal: str | None = None
+    draft_akurasi_ai: str | None = None
+    draft_severity_final: str | None = None
+    draft_rekomendasi_tindak_lanjut: str | None = None
+    draft_disimpan_pada: datetime | None = None
 
 
 class PsikologAvailableResponse(BaseModel):

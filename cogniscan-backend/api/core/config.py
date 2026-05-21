@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
     FRONTEND_LOGIN_URL: str = "http://localhost:3000/sign-in"
 
+    # Midtrans Snap payment gateway. SERVER_KEY hanya boleh dipakai backend.
+    MIDTRANS_SERVER_KEY: str | None = None
+    MIDTRANS_CLIENT_KEY: str | None = None
+    MIDTRANS_IS_PRODUCTION: bool = False
+    MIDTRANS_SNAP_BASE_URL: str = "https://app.sandbox.midtrans.com"
+    MIDTRANS_API_BASE_URL: str = "https://api.sandbox.midtrans.com"
+    MIDTRANS_FINISH_URL: str = "http://localhost:3000/pasien/booking/receipt/detail"
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS string menjadi list."""
@@ -80,6 +88,45 @@ class Settings(BaseSettings):
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
 
+    @property
+    def midtrans_snap_transactions_url(self) -> str:
+        return f"{self.MIDTRANS_SNAP_BASE_URL.rstrip('/')}/snap/v1/transactions"
+
+    @property
+    def midtrans_snap_script_url(self) -> str:
+        return f"{self.MIDTRANS_SNAP_BASE_URL.rstrip('/')}/snap/snap.js"
+
+    @property
+    def midtrans_is_configured(self) -> bool:
+        return bool(self.MIDTRANS_SERVER_KEY and self.MIDTRANS_CLIENT_KEY)
+
+    @property
+    def midtrans_environment_error(self) -> str | None:
+        """Validate that key prefixes match the selected Midtrans environment."""
+        server_key = self.MIDTRANS_SERVER_KEY or ""
+        client_key = self.MIDTRANS_CLIENT_KEY or ""
+
+        if not server_key or not client_key:
+            return "MIDTRANS_SERVER_KEY dan MIDTRANS_CLIENT_KEY wajib diisi"
+
+        server_is_sandbox_prefix = server_key.startswith("SB-Mid-server-")
+        client_is_sandbox_prefix = client_key.startswith("SB-Mid-client-")
+        
+        server_is_valid_prefix = server_key.startswith("Mid-server-") or server_is_sandbox_prefix
+        client_is_valid_prefix = client_key.startswith("Mid-client-") or client_is_sandbox_prefix
+
+        if not server_is_valid_prefix or not client_is_valid_prefix:
+            return "Format MIDTRANS_SERVER_KEY atau MIDTRANS_CLIENT_KEY tidak valid"
+
+        if self.MIDTRANS_IS_PRODUCTION:
+            if server_is_sandbox_prefix or client_is_sandbox_prefix:
+                return (
+                    "MIDTRANS_IS_PRODUCTION=true tidak boleh menggunakan "
+                    "sandbox key yang diawali SB-"
+                )
+
+        return None
+
 
 # Singleton — import ini dari file lain
-settings = Settings()
+settings = Settings()  # trigger reload

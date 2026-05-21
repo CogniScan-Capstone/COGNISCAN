@@ -43,6 +43,24 @@ class JournalAnswerResponse(BaseModel):
     dijawab_pada: datetime | None = None
 
 
+class JournalVoiceAnswerResponse(JournalAnswerResponse):
+    transkrip: str | None = None
+    indikator_non_verbal: str | None = None
+    ringkasan_klinis: str | None = None
+    catatan_kualitas_audio: str | None = None
+
+
+class JournalVoiceAnswerAcceptedResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_jawaban_jurnal: int
+    id_sesi_jurnal: int | None = None
+    urutan_pertanyaan: int | None = None
+    dijawab_pada: datetime | None = None
+    status: str = "tersimpan"
+    message: str = "Voice note berhasil diproses dan disimpan untuk psikolog."
+
+
 class JournalSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

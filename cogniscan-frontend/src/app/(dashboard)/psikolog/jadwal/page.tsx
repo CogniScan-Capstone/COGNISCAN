@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import {
   getPsikologNav,
   psikologProfileHref,
-  psikologUser,
+  psikologUser as defaultPsikologUser,
 } from "@/components/psikolog";
+import {
+  fetchPsikologScheduleBookings,
+  type PsikologScheduleBooking,
+} from "@/lib/auth";
+import { supabase } from "@/lib/supabase/client";
+import { useBackendUser } from "@/lib/useBackendUser";
 import { cn } from "@/lib/utils";
 
 type SlotStatus = "penuh" | "tersedia" | "kosong";
@@ -38,12 +45,17 @@ const monthNames = [
 ];
 
 const dayHeaders = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+const defaultDailySlots = 8;
 
-function hashSeed(y: number, m: number, d: number) {
-  return (y * 372 + (m + 1) * 31 + d) % 10;
+function formatDateKey(year: number, month: number, date: number) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(date).padStart(2, "0")}`;
 }
 
-function buildCalendar(year: number, month: number): DayInfo[] {
+function buildCalendar(
+  year: number,
+  month: number,
+  bookingCounts: Map<string, number>,
+): DayInfo[] {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const prevMonthDays = new Date(year, month, 0).getDate();
@@ -51,16 +63,18 @@ function buildCalendar(year: number, month: number): DayInfo[] {
 
   for (let i = firstDay - 1; i >= 0; i--) {
     const d = prevMonthDays - i;
-    cells.push(makeDay(year, month - 1, d, false));
+    cells.push(makeDay(year, month - 1, d, false, bookingCounts));
   }
+
   for (let d = 1; d <= daysInMonth; d++) {
-    cells.push(makeDay(year, month, d, true));
+    cells.push(makeDay(year, month, d, true, bookingCounts));
   }
-  while (cells.length % 7 !== 0 || cells.length < 42) {
+
+  while (cells.length < 42) {
     const next = cells.length - firstDay - daysInMonth + 1;
-    cells.push(makeDay(year, month + 1, next, false));
-    if (cells.length >= 42) break;
+    cells.push(makeDay(year, month + 1, next, false, bookingCounts));
   }
+
   return cells.slice(0, 42);
 }
 
@@ -69,23 +83,25 @@ function makeDay(
   month: number,
   date: number,
   inMonth: boolean,
+  bookingCounts: Map<string, number>,
 ): DayInfo {
   const normalized = new Date(year, month, date);
-  const seed = hashSeed(normalized.getFullYear(), normalized.getMonth(), date);
+  const normalizedYear = normalized.getFullYear();
+  const normalizedMonth = normalized.getMonth();
+  const normalizedDate = normalized.getDate();
   const dayOfWeek = normalized.getDay();
-  let slotsTotal = 8;
-  let slotsFilled = 0;
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    slotsTotal = 0;
-    slotsFilled = 0;
-  } else {
-    slotsTotal = 8;
-    slotsFilled = Math.max(0, Math.min(slotsTotal, seed));
-  }
+  const slotsFilled = bookingCounts.get(
+    formatDateKey(normalizedYear, normalizedMonth, normalizedDate),
+  ) ?? 0;
+  const slotsTotal =
+    dayOfWeek === 0 || dayOfWeek === 6
+      ? Math.max(slotsFilled, 0)
+      : Math.max(defaultDailySlots, slotsFilled);
+
   return {
-    date,
-    month: normalized.getMonth(),
-    year: normalized.getFullYear(),
+    date: normalizedDate,
+    month: normalizedMonth,
+    year: normalizedYear,
     inMonth,
     slotsTotal,
     slotsFilled,
@@ -94,14 +110,12 @@ function makeDay(
 
 function dayStatus(day: DayInfo): SlotStatus {
   if (day.slotsTotal === 0) return "kosong";
-  if (day.slotsFilled >= day.slotsTotal) return "penuh";
+  if (day.slotsFilled >= day.slotsTotal && day.slotsFilled > 0) return "penuh";
   return "tersedia";
 }
 
 function formatHref(day: DayInfo) {
-  const m = String(day.month + 1).padStart(2, "0");
-  const d = String(day.date).padStart(2, "0");
-  return `/psikolog/jadwal/${day.year}-${m}-${d}`;
+  return `/psikolog/jadwal/${formatDateKey(day.year, day.month, day.date)}`;
 }
 
 function getTodayParts() {
@@ -109,11 +123,27 @@ function getTodayParts() {
   return { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() };
 }
 
+function monthRange(year: number, month: number) {
+  return {
+    startDate: formatDateKey(year, month, 1),
+    endDate: formatDateKey(year, month, new Date(year, month + 1, 0).getDate()),
+  };
+}
+
 export default function PsikologJadwalPage() {
+  const backendUser = useBackendUser();
+  const displayUser = {
+    ...defaultPsikologUser,
+    name: backendUser?.nama_lengkap?.trim() || defaultPsikologUser.name,
+  };
+
   const [today] = useState(getTodayParts);
   const [viewYear, setViewYear] = useState(today.y);
   const [viewMonth, setViewMonth] = useState(today.m);
   const [yearOpen, setYearOpen] = useState(false);
+  const [bookings, setBookings] = useState<PsikologScheduleBooking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const yearRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -127,9 +157,55 @@ export default function PsikologJadwalPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, [yearOpen]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadBookings() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (!accessToken) {
+          throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+        }
+
+        const range = monthRange(viewYear, viewMonth);
+        const dataBookings = await fetchPsikologScheduleBookings(accessToken, range);
+        if (mounted) setBookings(dataBookings);
+      } catch (err) {
+        if (mounted) {
+          setError(err instanceof Error ? err.message : "Gagal memuat jadwal konsultasi.");
+          setBookings([]);
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadBookings();
+
+    return () => {
+      mounted = false;
+    };
+  }, [viewMonth, viewYear]);
+
+  const bookingCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    bookings.forEach((booking) => {
+      if (!booking.tanggal_konsultasi) return;
+      counts.set(
+        booking.tanggal_konsultasi,
+        (counts.get(booking.tanggal_konsultasi) ?? 0) + 1,
+      );
+    });
+    return counts;
+  }, [bookings]);
+
   const cells = useMemo(
-    () => buildCalendar(viewYear, viewMonth),
-    [viewYear, viewMonth],
+    () => buildCalendar(viewYear, viewMonth, bookingCounts),
+    [bookingCounts, viewMonth, viewYear],
   );
 
   const stats = useMemo(() => {
@@ -149,6 +225,7 @@ export default function PsikologJadwalPage() {
       setViewMonth((m) => m - 1);
     }
   };
+
   const goNext = () => {
     if (viewMonth === 11) {
       setViewMonth(0);
@@ -157,18 +234,19 @@ export default function PsikologJadwalPage() {
       setViewMonth((m) => m + 1);
     }
   };
+
   const goToday = () => {
     setViewYear(today.y);
     setViewMonth(today.m);
   };
 
-  const years = Array.from({ length: 7 }, (_, i) => 2024 + i);
+  const years = Array.from({ length: 7 }, (_, i) => today.y - 2 + i);
 
   return (
     <DashboardLayout
       title="Jadwal"
       navItems={getPsikologNav("jadwal")}
-      user={psikologUser}
+      user={displayUser}
       profileHref={psikologProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
@@ -180,7 +258,7 @@ export default function PsikologJadwalPage() {
                 {monthNames[viewMonth]} {viewYear}
               </h2>
               <p className="mt-1 text-[14px] text-on-surface-variant">
-                Pantau ketersediaan slot konsultasi bulan ini.
+                Jadwal hanya menampilkan booking pasien yang sudah dibayar.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -264,13 +342,20 @@ export default function PsikologJadwalPage() {
               count={stats.tersedia}
             />
             <LegendItem dot="bg-[#a98ad6]" label="Hari Ini" />
-            <div className="ml-auto text-on-surface-variant">
+            <div className="ml-auto inline-flex items-center gap-2 text-on-surface-variant">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
               Slot terisi:{" "}
               <span className="font-semibold text-on-surface">
                 {stats.filledSlot}/{stats.totalSlot}
               </span>
             </div>
           </div>
+
+          {error ? (
+            <p className="mt-4 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              {error}
+            </p>
+          ) : null}
         </DashboardCard>
 
         <DashboardCard className="px-3 py-3 sm:px-5 sm:py-5">
@@ -285,7 +370,6 @@ export default function PsikologJadwalPage() {
             {cells.map((day, idx) => {
               const status = dayStatus(day);
               const isToday =
-                today &&
                 today.y === day.year &&
                 today.m === day.month &&
                 today.d === day.date &&
@@ -332,10 +416,12 @@ export default function PsikologJadwalPage() {
                           "mt-0.5 font-semibold",
                           status === "penuh"
                             ? "text-white"
-                            : "text-[#3f5a3f]",
+                            : day.slotsFilled > 0
+                              ? "text-[#3f5a3f]"
+                              : "text-on-surface-muted",
                         )}
                       >
-                        {status === "penuh" ? "Penuh" : "Tersedia"}
+                        {day.slotsFilled > 0 ? "Ada Pasien" : "Tersedia"}
                       </p>
                     </div>
                   ) : day.inMonth ? (

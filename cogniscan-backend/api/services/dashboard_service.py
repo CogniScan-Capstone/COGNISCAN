@@ -21,6 +21,9 @@ from api.models.psikolog import Psikolog
 
 def _has_feedback(pra_asesmen: PraAsesmen) -> bool:
     return bool(
+        pra_asesmen.status_validasi == "selesai"
+        and pra_asesmen.divalidasi_pada
+        and
         pra_asesmen.feedback_psikolog
         and pra_asesmen.feedback_psikolog.strip()
     )
@@ -33,7 +36,7 @@ def _derive_patient_screening_status(pra_asesmen: PraAsesmen) -> str:
     ):
         return "perlu_eskalasi"
 
-    if _has_feedback(pra_asesmen) or pra_asesmen.status_validasi == "selesai":
+    if _has_feedback(pra_asesmen):
         return "feedback_tersedia"
 
     if pra_asesmen.status_validasi == "sedang_direview":
@@ -94,6 +97,8 @@ async def get_patient_dashboard_summary(
             SesiJurnal.id_pasien == pasien.id_pasien,
             PraAsesmen.feedback_psikolog.is_not(None),
             func.length(func.trim(PraAsesmen.feedback_psikolog)) > 0,
+            PraAsesmen.status_validasi == "selesai",
+            PraAsesmen.divalidasi_pada.is_not(None),
         )
     )
     total_konsultasi_result = await db.execute(
@@ -154,7 +159,12 @@ async def get_psikolog_dashboard_summary(
                 PraAsesmen.feedback_psikolog.is_(None)
                 | (func.length(func.trim(PraAsesmen.feedback_psikolog)) == 0)
             ),
-            PraAsesmen.status_validasi != "selesai",
+            ~(
+                (PraAsesmen.status_validasi == "selesai")
+                & PraAsesmen.divalidasi_pada.is_not(None)
+                & PraAsesmen.feedback_psikolog.is_not(None)
+                & (func.length(func.trim(PraAsesmen.feedback_psikolog)) > 0)
+            ),
         )
     )
     feedback_belum = int(belum_result.scalar_one() or 0)
@@ -163,11 +173,10 @@ async def get_psikolog_dashboard_summary(
     sudah_result = await db.execute(
         select(func.count(PraAsesmen.id_pra_asesmen)).where(
             PraAsesmen.id_psikolog == id_psikolog,
-            (
-                PraAsesmen.feedback_psikolog.is_not(None)
-                & (func.length(func.trim(PraAsesmen.feedback_psikolog)) > 0)
-            )
-            | (PraAsesmen.status_validasi == "selesai"),
+            PraAsesmen.status_validasi == "selesai",
+            PraAsesmen.divalidasi_pada.is_not(None),
+            PraAsesmen.feedback_psikolog.is_not(None),
+            func.length(func.trim(PraAsesmen.feedback_psikolog)) > 0,
         )
     )
     feedback_sudah = int(sudah_result.scalar_one() or 0)
@@ -194,7 +203,7 @@ async def get_psikolog_dashboard_summary(
 
     laporan_terbaru = []
     for row in recent_rows:
-        has_fb = bool(row.feedback_psikolog and row.feedback_psikolog.strip())
+        has_fb = _has_feedback(row)
         nama = None
         if row.sesi_jurnal and row.sesi_jurnal.pasien:
             nama = row.sesi_jurnal.pasien.nama_lengkap
@@ -205,7 +214,7 @@ async def get_psikolog_dashboard_summary(
                 konteks_pemicu=row.konteks_pemicu,
                 indikator_urgensi=row.indikator_urgensi,
                 status_validasi=row.status_validasi,
-                feedback_tersedia=has_fb or row.status_validasi == "selesai",
+                feedback_tersedia=has_fb,
                 dibuat_pada=row.dibuat_pada,
             )
         )

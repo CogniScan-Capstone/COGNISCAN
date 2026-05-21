@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies.auth import require_role
@@ -11,6 +11,7 @@ from api.schemas.journal import (
     JournalFinalizeResponse,
     JournalSessionResponse,
     JournalSessionStart,
+    JournalVoiceAnswerAcceptedResponse,
 )
 from api.services.journal_service import (
     CRISIS_CONTACTS,
@@ -18,7 +19,9 @@ from api.services.journal_service import (
     get_journal_session,
     start_journal_session,
     submit_journal_answer,
+    submit_voice_journal_answer,
 )
+from api.services.voice_note_service import MAX_AUDIO_BYTES
 
 router = APIRouter()
 
@@ -64,6 +67,52 @@ async def submit_answer(
         id_sesi_jurnal=id_sesi_jurnal,
         payload=payload,
     )
+
+
+@router.post(
+    "/sessions/{id_sesi_jurnal}/voice-answer",
+    response_model=JournalVoiceAnswerAcceptedResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_voice_answer(
+    id_sesi_jurnal: int,
+    request: Request,
+    urutan_pertanyaan: int = Query(..., ge=1),
+    teks_pertanyaan: str = Query(..., min_length=3, max_length=500),
+    current_user: Pengguna = Depends(require_role("pasien")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Proses voice note screening tanpa menyimpan audio mentah.
+
+    Body request berisi raw audio bytes. Backend membaca payload ke memori,
+    mengirimnya ke Gemini, lalu hanya menyimpan ringkasan teks ke jawaban jurnal.
+    """
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_AUDIO_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Ukuran voice note maksimal 10 MB",
+                )
+        except ValueError:
+            pass
+
+    audio_bytes = await request.body()
+    try:
+        jawaban, _voice_result = await submit_voice_journal_answer(
+            db=db,
+            current_user=current_user,
+            id_sesi_jurnal=id_sesi_jurnal,
+            urutan_pertanyaan=urutan_pertanyaan,
+            teks_pertanyaan=teks_pertanyaan,
+            audio_bytes=audio_bytes,
+            mime_type=request.headers.get("content-type"),
+        )
+        return JournalVoiceAnswerAcceptedResponse.model_validate(jawaban)
+    finally:
+        del audio_bytes
 
 
 @router.get(

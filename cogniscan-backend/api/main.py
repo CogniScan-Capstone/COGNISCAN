@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.core.config import settings
 from api.core.logging_config import setup_logging
-from api.routers import admin, auth, dashboard, journal, pre_assessment
+from api.routers import admin, auth, booking, dashboard, jadwal, journal, pembayaran, pre_assessment
 
 # from api.routers import journal, pre_assessment, booking, konsultasi, pembayaran, admin
 
@@ -49,6 +49,9 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(journal.router, prefix="/api/journal", tags=["Journaling"])
+app.include_router(booking.router, prefix="/api/booking", tags=["Booking"])
+app.include_router(jadwal.router, prefix="/api/jadwal", tags=["Jadwal"])
+app.include_router(pembayaran.router, prefix="/api/pembayaran", tags=["Pembayaran"])
 app.include_router(
     pre_assessment.router,
     prefix="/api/pre-assessment",

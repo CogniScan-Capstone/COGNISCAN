@@ -6,7 +6,9 @@ from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
 from api.schemas.pre_assessment import (
     PraAsesmenAssignPsikologRequest,
+    PraAsesmenFeedbackDraftRequest,
     PraAsesmenPasienResponse,
+    PraAsesmenPsikologResponse,
     PsikologAvailableResponse,
     PraAsesmenFeedbackRequest,
 )
@@ -17,6 +19,7 @@ from api.services.pre_assessment_service import (
     list_patient_pre_assessments,
     list_psikolog_pre_assessments,
     get_psikolog_pre_assessment,
+    save_pre_assessment_feedback_draft,
     submit_pre_assessment_feedback,
 )
 
@@ -85,7 +88,7 @@ async def assign_patient_pre_assessment_psikolog(
 
 @router.get(
     "/psikolog/reports",
-    response_model=list[PraAsesmenPasienResponse],
+    response_model=list[PraAsesmenPsikologResponse],
 )
 async def read_psikolog_pre_assessments(
     current_user: Pengguna = Depends(require_role("psikolog")),
@@ -97,7 +100,7 @@ async def read_psikolog_pre_assessments(
 
 @router.get(
     "/psikolog/reports/{id_pra_asesmen}",
-    response_model=PraAsesmenPasienResponse,
+    response_model=PraAsesmenPsikologResponse,
 )
 async def read_psikolog_pre_assessment(
     id_pra_asesmen: int,
@@ -113,8 +116,31 @@ async def read_psikolog_pre_assessment(
 
 
 @router.patch(
+    "/psikolog/reports/{id_pra_asesmen}/draft",
+    response_model=PraAsesmenPsikologResponse,
+)
+async def draft_patient_pre_assessment_feedback(
+    id_pra_asesmen: int,
+    payload: PraAsesmenFeedbackDraftRequest,
+    current_user: Pengguna = Depends(require_role("psikolog")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Simpan draft feedback psikolog tanpa menampilkannya ke pasien."""
+    return await save_pre_assessment_feedback_draft(
+        db=db,
+        current_user=current_user,
+        id_pra_asesmen=id_pra_asesmen,
+        draft_feedback_psikolog=payload.draft_feedback_psikolog,
+        draft_catatan_internal=payload.draft_catatan_internal,
+        draft_akurasi_ai=payload.draft_akurasi_ai,
+        draft_severity_final=payload.draft_severity_final,
+        draft_rekomendasi_tindak_lanjut=payload.draft_rekomendasi_tindak_lanjut,
+    )
+
+
+@router.patch(
     "/psikolog/reports/{id_pra_asesmen}/feedback",
-    response_model=PraAsesmenPasienResponse,
+    response_model=PraAsesmenPsikologResponse,
 )
 async def feedback_patient_pre_assessment(
     id_pra_asesmen: int,
@@ -129,4 +155,8 @@ async def feedback_patient_pre_assessment(
         id_pra_asesmen=id_pra_asesmen,
         feedback_psikolog=payload.feedback_psikolog,
         status_validasi=payload.status_validasi,
+        catatan_internal_psikolog=payload.catatan_internal_psikolog,
+        akurasi_ai_psikolog=payload.akurasi_ai_psikolog,
+        severity_final_psikolog=payload.severity_final_psikolog,
+        rekomendasi_tindak_lanjut_psikolog=payload.rekomendasi_tindak_lanjut_psikolog,
     )

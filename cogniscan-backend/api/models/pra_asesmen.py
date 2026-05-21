@@ -33,6 +33,16 @@ class PraAsesmen(Base):
     ringkasan_kondisi: Mapped[str | None] = mapped_column(Text, nullable=True)
     rekomendasi: Mapped[str | None] = mapped_column(Text, nullable=True)
     feedback_psikolog: Mapped[str | None] = mapped_column(Text, nullable=True)
+    catatan_internal_psikolog: Mapped[str | None] = mapped_column(Text, nullable=True)
+    akurasi_ai_psikolog: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity_final_psikolog: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rekomendasi_tindak_lanjut_psikolog: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_feedback_psikolog: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_catatan_internal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_akurasi_ai: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_severity_final: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_rekomendasi_tindak_lanjut: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_disimpan_pada: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status_validasi: Mapped[str | None] = mapped_column(
         Text, default="menunggu",
         comment="'menunggu', 'sedang_direview', 'selesai', 'perlu_eskalasi'"
@@ -67,6 +77,18 @@ class PraAsesmen(Base):
         if not self.sesi_jurnal or not self.sesi_jurnal.jawaban:
             return None
         lines = []
-        for jw in self.sesi_jurnal.jawaban:
+        for jw in sorted(
+            self.sesi_jurnal.jawaban,
+            key=lambda answer: answer.urutan_pertanyaan or 0,
+        ):
             lines.append(f"Q: {jw.teks_pertanyaan}\nA: {jw.teks_jawaban}")
         return "\n\n".join(lines)
+
+    @property
+    def jawaban_jurnal(self):
+        if not self.sesi_jurnal or not self.sesi_jurnal.jawaban:
+            return []
+        return sorted(
+            self.sesi_jurnal.jawaban,
+            key=lambda answer: answer.urutan_pertanyaan or 0,
+        )

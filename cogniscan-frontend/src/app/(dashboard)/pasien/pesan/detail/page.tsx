@@ -2,13 +2,46 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { ArrowRight, Lightbulb, Loader2 } from "lucide-react";
-import { DashboardLayout, StatusBadge } from "@/components/dashboard";
+import {
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  CreditCard,
+  Lightbulb,
+  Loader2,
+} from "lucide-react";
+import { DashboardLayout } from "@/components/dashboard";
 import { getPatientNav, patientProfileHref, patientUser as defaultPatientUser } from "@/components/patient";
-import { fetchPreAssessmentReport, type PreAssessment } from "@/lib/auth";
+import {
+  fetchPatientBookings,
+  fetchPreAssessmentReport,
+  type BookingReceipt,
+  type PreAssessment,
+} from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
+
+const rebookablePaymentStatuses = new Set(["gagal", "kedaluwarsa", "dibatalkan"]);
+
+function isPaidBooking(booking: BookingReceipt) {
+  return booking.status_pembayaran === "dibayar" || booking.status_transaksi === "berhasil";
+}
+
+function isPendingBooking(booking: BookingReceipt) {
+  return (
+    booking.status_pembayaran === "belum_bayar" ||
+    booking.status_transaksi === "menunggu" ||
+    booking.status_transaksi === "proses"
+  );
+}
+
+function isRebookableBooking(booking: BookingReceipt) {
+  return (
+    rebookablePaymentStatuses.has(booking.status_pembayaran || "") ||
+    rebookablePaymentStatuses.has(booking.status_transaksi || "")
+  );
+}
 
 function PatientMessageDetailContent() {
   const router = useRouter();
@@ -16,6 +49,7 @@ function PatientMessageDetailContent() {
   const idPraAsesmenStr = searchParams.get("id_pra_asesmen");
   const backendUser = useBackendUser();
   const [report, setReport] = useState<PreAssessment | null>(null);
+  const [bookings, setBookings] = useState<BookingReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -42,8 +76,14 @@ function PatientMessageDetailContent() {
         if (!accessToken) {
           throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
         }
-        const dataReport = await fetchPreAssessmentReport(accessToken, idPraAsesmen);
-        if (isMounted) setReport(dataReport);
+        const [dataReport, dataBookings] = await Promise.all([
+          fetchPreAssessmentReport(accessToken, idPraAsesmen),
+          fetchPatientBookings(accessToken),
+        ]);
+        if (isMounted) {
+          setReport(dataReport);
+          setBookings(dataBookings);
+        }
       } catch (err) {
         if (isMounted) {
           setError(err instanceof Error ? err.message : "Gagal memuat detail feedback.");
@@ -115,7 +155,22 @@ function PatientMessageDetailContent() {
     );
   }
 
-  const distortions = report.distorsi_terdeteksi?.map((d) => d.tipe_distorsi).filter(Boolean) || [];
+  const hasFeedback = Boolean(
+    report.status_validasi === "selesai" &&
+      report.divalidasi_pada &&
+      report.feedback_psikolog?.trim(),
+  );
+  const relatedBooking =
+    bookings.find(
+      (booking) =>
+        booking.id_pra_asesmen === report.id_pra_asesmen &&
+        !isRebookableBooking(booking),
+    ) ?? null;
+  const paidBooking = relatedBooking && isPaidBooking(relatedBooking) ? relatedBooking : null;
+  const pendingBooking =
+    relatedBooking && !paidBooking && isPendingBooking(relatedBooking)
+      ? relatedBooking
+      : null;
 
   return (
     <DashboardLayout
@@ -151,7 +206,7 @@ function PatientMessageDetailContent() {
             </div>
 
             <div className="mt-10 space-y-5 text-[16px] leading-8 text-on-surface-variant">
-              {report.feedback_psikolog ? (
+              {hasFeedback ? (
                 <p className="whitespace-pre-wrap">{report.feedback_psikolog}</p>
               ) : (
                 <div className="rounded-[12px] border border-dashed border-outline-variant bg-surface-container/30 px-6 py-8 text-center">
@@ -159,40 +214,139 @@ function PatientMessageDetailContent() {
                     Psikolog belum menuliskan tanggapan atau catatan feedback resmi untuk hasil screening ini.
                   </p>
                   <p className="mt-2 text-sm text-on-surface-variant">
-                    Jangan khawatir, hasil analisis awal AI tetap dapat diakses oleh psikolog Anda untuk mempersiapkan sesi konsultasi tatap muka Anda.
+                    Hasil screening sudah tersimpan dan akan muncul sebagai feedback setelah proses review selesai.
                   </p>
                 </div>
               )}
             </div>
 
-            {distortions.length > 0 && (
-              <section className="mt-10">
-                <h4 className="mb-4 text-[16px] font-extrabold text-[#6f5794]">
-                  Distorsi Kognitif Terdeteksi:
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  {distortions.map((distortion) => (
-                    <StatusBadge
-                      key={distortion}
-                      tone="purple"
-                      className="h-10 min-w-37.5 border-[#d4b7ff] bg-[#ead9ff] px-5 text-[15px] font-medium"
-                    >
-                      {distortion}
-                    </StatusBadge>
-                  ))}
-                </div>
-              </section>
-            )}
-
             <div className="mt-10 border-l-4 border-primary bg-[#eef8ef] px-6 py-6">
               <div className="flex gap-4">
-                <Lightbulb className="mt-1 h-6 w-6 shrink-0 fill-primary text-primary" aria-hidden="true" />
+                {hasFeedback ? (
+                  <Lightbulb className="mt-1 h-6 w-6 shrink-0 fill-primary text-primary" aria-hidden="true" />
+                ) : (
+                  <Clock3 className="mt-1 h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+                )}
                 <p className="text-[16px] leading-7 text-[#274f2b]">
-                  Lanjutkan sesi konsultasi untuk membahas strategi pengelolaan distorsi
-                  kognitif yang lebih personal dan terstruktur secara langsung.
+                  {hasFeedback
+                    ? "Lanjutkan sesi konsultasi untuk membahas strategi pengelolaan kondisi yang lebih personal dan terstruktur secara langsung."
+                    : "Silakan cek kembali halaman Pesan nanti. Feedback resmi psikolog akan muncul setelah review selesai."}
                 </p>
               </div>
             </div>
+
+            {hasFeedback ? (
+              <section className="mt-8 rounded-[14px] border border-outline-variant bg-surface-container/40 px-6 py-6">
+                {paidBooking ? (
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex gap-4">
+                      <CheckCircle2 className="mt-1 h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+                      <div>
+                        <h4 className="text-[18px] font-extrabold text-on-surface">
+                          Konsultasi untuk feedback ini sudah dibooking
+                        </h4>
+                        <p className="mt-2 text-[15px] leading-7 text-on-surface-variant">
+                          Pembayaran sudah berhasil, jadi feedback ini tidak bisa dipakai untuk membuat booking baru.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/pasien/konsultasi")}
+                      className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-extrabold text-white transition hover:bg-[#365f39]"
+                    >
+                      Lihat Jadwal
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : pendingBooking ? (
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex gap-4">
+                      <CreditCard className="mt-1 h-6 w-6 shrink-0 text-amber-700" aria-hidden="true" />
+                      <div>
+                        <h4 className="text-[18px] font-extrabold text-on-surface">
+                          Booking sudah dibuat, pembayaran belum selesai
+                        </h4>
+                        <p className="mt-2 text-[15px] leading-7 text-on-surface-variant">
+                          Selesaikan pembayaran untuk mengaktifkan jadwal konsultasi dari feedback ini.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          pendingBooking.order_id
+                            ? `/pasien/booking/receipt/detail?order_id=${encodeURIComponent(pendingBooking.order_id)}`
+                            : "/pasien/booking",
+                        )
+                      }
+                      className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-amber-600 px-6 text-sm font-extrabold text-white transition hover:bg-amber-700"
+                    >
+                      Lanjutkan Pembayaran
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : relatedBooking ? (
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex gap-4">
+                      <Clock3 className="mt-1 h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+                      <div>
+                        <h4 className="text-[18px] font-extrabold text-on-surface">
+                          Booking untuk feedback ini sudah tercatat
+                        </h4>
+                        <p className="mt-2 text-[15px] leading-7 text-on-surface-variant">
+                          Cek tab Booking untuk melihat status terbaru dari konsultasi ini.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/pasien/booking")}
+                      className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-extrabold text-white transition hover:bg-[#365f39]"
+                    >
+                      Buka Booking
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex gap-4">
+                      <CalendarDays className="mt-1 h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+                      <div>
+                        <h4 className="text-[18px] font-extrabold text-on-surface">
+                          Ingin lanjut konsultasi?
+                        </h4>
+                        <p className="mt-2 text-[15px] leading-7 text-on-surface-variant">
+                          Pilih jadwal konsultasi dengan psikolog yang meninjau feedback ini.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => router.push("/pasien/pesan")}
+                        className="inline-flex h-12 items-center justify-center rounded-full border border-outline-variant px-6 text-sm font-extrabold text-on-surface-variant transition hover:bg-white"
+                      >
+                        Belum Sekarang
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(
+                            `/pasien/booking/jadwal?id_pra_asesmen=${report.id_pra_asesmen}`,
+                          )
+                        }
+                        className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-extrabold text-white transition hover:bg-[#365f39]"
+                      >
+                        Lanjut Konsultasi
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
+            ) : null}
 
             <footer className="mt-12 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <button
@@ -202,13 +356,6 @@ function PatientMessageDetailContent() {
               >
                 Kembali
               </button>
-              <Link
-                href="/pasien/booking/jadwal"
-                className="inline-flex h-14 items-center justify-center gap-3 rounded-full bg-primary px-10 text-[16px] font-extrabold text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition hover:-translate-y-0.5 hover:bg-[#365f39]"
-              >
-                Lanjutkan Konsultasi
-                <ArrowRight className="h-5 w-5" aria-hidden="true" />
-              </Link>
             </footer>
           </div>
         </article>

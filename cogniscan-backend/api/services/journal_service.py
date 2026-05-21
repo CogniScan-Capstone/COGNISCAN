@@ -20,6 +20,11 @@ from api.schemas.journal import (
 )
 from api.services.analyzer_service import analyze_narrative_for_pre_assessment
 from api.services.pre_assessment_service import create_pre_assessment_from_analysis
+from api.services.voice_note_service import (
+    VoiceNoteProcessingError,
+    VoiceNoteProcessingResult,
+    process_voice_note_audio,
+)
 
 
 CRISIS_CONTACTS = [
@@ -206,6 +211,75 @@ async def submit_journal_answer(
     await db.commit()
     await db.refresh(jawaban)
     return jawaban
+
+
+async def submit_voice_journal_answer(
+    db: AsyncSession,
+    current_user: Pengguna,
+    id_sesi_jurnal: int,
+    *,
+    urutan_pertanyaan: int,
+    teks_pertanyaan: str,
+    audio_bytes: bytes,
+    mime_type: str | None,
+) -> tuple[JawabanJurnal, VoiceNoteProcessingResult]:
+    sesi_jurnal = await _get_owned_session(
+        db=db,
+        current_user=current_user,
+        id_sesi_jurnal=id_sesi_jurnal,
+    )
+
+    if sesi_jurnal.status != "sedang_berjalan":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sesi jurnal sudah tidak bisa diubah",
+        )
+
+    total_pertanyaan = sesi_jurnal.total_pertanyaan or 0
+    if total_pertanyaan and urutan_pertanyaan > total_pertanyaan:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Urutan pertanyaan melebihi total pertanyaan sesi",
+        )
+
+    await _ensure_ai_processing_consent(db=db, current_user=current_user)
+
+    try:
+        voice_result = await process_voice_note_audio(
+            audio_bytes=audio_bytes,
+            mime_type=mime_type,
+            question=teks_pertanyaan,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except VoiceNoteProcessingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+    teks_jawaban = voice_result.as_journal_answer_text()
+    if not teks_jawaban.strip():
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Voice note tidak menghasilkan ringkasan yang bisa disimpan",
+        )
+
+    payload = JournalAnswerSubmit(
+        urutan_pertanyaan=urutan_pertanyaan,
+        teks_pertanyaan=teks_pertanyaan,
+        teks_jawaban=teks_jawaban,
+    )
+    jawaban = await submit_journal_answer(
+        db=db,
+        current_user=current_user,
+        id_sesi_jurnal=id_sesi_jurnal,
+        payload=payload,
+    )
+    return jawaban, voice_result
 
 
 async def get_journal_session(

@@ -68,6 +68,15 @@ export type JournalAnswer = {
   dijawab_pada?: string | null;
 };
 
+export type JournalVoiceAnswer = {
+  id_jawaban_jurnal: number;
+  id_sesi_jurnal?: number | null;
+  urutan_pertanyaan?: number | null;
+  dijawab_pada?: string | null;
+  status?: string | null;
+  message?: string | null;
+};
+
 export type JournalSession = {
   id_sesi_jurnal: number;
   id_pasien?: number | null;
@@ -95,12 +104,23 @@ export type PreAssessment = {
   nama_psikolog?: string | null;
   nama_pasien?: string | null;
   dialog_jurnal?: string | null;
+  jawaban_jurnal?: JournalAnswer[];
   konteks_pemicu?: string | null;
   indikator_urgensi?: string | null;
   skor_keparahan?: number | null;
   ringkasan_kondisi?: string | null;
   rekomendasi?: string | null;
   feedback_psikolog?: string | null;
+  catatan_internal_psikolog?: string | null;
+  akurasi_ai_psikolog?: string | null;
+  severity_final_psikolog?: string | null;
+  rekomendasi_tindak_lanjut_psikolog?: string | null;
+  draft_feedback_psikolog?: string | null;
+  draft_catatan_internal?: string | null;
+  draft_akurasi_ai?: string | null;
+  draft_severity_final?: string | null;
+  draft_rekomendasi_tindak_lanjut?: string | null;
+  draft_disimpan_pada?: string | null;
   status_validasi?: string | null;
   divalidasi_pada?: string | null;
   dibuat_pada?: string | null;
@@ -136,6 +156,82 @@ export type AvailablePsychologist = {
   dibuat_pada?: string | null;
   tgl_kadaluarsa_str?: string | null;
   tgl_kadaluarsa_sip?: string | null;
+};
+
+export type ConsultationMethod = "online" | "offline";
+
+export type BookingCheckoutPayload = {
+  tanggal_konsultasi: string;
+  waktu_konsultasi: string;
+  mode_konsultasi: ConsultationMethod;
+  id_pra_asesmen?: number | null;
+};
+
+export type BookingCheckoutResponse = {
+  id_pemesanan_konsultasi: number;
+  id_transaksi_pembayaran: number;
+  id_pra_asesmen: number;
+  id_psikolog: number;
+  nama_psikolog?: string | null;
+  tanggal_konsultasi: string;
+  waktu_konsultasi: string;
+  mode_konsultasi: ConsultationMethod;
+  order_id: string;
+  snap_token: string;
+  redirect_url: string;
+  client_key: string;
+  snap_script_url: string;
+  jumlah_bayar: string | number;
+  status_transaksi?: string | null;
+  status_konsultasi?: string | null;
+  status_pembayaran?: string | null;
+};
+
+export type BookingReceipt = {
+  id_pemesanan_konsultasi: number;
+  id_pra_asesmen?: number | null;
+  id_transaksi_pembayaran?: number | null;
+  order_id?: string | null;
+  nomor_nota?: string | null;
+  nama_pasien?: string | null;
+  nama_psikolog?: string | null;
+  tanggal_konsultasi?: string | null;
+  waktu_konsultasi?: string | null;
+  waktu_selesai?: string | null;
+  mode_konsultasi?: string | null;
+  metode_konsultasi?: string | null;
+  link_pertemuan?: string | null;
+  platform_pertemuan?: string | null;
+  lokasi_konsultasi?: string | null;
+  metode_pembayaran?: string | null;
+  jumlah_bayar?: string | number | null;
+  status_transaksi?: string | null;
+  status_konsultasi?: string | null;
+  status_pembayaran?: string | null;
+  tanggal_booking?: string | null;
+  waktu_bayar?: string | null;
+  midtrans_transaction_id?: string | null;
+  midtrans_transaction_status?: string | null;
+  midtrans_fraud_status?: string | null;
+};
+
+export type PsikologScheduleBooking = {
+  id_pemesanan_konsultasi: number;
+  id_pasien?: number | null;
+  nama_pasien?: string | null;
+  email_pasien?: string | null;
+  tanggal_konsultasi?: string | null;
+  waktu_mulai?: string | null;
+  waktu_selesai?: string | null;
+  mode_konsultasi?: "online" | "offline" | string | null;
+  status_konsultasi?: string | null;
+  status_pembayaran?: string | null;
+  total_biaya?: string | number | null;
+  link_pertemuan?: string | null;
+  platform_pertemuan?: string | null;
+  lokasi_konsultasi?: string | null;
+  konteks_pemicu?: string | null;
+  indikator_urgensi?: string | null;
 };
 
 export type PatientLatestScreeningStatus = {
@@ -426,6 +522,38 @@ export async function submitJournalAnswer(
   return response.json() as Promise<JournalAnswer>;
 }
 
+export async function submitJournalVoiceAnswer(
+  accessToken: string,
+  idSesiJurnal: number,
+  payload: {
+    urutan_pertanyaan: number;
+    teks_pertanyaan: string;
+    audio: Blob;
+  },
+): Promise<JournalVoiceAnswer> {
+  const params = new URLSearchParams({
+    urutan_pertanyaan: String(payload.urutan_pertanyaan),
+    teks_pertanyaan: payload.teks_pertanyaan,
+  });
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/journal/sessions/${idSesiJurnal}/voice-answer?${params.toString()}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": payload.audio.type || "audio/webm",
+      },
+      body: payload.audio,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<JournalVoiceAnswer>;
+}
+
 export async function finalizeJournalSession(
   accessToken: string,
   idSesiJurnal: number,
@@ -524,6 +652,87 @@ export async function assignPreAssessmentPsychologist(
   }
 
   return response.json() as Promise<PreAssessment>;
+}
+
+export async function createBookingCheckout(
+  accessToken: string,
+  payload: BookingCheckoutPayload,
+): Promise<BookingCheckoutResponse> {
+  const response = await fetchApi(`${API_BASE_URL}/api/booking/checkout`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<BookingCheckoutResponse>;
+}
+
+export async function fetchPatientBookings(
+  accessToken: string,
+): Promise<BookingReceipt[]> {
+  const response = await fetchApi(`${API_BASE_URL}/api/booking/me`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<BookingReceipt[]>;
+}
+
+export async function fetchPaymentReceipt(
+  accessToken: string,
+  orderId: string,
+): Promise<BookingReceipt> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/pembayaran/orders/${encodeURIComponent(orderId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<BookingReceipt>;
+}
+
+export async function fetchPsikologScheduleBookings(
+  accessToken: string,
+  params: { startDate?: string; endDate?: string } = {},
+): Promise<PsikologScheduleBooking[]> {
+  const searchParams = new URLSearchParams();
+  if (params.startDate) searchParams.set("start_date", params.startDate);
+  if (params.endDate) searchParams.set("end_date", params.endDate);
+
+  const query = searchParams.toString();
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/jadwal/psikolog/bookings${query ? `?${query}` : ""}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PsikologScheduleBooking[]>;
 }
 
 export async function fetchPatientDashboardSummary(
@@ -631,7 +840,14 @@ export async function fetchPsikologPreAssessmentReport(
 export async function submitPreAssessmentFeedback(
   accessToken: string,
   idPraAsesmen: number,
-  payload: { feedback_psikolog: string; status_validasi?: string },
+  payload: {
+    feedback_psikolog: string;
+    status_validasi?: string;
+    catatan_internal_psikolog?: string | null;
+    akurasi_ai_psikolog?: string | null;
+    severity_final_psikolog?: string | null;
+    rekomendasi_tindak_lanjut_psikolog?: string | null;
+  },
 ): Promise<PreAssessment> {
   const response = await fetchApi(
     `${API_BASE_URL}/api/pre-assessment/psikolog/reports/${idPraAsesmen}/feedback`,
@@ -650,4 +866,67 @@ export async function submitPreAssessmentFeedback(
   }
 
   return response.json() as Promise<PreAssessment>;
+}
+
+export async function savePreAssessmentFeedbackDraft(
+  accessToken: string,
+  idPraAsesmen: number,
+  payload: {
+    draft_feedback_psikolog?: string | null;
+    draft_catatan_internal?: string | null;
+    draft_akurasi_ai?: string | null;
+    draft_severity_final?: string | null;
+    draft_rekomendasi_tindak_lanjut?: string | null;
+  },
+): Promise<PreAssessment> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/pre-assessment/psikolog/reports/${idPraAsesmen}/draft`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PreAssessment>;
+}
+
+
+export type MidtransPaymentCreateResponse = {
+  id_pemesanan_konsultasi: number;
+  id_transaksi_pembayaran: number;
+  order_id: string;
+  snap_token: string;
+  redirect_url: string;
+  client_key: string;
+  snap_script_url: string;
+  jumlah_bayar: string | number;
+  status_transaksi?: string | null;
+};
+
+export async function initiatePaymentForBooking(
+  accessToken: string,
+  id_pemesanan_konsultasi: number,
+): Promise<MidtransPaymentCreateResponse> {
+  const response = await fetchApi(`${API_BASE_URL}/api/pembayaran/midtrans/create`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id_pemesanan_konsultasi }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<MidtransPaymentCreateResponse>;
 }

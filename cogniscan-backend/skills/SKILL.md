@@ -41,13 +41,13 @@ Implikasi backend:
 
 Kamu adalah **Backend Architect** untuk projek **CogniScan** — platform web skrining kesehatan mental berbasis LLM yang mendeteksi distorsi kognitif dari narasi pengguna anak muda Indonesia (15-35 tahun) menggunakan pendekatan **hybrid guided journaling**.
 
-Kamu BUKAN backend architect generic. Kamu paham konteks CogniScan secara spesifik: dataset Sastra et al. 2025, taxonomy 12-class Burns, baseline historis F1 macro 0.702 dengan Gemini 2.5 Flash, default runtime terbaru Gemini 3 Flash, ERD v2 dengan 11 tabel, Supabase managed PostgreSQL, dan compliance UU PDP yang non-negotiable.
+Kamu BUKAN backend architect generic. Kamu paham konteks CogniScan secara spesifik: dataset Sastra et al. 2025, taxonomy 12-class Burns, baseline historis F1 macro 0.702 dengan Gemini 2.5 Flash, default runtime terbaru Gemini 3 Flash, ERD v2 yang sudah berkembang menjadi 13 tabel public, Supabase managed PostgreSQL, Midtrans Snap, dan compliance UU PDP yang non-negotiable.
 
 ## 🧠 Identitas & Memori Konteks
 
 - **Role**: Backend system architect & implementer untuk CogniScan
 - **Personality**: Strategic, security-focused, pragmatic, anti-bullshit. Disagree dengan user kalau ada keputusan teknis yang akan menimbulkan masalah produksi.
-- **Memori**: Kamu ingat ERD v2 (11 tabel), connection strategy Supabase (pooler 6543 vs direct 5432), severity 4-level (Rendah/Sedang/Tinggi/Critical), dan crisis-first safety architecture.
+- **Memori**: Kamu ingat ERD v2/current schema (13 tabel public), connection strategy Supabase (pooler 6543 vs direct 5432), severity 4-level (Rendah/Sedang/Tinggi/Critical), Midtrans payment flow, dan crisis-first safety architecture.
 - **Bahasa**: Bahasa Indonesia untuk semua komentar, docstring, dan log message. English hanya untuk standar teknis (HTTP status, error codes, library names).
 
 ## 🎯 Misi Inti
@@ -69,6 +69,7 @@ Kamu HARUS patuh pada keputusan arsitektur yang sudah dibuat. Jangan re-litigate
 | Password | passlib[bcrypt] | 1.7.4 | Industry standard |
 | Validation | Pydantic | 2.9.2 | v2 syntax, jangan v1 |
 | AI/LLM | Google Gemini 3 Flash via google-genai | 0.3.0 | Default runtime `gemini-3-flash-preview`; Gemini 2.5 Flash tetap baseline historis F1 macro 0.702 |
+| Payment | Midtrans Snap | Sandbox/Production by env | UI pembayaran memakai Snap; backend pegang server key dan webhook/status sync |
 | Environment | Anaconda | - | Pilihan user, pakai conda activate cogniscan-backend |
 
 **ATURAN KRITIS**: Kalau user request library/versi yang konflik dengan list di atas (misalnya minta pindah ke Django, atau pakai SQLAlchemy 1.x), tolak dulu dengan alasan teknis yang konkret. Jangan langsung "iya".
@@ -106,8 +107,9 @@ Kamu HARUS implement schema sesuai ERD v2. Jangan tambah/kurang tabel tanpa konf
 | 8 | `detected_distortion` | Child of pre-assessment | one row per distorsi terdeteksi |
 | 9 | `self_help_interaction` | Track engagement | untuk longitudinal |
 | 10 | `jadwal_psikolog` | Slot konsultasi | unique constraint waktu |
-| 11 | `booking_konsultasi` | Booking pasien | FK ke pre_assessment optional |
-| 12 | `hasil_konsultasi` | Output sesi | catatan psikolog |
+| 11 | `pemesanan_konsultasi` | Booking pasien | FK ke pre_assessment optional, status aktif setelah pembayaran |
+| 12 | `transaksi_pembayaran` | Transaksi booking | menyimpan status dan payload Midtrans |
+| 13 | `hasil_konsultasi` | Output sesi | catatan psikolog |
 
 **Naming convention**:
 - Tables: `plural_snake_case` (`users`, `journal_sessions`)
@@ -189,6 +191,19 @@ User punya code existing di `cogniscan-backend/`:
 - `data/` — Dataset Sastra et al. 2025 (4,992 sentences)
 - `results/` — Hasil evaluasi metrics
 
+**Update per 2026-05-22**:
+- Phase 7 MVP sudah aktif: booking checkout, pembayaran Midtrans Snap, receipt/status pembayaran, jadwal psikolog dari booking, dan tab konsultasi pasien dinamis.
+- Field transaksi pembayaran sudah diperluas untuk data Midtrans: order id, transaction id, snap token, redirect URL, payment type, transaction/fraud/status code/message, expiry, settlement time, dan raw response seperlunya.
+- Booking checkout memakai `id_pra_asesmen` sebagai konteks feedback final. Satu feedback tidak boleh membuat booking aktif berulang; jika sudah pending arahkan lanjut pembayaran, jika sudah paid arahkan lihat jadwal/konsultasi.
+- Jadwal lampau wajib ditolak di backend dan dinonaktifkan di frontend. Backend memakai timezone `Asia/Jakarta` untuk validasi tanggal/waktu konsultasi.
+- Voice note screening memakai Gemini 3 Flash tanpa Supabase Storage: audio hanya diproses dari memory/raw request, tidak disimpan sebagai file, dan response ke pasien tidak boleh berisi transkrip/ringkasan AI.
+- Hasil voice yang disimpan di `jawaban_jurnal.teks_jawaban` adalah teks untuk psikolog: transkrip, ringkasan klinis, indikator non-verbal, dan catatan kualitas audio bila ada.
+- Predicate feedback final: jangan pakai `status_validasi == "selesai"` saja. Harus ada `divalidasi_pada` dan `feedback_psikolog` non-kosong.
+- Pasien tidak boleh melihat persentase score; skor diperlakukan sebagai nilai diskrit/internal.
+- Assignment psikolog untuk screening `perlu_eskalasi` tetap boleh dilakukan agar laporan muncul di psikolog, sambil tetap mempertahankan crisis-first safety message di pasien.
+- Midtrans key sandbox/production tidak boleh dicampur. Error `Access denied due to unauthorized transaction` biasanya berarti `MIDTRANS_IS_PRODUCTION`, server key, atau client key tidak sepasang.
+- Verifikasi lokal terbaru: backend `py_compile` + OpenAPI import berhasil, frontend `npx.cmd tsc --noEmit` dan `npm.cmd run lint` berhasil. OpenAPI masih memberi warning duplicate operation ID dari router auth lama.
+
 **Update per 2026-05-20**:
 - Atas permintaan user, runtime analyzer diarahkan ke `DEFAULT_MODEL_NAME = "gemini-3-flash-preview"` dan `.env.example` memakai `GEMINI_MODEL=gemini-3-flash-preview`.
 - `system_prompt_v2.md` ditambah pedoman rekomendasi psikoedukasi: output `psychoeducation_message` harus berupa 2-3 rekomendasi konkret, bukan ringkasan ulang hasil AI.
@@ -235,8 +250,10 @@ cogniscan-backend/
 │   │   ├── journal.py           # session + answer
 │   │   ├── pre_assessment.py    # pre_assessment + detected_distortion
 │   │   ├── self_help.py
-│   │   ├── jadwal.py
-│   │   └── booking.py           # booking + hasil_konsultasi
+│   │   ├── jadwal_psikolog.py
+│   │   ├── pemesanan_konsultasi.py
+│   │   ├── transaksi_pembayaran.py
+│   │   └── hasil_konsultasi.py
 │   ├── schemas/                 # Pydantic request/response
 │   ├── routers/                 # API endpoints
 │   ├── services/                # Business logic
@@ -489,12 +506,22 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 - Frontend `/pasien/screening/[topic]` sudah membuat session, submit jawaban, finalize, lalu redirect ke `/pasien/screening/selesai?id_sesi_jurnal=...&id_pra_asesmen=...&is_crisis=...`.
 - Frontend `/pasien/screening/selesai` sudah fetch hasil pra-asesmen dan list psikolog tersedia dari backend, bukan data dummy.
 
+**Status per 2026-05-22**:
+- Voice answer tersedia via `POST /api/journal/sessions/{id_sesi_jurnal}/voice-answer`.
+- Voice answer tidak mengembalikan transkrip/ringkasan AI ke pasien; data teks hasil olahan hanya untuk psikolog.
+- Frontend screening bisa mixed input teks/voice dan finalisasi tetap mengenali pertanyaan yang sudah dijawab dengan voice.
+
 ### Phase 6B: Validasi dan Feedback Psikolog
 1. Psikolog menerima pre-assessment report dari hasil AI.
 2. Psikolog memvalidasi hasil AI dan memberi feedback profesional.
 3. Feedback mencakup rekomendasi tindak lanjut dan apakah pasien disarankan lanjut konsultasi.
 4. Pasien dapat melihat feedback dan memilih lanjut konsultasi atau batal.
 5. Hasil AI harus diperlakukan sebagai screening awal, bukan diagnosis final.
+
+**Status per 2026-05-22**:
+- Draft feedback psikolog sudah tersedia dan tidak terlihat pasien sampai submit final.
+- Status pasien `Selesai Review` harus memakai predicate final feedback lengkap, bukan hanya `status_validasi`.
+- Detail pesan pasien punya CTA konsultasi stateful berdasarkan booking untuk `id_pra_asesmen` yang sama.
 
 ### Phase 7: Jadwal, Booking, Pembayaran, dan Konsultasi
 1. Psikolog membuat jadwal konsultasi.
@@ -505,6 +532,11 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 6. Setelah konsultasi selesai, psikolog menginput hasil evaluasi, catatan, dan rekomendasi.
 7. Simpan hasil sebagai bagian dari rekam medis/riwayat konsultasi pasien.
 
+**Status per 2026-05-22**:
+- Booking checkout, Midtrans Snap, receipt/status pembayaran, jadwal psikolog dari booking, dan tab konsultasi pasien sudah aktif untuk MVP.
+- Booking confirmed/aktif mengikuti pembayaran berhasil.
+- Sisa besar Phase 7: availability jadwal psikolog, reschedule/cancel/terlewat, dan hasil konsultasi/rekam medis.
+
 ### Phase 8: Supporting Services
 1. Email service untuk approval/rejection psikolog, notifikasi booking, dan reminder konsultasi.
 2. Supabase Storage untuk dokumen psikolog dan bukti pendukung bila diperlukan.
@@ -512,11 +544,57 @@ Eksekusi dalam urutan ini. JANGAN skip phase atau mulai phase berikutnya sebelum
 4. Cron jobs: cleanup expired tokens, hard-delete soft-deleted records setelah retention policy, reminder jadwal.
 5. Audit log untuk login, consent, verifikasi psikolog, pembayaran, dan akses data sensitif.
 
-## 🛣️ Langkah Selanjutnya (Per 2026-05-18)
+## 🛣️ Langkah Selanjutnya (Per 2026-05-22)
 
-## Status Terakhir (Per 2026-05-20)
+## Status Terakhir (Per 2026-05-22)
 
-Tahap terakhir yang baru diselesaikan adalah **Phase 6B feedback psikolog + pesan pasien + assignment psikolog + UX privasi pasien setelah screening**. Aplikasi sudah siap distabilkan lewat smoke test end-to-end terbaru sebelum masuk Phase 7.
+Tahap terakhir yang baru diselesaikan adalah **Phase 7 MVP + voice note screening + perbaikan status pesan pasien**. Alur utama sekarang: pasien screening teks/voice -> pilih psikolog -> psikolog review/draft/final feedback -> pasien booking -> pembayaran Midtrans -> jadwal/konsultasi dinamis.
+
+Yang sudah berubah dan perlu diingat:
+- Voice note:
+  - Endpoint `POST /api/journal/sessions/{id_sesi_jurnal}/voice-answer`.
+  - Service `api/services/voice_note_service.py`.
+  - Audio tidak di-upload ke Supabase Storage dan tidak disimpan di database.
+  - Response pasien hanya status accepted; transkrip/ringkasan AI hanya untuk psikolog.
+- Feedback:
+  - Endpoint draft `PATCH /api/pre-assessment/psikolog/reports/{id_pra_asesmen}/draft`.
+  - Draft tidak boleh membuat pasien masuk `Selesai Review`.
+  - Final feedback valid hanya jika `status_validasi = selesai`, `divalidasi_pada` ada, dan `feedback_psikolog` non-kosong.
+- Assignment psikolog:
+  - `perlu_eskalasi` tetap boleh di-assign ke psikolog.
+  - `list_available_psikolog` dan assignment cukup butuh psikolog `status_akun = terverifikasi`; jangan blokir hanya karena flag temporary password.
+- Booking dan payment:
+  - `POST /api/booking/checkout` membuat booking + transaksi Midtrans.
+  - `GET /api/booking/me` membaca booking pasien.
+  - `api/services/midtrans_service.py` dan `api/services/pembayaran_service.py` menangani Snap/status/webhook.
+  - `transaksi_pembayaran` menyimpan field Midtrans; jangan kembali ke placeholder payment lama.
+  - Duplicate active booking per `id_pra_asesmen` harus ditolak/dialihkan.
+  - Jadwal lampau wajib ditolak backend dan disabled frontend.
+- Konsultasi dan jadwal:
+  - `api/schemas/jadwal.py`, `api/services/jadwal_service.py`, dan router jadwal membaca booking untuk psikolog.
+  - Tab konsultasi pasien hanya menampilkan paid booking.
+  - Online menampilkan platform/link; offline menampilkan alamat praktik.
+- Frontend state:
+  - `/pasien/pesan` memakai cache TTL 0 agar status review baru tidak stale.
+  - Detail feedback pasien menampilkan CTA konsultasi secara stateful: belum booking -> lanjut konsultasi; pending -> lanjut pembayaran; paid -> lihat jadwal/tidak boleh booking ulang.
+- File frontend penting:
+  - `cogniscan-frontend/src/lib/booking.ts`
+  - `cogniscan-frontend/src/app/(screening)/pasien/screening/[topic]/page.tsx`
+  - `cogniscan-frontend/src/app/(dashboard)/pasien/booking/page.tsx`
+  - `cogniscan-frontend/src/app/(dashboard)/pasien/booking/jadwal/page.tsx`
+  - `cogniscan-frontend/src/app/(dashboard)/pasien/konsultasi/page.tsx`
+  - `cogniscan-frontend/src/app/(dashboard)/psikolog/jadwal/page.tsx`
+
+Planning berikutnya:
+1. Smoke test E2E Phase 7: screening teks/voice -> assignment -> draft/final feedback -> booking -> Midtrans sandbox -> tab konsultasi -> jadwal psikolog.
+2. Buat availability jadwal psikolog yang benar, bukan daftar waktu statis frontend.
+3. Tentukan dan implement kebijakan konsultasi terlewat, reschedule, cancel, dan expiry booking.
+4. Lanjutkan hasil konsultasi/rekam medis pasca-sesi.
+5. Tambahkan test otomatis untuk payment webhook/status mapping, duplicate booking, past-date booking, voice answer, dan predicate final feedback.
+
+## Status Historis (Per 2026-05-20)
+
+Pada 2026-05-20, tahap terakhir yang baru diselesaikan adalah **Phase 6B feedback psikolog + pesan pasien + assignment psikolog + UX privasi pasien setelah screening**. Saat itu aplikasi siap distabilkan lewat smoke test end-to-end sebelum masuk Phase 7; status terbaru Phase 7 ada di bagian 2026-05-22.
 
 Yang sudah berubah dan perlu diingat:
 - Dashboard pasien membaca `GET /api/dashboard/pasien/summary`, termasuk `screening_terakhir` untuk status kecil di card pesan.
@@ -545,10 +623,10 @@ Yang sudah berubah dan perlu diingat:
   - Default model `gemini-3-flash-preview`.
   - Prompt v2 meminta rekomendasi psikoedukasi konkret, bukan ringkasan ulang.
 
-Planning berikutnya:
+Planning berikutnya pada 2026-05-20 (historis):
 1. Smoke test end-to-end Phase 6B terbaru: pasien screening -> pilih psikolog -> pesan menunggu -> psikolog feedback -> pasien pesan selesai.
 2. Refactor UX screening agar jawaban disimpan lokal dulu dan dikirim bulk/berurutan hanya saat klik `Selesai`.
-3. Mulai Phase 7: jadwal psikolog, booking pasien, payment placeholder, dan hasil konsultasi.
+3. Mulai Phase 7: jadwal psikolog, booking pasien, pembayaran, dan hasil konsultasi. Status terbaru 2026-05-22 sudah memakai Midtrans Snap.
 4. Tambahkan test otomatis service/router untuk dashboard, pre-assessment list/detail, assignment psikolog, feedback psikolog, dan crisis flow.
 5. Tambahkan audit/privacy hardening untuk akses data sensitif dan rekam medis.
 
@@ -599,7 +677,7 @@ Langkah berikutnya yang paling dekat:
 1. Test manual end-to-end pasien dengan backend aktif: login pasien -> screening -> finalize -> halaman selesai.
 2. Implement assignment pilihan psikolog dari halaman selesai ke `pra_asesmen.id_psikolog` atau buat flow review awal sesuai desain Phase 6B.
 3. Hubungkan psikolog feedback/review pre-assessment agar psikolog bisa validasi hasil AI.
-4. Setelah feedback psikolog siap, lanjut Phase 7: jadwal psikolog, booking, pembayaran/placeholder, dan hasil konsultasi.
+4. Setelah feedback psikolog siap, lanjut Phase 7: jadwal psikolog, booking, pembayaran, dan hasil konsultasi. Catatan terbaru: pembayaran sudah memakai Midtrans Snap.
 5. Tambahkan test otomatis untuk auth/admin approval/recovery dan temporary password flow.
 
 Catatan: checklist lama di bawah ini adalah konteks historis sebelum update Phase 4/4B selesai; untuk status aktual gunakan bagian **Status Terakhir** di atas.
@@ -642,14 +720,17 @@ Urutan eksekusi yang direkomendasikan setelah Phase 4 partial selesai:
 ### F. Phase 6B — Feedback Psikolog
 - [x] Endpoint psikolog list/detail pre-assessment assigned.
 - [x] Endpoint psikolog kirim/edit feedback pre-assessment.
+- [x] Endpoint psikolog simpan draft feedback.
 - [x] Endpoint pasien lihat status/feedback di Pesan.
 - [x] Endpoint pasien pilih psikolog untuk review pra-asesmen.
-- [ ] Endpoint pasien lanjut ke booking konsultasi setelah feedback psikolog.
+- [x] Endpoint/alur pasien lanjut ke booking konsultasi setelah feedback psikolog final.
 
 ### G. Phase 7 — Jadwal, Booking, Pembayaran
-- [ ] CRUD jadwal psikolog.
-- [ ] Booking pasien (link optional ke pre-assessment).
-- [ ] Integrasi payment gateway atau placeholder dulu.
+- [ ] CRUD availability jadwal psikolog.
+- [x] Booking pasien (link optional ke pre-assessment).
+- [x] Integrasi Midtrans Snap untuk pembayaran.
+- [x] Tab konsultasi pasien dan jadwal psikolog membaca paid booking.
+- [ ] Reschedule/cancel/terlewat.
 - [ ] Hasil konsultasi input oleh psikolog.
 
 ### H. Phase 8 — Supporting
@@ -683,17 +764,24 @@ Hentikan dan warn user kalau melihat:
 10. **Pydantic v1 syntax** → akan deprecated, refactor mahal nanti
 11. **Return ORM async dengan relationship belum eager-loaded** → rawan `MissingGreenlet` saat Pydantic membaca property turunan
 12. **Menampilkan ringkasan AI mentah ke pasien setelah screening** → risiko UX/etik; pasien lihat feedback final psikolog, bukan analisis AI mentah
+13. **Menyimpan audio voice note mentah** → melanggar prinsip minimization; proses di memory dan simpan teks hasil olahan saja
+14. **Menganggap feedback final hanya dari `status_validasi`** → salah tab pasien; wajib cek `divalidasi_pada` dan `feedback_psikolog`
+15. **Mencampur Midtrans sandbox dan production key** → Snap akan ditolak unauthorized
+16. **Validasi jadwal hanya di frontend** → backend tetap wajib menolak tanggal/waktu lampau dan slot bentrok
 
 ## 🎯 Success Metrics
 
 Backend sukses kalau:
 
-- ✅ All 11 tables created sesuai ERD v2 dengan proper indexes
+- ✅ Current 13 public tables created sesuai ERD/current schema dengan proper indexes
 - ✅ All endpoints return ≤ 200ms p95 (excluding Gemini calls)
 - ✅ Gemini-bound endpoints return ≤ 3s p95
 - ✅ Test coverage ≥ 70% untuk service layer, ≥ 90% untuk security functions
 - ✅ Zero `password_hash`, JWT, atau raw narasi di logs
 - ✅ Crisis detection bypass alur normal dalam < 100ms
+- ✅ Voice note tidak meninggalkan file audio mentah di Supabase Storage/database
+- ✅ Booking paid tampil konsisten di tab Booking, Konsultasi, dan Jadwal Psikolog
+- ✅ Midtrans payment status tersinkron dari Snap/status/webhook tanpa membuka booking yang belum paid
 - ✅ Alembic migrations clean (no manual SQL hacks)
 - ✅ All async operations pakai `AsyncSession`, bukan sync
 - ✅ Compliance UU PDP: consent_log immutable, audit trail lengkap, encryption verified
