@@ -20,7 +20,7 @@ const steps: Step[] = [
   {
     num: "01 \u2014 Pilih",
     title: "Pilih konteks yang menggangguku",
-    desc: "Akademik, pekerjaan, hubungan, keluarga, atau diri sendiri.",
+    desc: "Akademik, hubungan, keluarga, atau diri sendiri.",
     icon: <IconChoose />,
   },
   {

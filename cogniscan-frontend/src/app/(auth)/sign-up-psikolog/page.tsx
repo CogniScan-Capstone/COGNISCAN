@@ -191,19 +191,12 @@ export default function SignUpPsikologPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [specialization, setSpecialization] = useState("");
-  const [experienceYears, setExperienceYears] = useState("");
-  const [university, setUniversity] = useState("");
-  const [graduationYear, setGraduationYear] = useState("");
   const [practiceAddress, setPracticeAddress] = useState("");
   const [city, setCity] = useState("");
   const [province, setProvince] = useState("");
   const [consultationFee, setConsultationFee] = useState("");
   const [strNumber, setStrNumber] = useState("");
   const [sipNumber, setSipNumber] = useState("");
-  const [strExpiredAt, setStrExpiredAt] = useState("");
-  const [sipExpiredAt, setSipExpiredAt] = useState("");
-  const [bio, setBio] = useState("");
   const [strFile, setStrFile] = useState<File | null>(null);
   const [sipFile, setSipFile] = useState<File | null>(null);
   const [strError, setStrError] = useState<string | undefined>();
@@ -227,21 +220,14 @@ export default function SignUpPsikologPage() {
         email,
         nama_lengkap: fullName.trim(),
         nomor_hp: normalizeIndonesianPhone(phone),
-        spesialisasi: optionalText(specialization),
-        pengalaman_tahun: optionalNumber(experienceYears),
-        universitas_asal: optionalText(university),
-        tahun_lulus: optionalNumber(graduationYear),
         alamat_praktik: optionalText(practiceAddress),
         kota: optionalText(city),
         provinsi: optionalText(province),
         tarif_konsultasi: optionalNumber(consultationFee),
         no_str: strNumber.trim(),
         no_sip: sipNumber.trim(),
-        tgl_kadaluarsa_str: optionalText(strExpiredAt),
-        tgl_kadaluarsa_sip: optionalText(sipExpiredAt),
         upload_dokumen_str: strFile.name,
         upload_dokumen_sip: sipFile.name,
-        bio_singkat: optionalText(bio),
       });
 
       router.push("/registration-success");
@@ -310,51 +296,12 @@ export default function SignUpPsikologPage() {
                 onChange={(event) => setPhone(event.target.value)}
               />
               <Field
-                label="Spesialisasi"
-                placeholder="Klinis dewasa, keluarga, remaja..."
-                value={specialization}
-                onChange={(event) => setSpecialization(event.target.value)}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Pengalaman (Tahun)"
-                  placeholder="5"
-                  type="number"
-                  min="0"
-                  value={experienceYears}
-                  onChange={(event) => setExperienceYears(event.target.value)}
-                />
-                <Field
-                  label="Tarif Konsultasi"
-                  placeholder="150000"
-                  type="number"
-                  min="0"
-                  value={consultationFee}
-                  onChange={(event) => setConsultationFee(event.target.value)}
-                />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Universitas"
-                  placeholder="Universitas Indonesia"
-                  value={university}
-                  onChange={(event) => setUniversity(event.target.value)}
-                />
-                <Field
-                  label="Tahun Lulus"
-                  placeholder="2020"
-                  type="number"
-                  min="1950"
-                  value={graduationYear}
-                  onChange={(event) => setGraduationYear(event.target.value)}
-                />
-              </div>
-              <TextAreaField
-                label="Bio Singkat"
-                placeholder="Ceritakan pendekatan praktik dan area pendampingan kamu..."
-                rows={4}
-                value={bio}
-                onChange={(event) => setBio(event.target.value)}
+                label="Tarif Konsultasi"
+                placeholder="150000"
+                type="number"
+                min="0"
+                value={consultationFee}
+                onChange={(event) => setConsultationFee(event.target.value)}
               />
             </div>
           </section>
@@ -380,22 +327,6 @@ export default function SignUpPsikologPage() {
                   value={sipNumber}
                   onChange={(event) => setSipNumber(event.target.value)}
                   required
-                />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Kadaluarsa STR"
-                  placeholder=""
-                  type="date"
-                  value={strExpiredAt}
-                  onChange={(event) => setStrExpiredAt(event.target.value)}
-                />
-                <Field
-                  label="Kadaluarsa SIP"
-                  placeholder=""
-                  type="date"
-                  value={sipExpiredAt}
-                  onChange={(event) => setSipExpiredAt(event.target.value)}
                 />
               </div>
               <TextAreaField

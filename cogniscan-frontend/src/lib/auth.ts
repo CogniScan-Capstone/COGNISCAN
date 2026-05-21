@@ -30,21 +30,14 @@ export type PsikologRegistrationPayload = {
   email: string;
   nama_lengkap: string;
   nomor_hp?: string;
-  spesialisasi?: string;
-  pengalaman_tahun?: number;
-  universitas_asal?: string;
-  tahun_lulus?: number;
   alamat_praktik?: string;
   kota?: string;
   provinsi?: string;
   tarif_konsultasi?: number;
   no_str: string;
   no_sip: string;
-  tgl_kadaluarsa_str?: string;
-  tgl_kadaluarsa_sip?: string;
   upload_dokumen_str?: string;
   upload_dokumen_sip?: string;
-  bio_singkat?: string;
 };
 
 export type JournalSessionStartPayload = {

@@ -43,6 +43,9 @@ class PaymentReceiptResponse(BaseModel):
     status_transaksi: str | None = None
     status_konsultasi: str | None = None
     status_pembayaran: str | None = None
+    link_pertemuan: str | None = None
+    platform_pertemuan: str | None = None
+    lokasi_konsultasi: str | None = None
     tanggal_konsultasi: date | None = None
     waktu_konsultasi: str | None = None
     tanggal_booking: datetime | None = None

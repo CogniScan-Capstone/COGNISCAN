@@ -24,6 +24,7 @@ from api.services.midtrans_service import (
     map_midtrans_status,
     verify_midtrans_signature,
 )
+from api.services.meeting_service import ensure_online_meeting_room
 
 
 def _generate_order_id(id_transaksi_pembayaran: int) -> str:
@@ -48,6 +49,18 @@ def _booking_amount(booking: PemesananKonsultasi) -> Decimal:
             return amount
 
     return Decimal("150000")
+
+
+def _confirm_paid_booking(
+    transaction: TransaksiPembayaran,
+    booking: PemesananKonsultasi,
+) -> None:
+    transaction.waktu_bayar = transaction.waktu_bayar or datetime.now(timezone.utc)
+    booking.status_pembayaran = "dibayar"
+    booking.status_konsultasi = "terkonfirmasi"
+    ensure_online_meeting_room(booking)
+    if booking.jadwal is not None:
+        booking.jadwal.apakah_tersedia = False
 
 
 async def _get_patient_booking(
@@ -224,11 +237,7 @@ async def process_midtrans_notification(
     booking = transaction.pemesanan
     if booking is not None:
         if internal_status == "berhasil":
-            transaction.waktu_bayar = datetime.now(timezone.utc)
-            booking.status_pembayaran = "dibayar"
-            booking.status_konsultasi = "terkonfirmasi"
-            if booking.jadwal is not None:
-                booking.jadwal.apakah_tersedia = False
+            _confirm_paid_booking(transaction, booking)
         elif internal_status == "menunggu":
             booking.status_pembayaran = "belum_bayar"
             booking.status_konsultasi = "menunggu_pembayaran"
@@ -282,11 +291,7 @@ async def sync_payment_status_if_needed(
             booking = transaction.pemesanan
             if booking is not None:
                 if internal_status == "berhasil":
-                    transaction.waktu_bayar = datetime.now(timezone.utc)
-                    booking.status_pembayaran = "dibayar"
-                    booking.status_konsultasi = "terkonfirmasi"
-                    if booking.jadwal is not None:
-                        booking.jadwal.apakah_tersedia = False
+                    _confirm_paid_booking(transaction, booking)
                 elif internal_status in {"gagal", "kedaluwarsa", "dibatalkan"}:
                     booking.status_pembayaran = internal_status
                     booking.status_konsultasi = "menunggu_pembayaran"
@@ -352,6 +357,9 @@ async def get_payment_receipt_by_order_id(
         status_transaksi=transaction.status_transaksi,
         status_konsultasi=booking.status_konsultasi,
         status_pembayaran=booking.status_pembayaran,
+        link_pertemuan=booking.link_pertemuan,
+        platform_pertemuan=booking.platform_pertemuan,
+        lokasi_konsultasi=booking.psikolog.alamat_praktik if booking.psikolog else None,
         tanggal_konsultasi=booking.jadwal.tanggal_praktik if booking.jadwal else None,
         waktu_konsultasi=booking.jadwal.waktu_mulai.isoformat(timespec="minutes")
         if booking.jadwal and booking.jadwal.waktu_mulai

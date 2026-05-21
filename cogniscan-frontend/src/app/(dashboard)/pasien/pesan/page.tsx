@@ -15,17 +15,9 @@ import {
 import { DashboardLayout, StatusBadge } from "@/components/dashboard";
 import { getPatientNav, patientProfileHref, patientUser as defaultPatientUser } from "@/components/patient";
 import { fetchPatientPreAssessments, type PreAssessment } from "@/lib/auth";
+import { getScreeningTopicLabel } from "@/config/screening-questions";
 import { useBackendUser } from "@/lib/useBackendUser";
 import { useCachedApi } from "@/lib/useCachedApi";
-
-const topicLabels: Record<string, string> = {
-  pendidikan: "Pendidikan",
-  keluarga: "Keluarga",
-  hubungan: "Hubungan",
-  keuangan: "Keuangan",
-  "diri-sendiri": "Diri Sendiri",
-  kesehatan: "Kesehatan",
-};
 
 function hasFeedback(report: PreAssessment) {
   return Boolean(
@@ -233,8 +225,7 @@ export default function PatientMessagesPage() {
               <div className="space-y-4">
                 {activeReports.map((report) => {
                   const topicSlug = report.konteks_pemicu || "";
-                  const currentTopicName =
-                    topicLabels[topicSlug] || topicSlug.replace("-", " ") || "Umum";
+                  const currentTopicName = getScreeningTopicLabel(topicSlug);
                   const copy = reportStatusCopy(report);
                   const StatusIcon = copy.icon;
 

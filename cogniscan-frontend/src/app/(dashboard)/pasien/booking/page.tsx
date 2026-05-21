@@ -24,6 +24,7 @@ import {
   type BookingReceipt,
   type PreAssessment,
 } from "@/lib/auth";
+import { getScreeningTopicLabel } from "@/config/screening-questions";
 import { formatCurrency } from "@/lib/booking";
 import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
@@ -294,7 +295,7 @@ function BookingGate({
               {eligibleReport.nama_psikolog || "Psikolog CogniScan"}
             </h3>
             <p className="mt-1 text-sm text-on-surface-variant">
-              {eligibleReport.konteks_pemicu || "Screening"} - {formatDateTime(eligibleReport.divalidasi_pada || eligibleReport.dibuat_pada)}
+              {getScreeningTopicLabel(eligibleReport.konteks_pemicu)} - {formatDateTime(eligibleReport.divalidasi_pada || eligibleReport.dibuat_pada)}
             </p>
             <Link
               href={`/pasien/booking/jadwal?id_pra_asesmen=${eligibleReport.id_pra_asesmen}`}

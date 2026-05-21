@@ -300,7 +300,7 @@ function ConsultationCard({
                 </a>
               ) : (
                 <p className="mt-2 text-[14px] leading-6 text-on-surface-variant">
-                  Link meeting belum tersedia. Psikolog atau admin perlu mengisi link pertemuan sebelum sesi dimulai.
+                  Link meeting sedang dibuat otomatis setelah pembayaran terkonfirmasi.
                 </p>
               )}
             </div>

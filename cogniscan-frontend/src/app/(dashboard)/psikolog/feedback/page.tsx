@@ -11,6 +11,7 @@ import {
 } from "@/components/psikolog";
 import { cn } from "@/lib/utils";
 import { fetchPsikologPreAssessments, type PreAssessment } from "@/lib/auth";
+import { getScreeningTopicLabel } from "@/config/screening-questions";
 import { useBackendUser } from "@/lib/useBackendUser";
 import { useCachedApi } from "@/lib/useCachedApi";
 
@@ -142,7 +143,7 @@ export default function PsikologFeedbackPage() {
         "diri-sendiri": "lilac",
         kesehatan: "lilac",
       };
-      const topic = item.konteks_pemicu || "Jurnal";
+      const topic = getScreeningTopicLabel(item.konteks_pemicu);
       const topicTone = topicToneMap[item.konteks_pemicu?.toLowerCase() || ""] || "blue";
 
       return {

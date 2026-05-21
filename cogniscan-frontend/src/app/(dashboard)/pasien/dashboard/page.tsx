@@ -19,6 +19,7 @@ import {
   type PatientDashboardSummary,
   type PatientLatestScreeningStatus,
 } from "@/lib/auth";
+import { getScreeningTopicLabel } from "@/config/screening-questions";
 import { useBackendUser } from "@/lib/useBackendUser";
 import { useCachedApi } from "@/lib/useCachedApi";
 
@@ -61,18 +62,8 @@ const topics = [
   },
 ];
 
-const topicLabels: Record<string, string> = {
-  pendidikan: "Pendidikan",
-  keluarga: "Keluarga",
-  hubungan: "Hubungan",
-  keuangan: "Keuangan",
-  "diri-sendiri": "Diri Sendiri",
-  kesehatan: "Kesehatan",
-};
-
 function topicName(slug?: string | null) {
-  if (!slug) return "Screening";
-  return topicLabels[slug] || slug.replace(/-/g, " ");
+  return getScreeningTopicLabel(slug);
 }
 
 function screeningStatusText(latest: PatientLatestScreeningStatus) {

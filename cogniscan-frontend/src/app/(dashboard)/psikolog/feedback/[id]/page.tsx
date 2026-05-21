@@ -29,6 +29,7 @@ import {
   submitPreAssessmentFeedback,
   type PreAssessment,
 } from "@/lib/auth";
+import { getScreeningTopicLabel } from "@/config/screening-questions";
 import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
 
@@ -347,7 +348,7 @@ export default function FeedbackDetailPage({
 
     return {
       name: report.nama_pasien || "Pasien Anonim",
-      topic: report.konteks_pemicu || "Jurnal",
+      topic: getScreeningTopicLabel(report.konteks_pemicu),
       topicTone,
       relativeTime,
       dialogText: buildDialogText(report.jawaban_jurnal, report.dialog_jurnal),

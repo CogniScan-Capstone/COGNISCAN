@@ -25,6 +25,7 @@ import {
   fetchPsikologDashboardSummary,
   type PsikologDashboardSummary,
 } from "@/lib/auth";
+import { getScreeningTopicLabel } from "@/config/screening-questions";
 import { useBackendUser } from "@/lib/useBackendUser";
 import { useCachedApi } from "@/lib/useCachedApi";
 
@@ -34,15 +35,6 @@ const priorityBadge: Record<Priority, string> = {
   high: "bg-[#fbd6d4] text-[#a3372e]",
   medium: "bg-[#fbe8c5] text-[#a35a1a]",
   low: "bg-surface-container text-on-surface-variant",
-};
-
-const topicLabels: Record<string, string> = {
-  pendidikan: "Pendidikan",
-  keluarga: "Keluarga",
-  hubungan: "Hubungan",
-  keuangan: "Keuangan",
-  "diri-sendiri": "Diri Sendiri",
-  kesehatan: "Kesehatan",
 };
 
 function derivePriority(urgency: string | null | undefined): Priority {
@@ -165,10 +157,7 @@ export default function PsikologDashboardPage() {
               {summary.laporan_terbaru.map((report) => {
                 const priority = derivePriority(report.indikator_urgensi);
                 const topicSlug = report.konteks_pemicu || "";
-                const topicName =
-                  topicLabels[topicSlug] ||
-                  topicSlug.replace("-", " ") ||
-                  "Umum";
+                const topicName = getScreeningTopicLabel(topicSlug);
                 const initials = (report.nama_pasien || "?")
                   .split(" ")
                   .map((w) => w[0])

@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     MIDTRANS_API_BASE_URL: str = "https://api.sandbox.midtrans.com"
     MIDTRANS_FINISH_URL: str = "http://localhost:3000/pasien/booking/receipt/detail"
 
+    # Jitsi public room host. Room dibuat otomatis saat link pertama kali dibuka.
+    JITSI_BASE_URL: str = "https://meet.jit.si"
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS string menjadi list."""

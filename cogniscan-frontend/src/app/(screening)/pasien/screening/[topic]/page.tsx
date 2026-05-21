@@ -9,60 +9,12 @@ import {
   submitJournalAnswer,
   submitJournalVoiceAnswer,
 } from "@/lib/auth";
+import {
+  getScreeningQuestions,
+  getScreeningTopicLabel,
+} from "@/config/screening-questions";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-
-const questions = [
-  {
-    question: "Apa situasi yang paling sering membuat pikiranmu terasa berat akhir-akhir ini?",
-    placeholder: "Ceritakan situasi yang paling terasa mengganggu...",
-  },
-  {
-    question: "Pikiran apa yang biasanya langsung muncul ketika situasi itu terjadi?",
-    placeholder: "Tuliskan kalimat yang muncul di kepalamu...",
-  },
-  {
-    question: "Apa perasaan yang paling kuat kamu rasakan saat pikiran itu muncul?",
-    placeholder: "Misalnya sedih, takut, marah, malu, atau campur aduk...",
-  },
-  {
-    question: "Bagaimana biasanya kamu merespons situasi itu?",
-    placeholder: "Ceritakan tindakan, reaksi, atau kebiasaanmu saat itu...",
-  },
-  {
-    question: "Apakah kamu merasa ada pola yang berulang dari pengalaman ini?",
-    placeholder: "Jika ada, jelaskan pola yang sering muncul...",
-  },
-  {
-    question: "Apa bukti yang mendukung pikiranmu saat itu?",
-    placeholder: "Tuliskan hal-hal yang membuat pikiran itu terasa benar...",
-  },
-  {
-    question: "Apa bukti lain yang mungkin menunjukkan sudut pandang berbeda?",
-    placeholder: "Coba tuliskan kemungkinan lain tanpa memaksa diri untuk positif...",
-  },
-  {
-    question: "Jika teman dekatmu mengalami hal yang sama, apa yang akan kamu katakan padanya?",
-    placeholder: "Tulis dengan bahasa yang lembut dan jujur...",
-  },
-  {
-    question: "Apa langkah kecil yang terasa mungkin kamu lakukan setelah ini?",
-    placeholder: "Tidak perlu besar. Cukup satu langkah yang realistis...",
-  },
-  {
-    question: "Apa yang kamu harapkan dari psikolog saat meninjau jawabanmu?",
-    placeholder: "Misalnya arahan, validasi, strategi, atau bantuan memahami pola pikir...",
-  },
-];
-
-const topicLabels: Record<string, string> = {
-  pendidikan: "Pendidikan",
-  keluarga: "Keluarga",
-  hubungan: "Hubungan",
-  keuangan: "Keuangan",
-  "diri-sendiri": "Diri Sendiri",
-  kesehatan: "Kesehatan",
-};
 
 const recordingMimeTypes = [
   "audio/webm;codecs=opus",
@@ -88,7 +40,7 @@ export default function ScreeningQuestionPage() {
   const params = useParams<{ topic?: string }>();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [voiceAnsweredIndexes, setVoiceAnsweredIndexes] = useState<Record<number, boolean>>({});
+  const [voiceAnswers, setVoiceAnswers] = useState<Record<number, Blob>>({});
   const [hasConsent, setHasConsent] = useState(false);
   const [journalSessionId, setJournalSessionId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -104,19 +56,26 @@ export default function ScreeningQuestionPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
 
-  const currentQuestion = questions[currentIndex];
+  const topicSlug = useMemo(() => {
+    const rawTopic = Array.isArray(params.topic) ? params.topic[0] : params.topic;
+    return rawTopic ?? "screening";
+  }, [params.topic]);
+
+  const questions = useMemo(() => getScreeningQuestions(topicSlug), [topicSlug]);
+  const topic = useMemo(() => getScreeningTopicLabel(topicSlug), [topicSlug]);
+  const currentQuestion = questions[currentIndex] ?? questions[0];
   const currentAnswer = answers[currentIndex] ?? "";
-  const currentAnsweredByVoice = Boolean(voiceAnsweredIndexes[currentIndex]);
+  const currentAnsweredByVoice = Boolean(voiceAnswers[currentIndex]);
   const canContinue =
     (currentAnswer.trim().length > 0 || currentAnsweredByVoice) &&
-    (journalSessionId !== null || hasConsent) &&
+    hasConsent &&
     !isRecording &&
     !isVoiceUploading;
   const isLastQuestion = currentIndex === questions.length - 1;
   const progress = ((currentIndex + 1) / questions.length) * 100;
   const submitStatusText = isLastQuestion
     ? "Menganalisis jawaban..."
-    : "Menyimpan jawaban...";
+    : "Menyiapkan jawaban...";
   const submitButtonText = isSubmitting
     ? isLastQuestion
       ? "Menganalisis"
@@ -124,15 +83,6 @@ export default function ScreeningQuestionPage() {
     : isLastQuestion
       ? "Selesai"
       : "Selanjutnya";
-
-  const topicSlug = useMemo(() => {
-    const rawTopic = Array.isArray(params.topic) ? params.topic[0] : params.topic;
-    return rawTopic ?? "screening";
-  }, [params.topic]);
-
-  const topic = useMemo(() => {
-    return topicLabels[topicSlug] ?? topicSlug.replaceAll("-", " ");
-  }, [topicSlug]);
 
   useEffect(() => {
     return () => {
@@ -192,16 +142,25 @@ export default function ScreeningQuestionPage() {
     setVoiceStatusMessage(nextStatusMessage);
   }
 
+  function removeCurrentVoiceAnswer() {
+    setVoiceAnswers((prev) => {
+      const nextVoiceAnswers = { ...prev };
+      delete nextVoiceAnswers[currentIndex];
+      return nextVoiceAnswers;
+    });
+    clearVoiceNote();
+  }
+
   function isQuestionAnswered(
     questionIndex: number,
-    voiceAnswers: Record<number, boolean> = voiceAnsweredIndexes,
+    nextVoiceAnswers: Record<number, Blob> = voiceAnswers,
   ) {
-    return Boolean((answers[questionIndex] ?? "").trim()) || Boolean(voiceAnswers[questionIndex]);
+    return Boolean((answers[questionIndex] ?? "").trim()) || Boolean(nextVoiceAnswers[questionIndex]);
   }
 
   async function startRecording() {
     if (isSubmitting || isVoiceUploading || isRecording) return;
-    if (journalSessionId === null && !hasConsent) {
+    if (!hasConsent) {
       setErrorMessage("Centang persetujuan pemrosesan AI sebelum merekam voice note.");
       return;
     }
@@ -247,7 +206,7 @@ export default function ScreeningQuestionPage() {
           if (currentUrl) URL.revokeObjectURL(currentUrl);
           return URL.createObjectURL(recordedBlob);
         });
-        setVoiceStatusMessage("Voice note siap diproses.");
+        setVoiceStatusMessage("Voice note siap disimpan sementara.");
       };
 
       recorder.start();
@@ -275,29 +234,19 @@ export default function ScreeningQuestionPage() {
 
   async function processVoiceNote() {
     if (!voiceBlob || isVoiceUploading || isSubmitting || isRecording) return;
-    if (journalSessionId === null && !hasConsent) {
-      setErrorMessage("Centang persetujuan pemrosesan AI sebelum memproses voice note.");
+    if (!hasConsent) {
+      setErrorMessage("Centang persetujuan pemrosesan AI sebelum menyimpan voice note.");
       return;
     }
 
     setErrorMessage("");
-    setVoiceStatusMessage("Memproses voice note...");
-    setIsVoiceUploading(true);
 
     try {
-      const accessToken = await getAccessToken();
-      const idSesiJurnal = await ensureJournalSession(accessToken);
-      await submitJournalVoiceAnswer(accessToken, idSesiJurnal, {
-        urutan_pertanyaan: currentIndex + 1,
-        teks_pertanyaan: currentQuestion.question,
-        audio: voiceBlob,
-      });
-
-      const nextVoiceAnsweredIndexes = {
-        ...voiceAnsweredIndexes,
-        [currentIndex]: true,
+      const nextVoiceAnswers = {
+        ...voiceAnswers,
+        [currentIndex]: voiceBlob,
       };
-      setVoiceAnsweredIndexes(nextVoiceAnsweredIndexes);
+      setVoiceAnswers(nextVoiceAnswers);
       setAnswers((prev) => {
         const nextAnswers = { ...prev };
         delete nextAnswers[currentIndex];
@@ -311,11 +260,11 @@ export default function ScreeningQuestionPage() {
       }
 
       setIsSubmitting(true);
-      await finalizeScreening(accessToken, idSesiJurnal, nextVoiceAnsweredIndexes);
+      await finalizeScreening(nextVoiceAnswers);
     } catch (error) {
       setVoiceStatusMessage("");
       setErrorMessage(
-        error instanceof Error ? error.message : "Gagal memproses voice note.",
+        error instanceof Error ? error.message : "Gagal menyimpan voice note.",
       );
     } finally {
       setIsVoiceUploading(false);
@@ -327,9 +276,17 @@ export default function ScreeningQuestionPage() {
     accessToken: string,
     idSesiJurnal: number,
     questionIndex: number,
-    voiceAnswers: Record<number, boolean> = voiceAnsweredIndexes,
+    nextVoiceAnswers: Record<number, Blob> = voiceAnswers,
   ) {
-    if (voiceAnswers[questionIndex]) return;
+    const voiceAnswer = nextVoiceAnswers[questionIndex];
+    if (voiceAnswer) {
+      await submitJournalVoiceAnswer(accessToken, idSesiJurnal, {
+        urutan_pertanyaan: questionIndex + 1,
+        teks_pertanyaan: questions[questionIndex].question,
+        audio: voiceAnswer,
+      });
+      return;
+    }
 
     const answer = answers[questionIndex]?.trim();
     if (!answer) {
@@ -344,29 +301,28 @@ export default function ScreeningQuestionPage() {
   }
 
   function buildMissingAnswerMessage(
-    voiceAnswers: Record<number, boolean> = voiceAnsweredIndexes,
+    nextVoiceAnswers: Record<number, Blob> = voiceAnswers,
   ) {
     const missing = questions
       .map((_, index) => index + 1)
-      .filter((order) => !isQuestionAnswered(order - 1, voiceAnswers));
+      .filter((order) => !isQuestionAnswered(order - 1, nextVoiceAnswers));
 
     if (missing.length === 0) return "";
     return `Pertanyaan ${missing.join(", ")} belum dijawab.`;
   }
 
-  async function finalizeScreening(
-    accessToken: string,
-    idSesiJurnal: number,
-    voiceAnswers: Record<number, boolean> = voiceAnsweredIndexes,
-  ) {
-    const missingAnswerMessage = buildMissingAnswerMessage(voiceAnswers);
+  async function finalizeScreening(nextVoiceAnswers: Record<number, Blob> = voiceAnswers) {
+    const missingAnswerMessage = buildMissingAnswerMessage(nextVoiceAnswers);
     if (missingAnswerMessage) {
       setErrorMessage(missingAnswerMessage);
       return;
     }
 
+    const accessToken = await getAccessToken();
+    const idSesiJurnal = await ensureJournalSession(accessToken);
+
     for (let questionIndex = 0; questionIndex < questions.length; questionIndex += 1) {
-      await saveAnswerByIndex(accessToken, idSesiJurnal, questionIndex, voiceAnswers);
+      await saveAnswerByIndex(accessToken, idSesiJurnal, questionIndex, nextVoiceAnswers);
     }
 
     const result = await finalizeJournalSession(accessToken, idSesiJurnal);
@@ -394,20 +350,16 @@ export default function ScreeningQuestionPage() {
     if (!canContinue || isSubmitting || isVoiceUploading || isRecording) return;
 
     setErrorMessage("");
-    setIsSubmitting(true);
 
     try {
-      const accessToken = await getAccessToken();
-      const idSesiJurnal = await ensureJournalSession(accessToken);
-
       if (!isLastQuestion) {
-        await saveAnswerByIndex(accessToken, idSesiJurnal, currentIndex);
         clearVoiceNote();
         setCurrentIndex((index) => index + 1);
         return;
       }
 
-      await finalizeScreening(accessToken, idSesiJurnal);
+      setIsSubmitting(true);
+      await finalizeScreening();
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Gagal menyimpan screening.",
@@ -468,7 +420,7 @@ export default function ScreeningQuestionPage() {
               rows={7}
               placeholder={
                 currentAnsweredByVoice
-                  ? "Jawaban voice note sudah tersimpan untuk psikolog."
+                  ? "Jawaban voice note sudah disimpan sementara."
                   : currentQuestion.placeholder
               }
               className="mt-8 w-full resize-none rounded-[12px] border border-surface-variant bg-surface px-6 py-5 text-[16px] text-on-surface outline-none transition placeholder:text-on-surface-muted/45 focus:border-primary-container focus:ring-4 focus:ring-primary-container/15 disabled:cursor-not-allowed disabled:opacity-70"
@@ -484,8 +436,8 @@ export default function ScreeningQuestionPage() {
                       ? `Merekam ${formatRecordingSeconds(recordingSeconds)}`
                       : voiceStatusMessage ||
                         (currentAnsweredByVoice
-                          ? "Voice note pertanyaan ini sudah tersimpan untuk psikolog."
-                          : "Audio diproses sementara dan file mentah tidak disimpan.")}
+                          ? "Voice note pertanyaan ini sudah disimpan sementara."
+                          : "Audio disimpan sementara di browser dan dikirim saat selesai.")}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -511,8 +463,8 @@ export default function ScreeningQuestionPage() {
                   )}
                   <button
                     type="button"
-                    onClick={() => clearVoiceNote()}
-                    disabled={!voiceBlob && !voicePreviewUrl}
+                    onClick={removeCurrentVoiceAnswer}
+                    disabled={!voiceBlob && !voicePreviewUrl && !currentAnsweredByVoice}
                     className="inline-flex h-10 items-center justify-center rounded-full border border-outline-variant px-3 text-on-surface-variant transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
                     aria-label="Hapus voice note"
                   >

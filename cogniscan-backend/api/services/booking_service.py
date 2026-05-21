@@ -26,6 +26,7 @@ from api.services.pembayaran_service import (
     create_midtrans_payment_for_booking,
     sync_payment_status_if_needed,
 )
+from api.services.meeting_service import JITSI_PLATFORM_NAME
 
 
 DEFAULT_CONSULTATION_FEE = Decimal("150000")
@@ -250,7 +251,7 @@ async def create_booking_checkout(
         id_jadwal_psikolog=slot.id_jadwal_psikolog,
         id_pra_asesmen=pra_asesmen.id_pra_asesmen,
         mode_konsultasi=payload.mode_konsultasi,
-        platform_pertemuan="Google Meet" if payload.mode_konsultasi == "online" else None,
+        platform_pertemuan=JITSI_PLATFORM_NAME if payload.mode_konsultasi == "online" else None,
         total_biaya=amount,
         status_konsultasi="menunggu_pembayaran",
         status_pembayaran="belum_bayar",
