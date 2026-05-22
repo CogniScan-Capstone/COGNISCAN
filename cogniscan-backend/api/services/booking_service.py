@@ -21,12 +21,13 @@ from api.schemas.booking import (
     BookingCheckoutRequest,
     BookingCheckoutResponse,
     BookingReceiptResponse,
+    BookingRescheduleRequest,
 )
 from api.services.pembayaran_service import (
     create_midtrans_payment_for_booking,
     sync_payment_status_if_needed,
 )
-from api.services.meeting_service import JITSI_PLATFORM_NAME
+from api.services.meeting_service import JITSI_PLATFORM_NAME, ensure_online_meeting_room
 
 
 DEFAULT_CONSULTATION_FEE = Decimal("150000")
@@ -55,10 +56,10 @@ def _booking_fee(psikolog: Psikolog | None) -> Decimal:
     return amount if amount > 0 else DEFAULT_CONSULTATION_FEE
 
 
-def _ensure_schedule_not_in_past(payload: BookingCheckoutRequest) -> None:
+def _ensure_schedule_not_in_past(tanggal_konsultasi: date_type, waktu_konsultasi) -> None:
     requested_start = datetime.combine(
-        payload.tanggal_konsultasi,
-        payload.waktu_konsultasi,
+        tanggal_konsultasi,
+        waktu_konsultasi,
     ).replace(tzinfo=BOOKING_TIMEZONE)
     now = datetime.now(BOOKING_TIMEZONE)
 
@@ -76,6 +77,15 @@ def _is_rebookable_booking(booking: PemesananKonsultasi) -> bool:
     return (
         payment_status in REBOOKABLE_PAYMENT_STATUSES
         or transaction_status in REBOOKABLE_PAYMENT_STATUSES
+    )
+
+
+def _is_paid_booking(booking: PemesananKonsultasi) -> bool:
+    transaction = booking.transaksi_pembayaran
+    return (
+        booking.status_pembayaran == "dibayar"
+        or booking.status_konsultasi == "terkonfirmasi"
+        or (transaction is not None and transaction.status_transaksi == "berhasil")
     )
 
 
@@ -156,19 +166,37 @@ async def _get_or_create_slot(
     pra_asesmen: PraAsesmen,
     payload: BookingCheckoutRequest,
 ) -> JadwalPsikolog:
+    return await _get_or_create_slot_for_psikolog(
+        db=db,
+        id_psikolog=pra_asesmen.id_psikolog or 0,
+        tanggal_konsultasi=payload.tanggal_konsultasi,
+        waktu_konsultasi=payload.waktu_konsultasi,
+    )
+
+
+async def _get_or_create_slot_for_psikolog(
+    db: AsyncSession,
+    id_psikolog: int,
+    tanggal_konsultasi: date_type,
+    waktu_konsultasi,
+    current_slot_id: int | None = None,
+) -> JadwalPsikolog:
     result = await db.execute(
         select(JadwalPsikolog)
         .where(
-            JadwalPsikolog.id_psikolog == pra_asesmen.id_psikolog,
-            JadwalPsikolog.tanggal_praktik == payload.tanggal_konsultasi,
-            JadwalPsikolog.waktu_mulai == payload.waktu_konsultasi,
+            JadwalPsikolog.id_psikolog == id_psikolog,
+            JadwalPsikolog.tanggal_praktik == tanggal_konsultasi,
+            JadwalPsikolog.waktu_mulai == waktu_konsultasi,
         )
         .limit(1)
     )
     slot = result.scalars().first()
 
     if slot is not None:
-        if slot.apakah_tersedia is False:
+        if (
+            slot.apakah_tersedia is False
+            and slot.id_jadwal_psikolog != current_slot_id
+        ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Slot jadwal ini sudah tidak tersedia",
@@ -176,10 +204,10 @@ async def _get_or_create_slot(
         return slot
 
     slot = JadwalPsikolog(
-        id_psikolog=pra_asesmen.id_psikolog,
-        tanggal_praktik=payload.tanggal_konsultasi,
-        waktu_mulai=payload.waktu_konsultasi,
-        waktu_selesai=_slot_end_time(payload.tanggal_konsultasi, payload.waktu_konsultasi),
+        id_psikolog=id_psikolog,
+        tanggal_praktik=tanggal_konsultasi,
+        waktu_mulai=waktu_konsultasi,
+        waktu_selesai=_slot_end_time(tanggal_konsultasi, waktu_konsultasi),
         apakah_tersedia=True,
     )
     db.add(slot)
@@ -229,7 +257,7 @@ async def create_booking_checkout(
     current_user: Pengguna,
     payload: BookingCheckoutRequest,
 ) -> BookingCheckoutResponse:
-    _ensure_schedule_not_in_past(payload)
+    _ensure_schedule_not_in_past(payload.tanggal_konsultasi, payload.waktu_konsultasi)
 
     patient = await _get_patient(db=db, current_user=current_user)
     pra_asesmen = await _get_checkout_pre_assessment(
@@ -287,6 +315,99 @@ async def create_booking_checkout(
         status_konsultasi=booking.status_konsultasi,
         status_pembayaran=booking.status_pembayaran,
     )
+
+
+async def _get_patient_booking(
+    db: AsyncSession,
+    current_user: Pengguna,
+    id_pemesanan_konsultasi: int,
+) -> PemesananKonsultasi:
+    result = await db.execute(
+        select(PemesananKonsultasi)
+        .join(Pasien, PemesananKonsultasi.id_pasien == Pasien.id_pasien)
+        .where(
+            PemesananKonsultasi.id_pemesanan_konsultasi == id_pemesanan_konsultasi,
+            Pasien.id_pengguna == current_user.id,
+        )
+        .options(
+            selectinload(PemesananKonsultasi.pasien),
+            selectinload(PemesananKonsultasi.psikolog),
+            selectinload(PemesananKonsultasi.jadwal),
+            selectinload(PemesananKonsultasi.transaksi_pembayaran),
+        )
+    )
+    booking = result.scalar_one_or_none()
+    if booking is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Booking konsultasi tidak ditemukan",
+        )
+    return booking
+
+
+async def reschedule_paid_booking(
+    db: AsyncSession,
+    current_user: Pengguna,
+    id_pemesanan_konsultasi: int,
+    payload: BookingRescheduleRequest,
+) -> BookingReceiptResponse:
+    _ensure_schedule_not_in_past(payload.tanggal_konsultasi, payload.waktu_konsultasi)
+
+    booking = await _get_patient_booking(
+        db=db,
+        current_user=current_user,
+        id_pemesanan_konsultasi=id_pemesanan_konsultasi,
+    )
+
+    if booking.transaksi_pembayaran is not None:
+        await sync_payment_status_if_needed(db, booking.transaksi_pembayaran)
+
+    if not _is_paid_booking(booking):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reschedule hanya tersedia untuk booking yang sudah dibayar",
+        )
+
+    if booking.status_konsultasi in {"selesai", "dibatalkan"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Booking yang sudah selesai atau dibatalkan tidak dapat di-reschedule",
+        )
+
+    if not booking.id_psikolog:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Booking belum memiliki psikolog",
+        )
+
+    old_slot = booking.jadwal
+    new_slot = await _get_or_create_slot_for_psikolog(
+        db=db,
+        id_psikolog=booking.id_psikolog,
+        tanggal_konsultasi=payload.tanggal_konsultasi,
+        waktu_konsultasi=payload.waktu_konsultasi,
+        current_slot_id=booking.id_jadwal_psikolog,
+    )
+
+    if old_slot is not None and old_slot.id_jadwal_psikolog != new_slot.id_jadwal_psikolog:
+        old_slot.apakah_tersedia = True
+
+    new_slot.apakah_tersedia = False
+    booking.id_jadwal_psikolog = new_slot.id_jadwal_psikolog
+    booking.jadwal = new_slot
+    booking.mode_konsultasi = payload.mode_konsultasi
+    booking.status_pembayaran = "dibayar"
+    booking.status_konsultasi = "terkonfirmasi"
+
+    if payload.mode_konsultasi == "online":
+        booking.platform_pertemuan = JITSI_PLATFORM_NAME
+        ensure_online_meeting_room(booking)
+    else:
+        booking.platform_pertemuan = None
+        booking.link_pertemuan = None
+
+    await db.commit()
+    return _receipt_response(booking)
 
 
 def _receipt_response(booking: PemesananKonsultasi) -> BookingReceiptResponse:

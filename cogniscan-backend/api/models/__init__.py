@@ -20,3 +20,4 @@ from api.models.jadwal_psikolog import JadwalPsikolog  # noqa: F401
 from api.models.pemesanan_konsultasi import PemesananKonsultasi  # noqa: F401
 from api.models.hasil_konsultasi import HasilKonsultasi  # noqa: F401
 from api.models.transaksi_pembayaran import TransaksiPembayaran  # noqa: F401
+from api.models.reminder_konsultasi import ReminderKonsultasi  # noqa: F401

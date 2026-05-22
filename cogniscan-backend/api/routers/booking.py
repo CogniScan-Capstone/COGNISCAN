@@ -7,9 +7,16 @@ from api.models.pengguna import Pengguna
 from api.schemas.booking import (
     BookingCheckoutRequest,
     BookingCheckoutResponse,
+    BookingReminderDispatchResponse,
     BookingReceiptResponse,
+    BookingRescheduleRequest,
 )
-from api.services.booking_service import create_booking_checkout, list_patient_bookings
+from api.services.booking_reminder_service import dispatch_due_booking_reminders
+from api.services.booking_service import (
+    create_booking_checkout,
+    list_patient_bookings,
+    reschedule_paid_booking,
+)
 
 router = APIRouter()
 
@@ -42,3 +49,34 @@ async def read_my_bookings(
 ):
     """Ambil riwayat booking pasien login."""
     return await list_patient_bookings(db=db, current_user=current_user)
+
+
+@router.patch(
+    "/{id_pemesanan_konsultasi}/reschedule",
+    response_model=BookingReceiptResponse,
+)
+async def reschedule_booking(
+    id_pemesanan_konsultasi: int,
+    payload: BookingRescheduleRequest,
+    current_user: Pengguna = Depends(require_role("pasien")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ubah jadwal booking yang sudah dibayar tanpa membuat transaksi baru."""
+    return await reschedule_paid_booking(
+        db=db,
+        current_user=current_user,
+        id_pemesanan_konsultasi=id_pemesanan_konsultasi,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/reminders/send-due",
+    response_model=BookingReminderDispatchResponse,
+)
+async def send_due_booking_reminders(
+    _admin: Pengguna = Depends(require_role("admin")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Kirim reminder WhatsApp untuk booking yang waktunya sudah jatuh tempo."""
+    return await dispatch_due_booking_reminders(db=db)

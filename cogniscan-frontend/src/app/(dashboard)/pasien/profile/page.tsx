@@ -223,7 +223,7 @@ export default function PatientProfilePage() {
                     readOnly
                   />
                   <ProfileInput
-                    label="No. HP"
+                    label="No. WhatsApp"
                     value={phone}
                     icon={<Phone />}
                     onChange={setPhone}

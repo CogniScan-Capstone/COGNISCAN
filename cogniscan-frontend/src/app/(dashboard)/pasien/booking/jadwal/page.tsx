@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   CalendarDays,
   Check,
   ChevronLeft,
@@ -18,7 +19,7 @@ import {
   patientUser,
 } from "@/components/patient";
 
-import { createBookingCheckout } from "@/lib/auth";
+import { createBookingCheckout, reschedulePatientBooking } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -203,14 +204,22 @@ function availableTimesForDate(date: Date, now: Date) {
   return times.filter((time) => !isPastTimeSlot(date, time, now));
 }
 
-function getIdPraAsesmenParam() {
+function getPositiveIntSearchParam(name: string) {
   if (typeof window === "undefined") return null;
 
-  const value = new URLSearchParams(window.location.search).get("id_pra_asesmen");
+  const value = new URLSearchParams(window.location.search).get(name);
   if (!value) return null;
 
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function getIdPraAsesmenParam() {
+  return getPositiveIntSearchParam("id_pra_asesmen");
+}
+
+function getRescheduleBookingIdParam() {
+  return getPositiveIntSearchParam("reschedule_booking_id");
 }
 
 function loadMidtransSnap(scriptUrl: string, clientKey: string) {
@@ -242,6 +251,7 @@ function loadMidtransSnap(scriptUrl: string, clientKey: string) {
 
 export default function PatientBookingSchedulePage() {
   const router = useRouter();
+  const [rescheduleBookingId] = useState(() => getRescheduleBookingIdParam());
   const [viewDate, setViewDate] = useState(() => {
     const current = new Date();
     return new Date(current.getFullYear(), current.getMonth(), 1);
@@ -257,6 +267,7 @@ export default function PatientBookingSchedulePage() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState("");
   const [paymentNotice, setPaymentNotice] = useState("");
+  const [policyAccepted, setPolicyAccepted] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   const [today] = useState(() => {
@@ -292,6 +303,7 @@ export default function PatientBookingSchedulePage() {
   }, []);
 
   const cells = buildCalendarDays(viewDate.getFullYear(), viewDate.getMonth());
+  const isReschedule = rescheduleBookingId !== null;
   const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const previousMonthUnavailable =
     new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1).getTime() <
@@ -329,6 +341,11 @@ export default function PatientBookingSchedulePage() {
       return;
     }
 
+    if (!isReschedule && !policyAccepted) {
+      setError("Centang persetujuan kebijakan pembayaran dan reschedule terlebih dahulu.");
+      return;
+    }
+
     setIsConfirming(true);
     setError("");
     setPaymentNotice("");
@@ -340,10 +357,31 @@ export default function PatientBookingSchedulePage() {
         throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
       }
 
-      const checkout = await createBookingCheckout(accessToken, {
+      const schedulePayload = {
         tanggal_konsultasi: formatDatePayload(selectedDate),
         waktu_konsultasi: selectedTime,
         mode_konsultasi: selectedMethod,
+      };
+
+      if (isReschedule) {
+        const updatedBooking = await reschedulePatientBooking(
+          accessToken,
+          rescheduleBookingId,
+          schedulePayload,
+        );
+
+        if (updatedBooking.order_id) {
+          router.push(
+            `/pasien/booking/receipt/detail?order_id=${encodeURIComponent(updatedBooking.order_id)}`,
+          );
+        } else {
+          router.push("/pasien/booking");
+        }
+        return;
+      }
+
+      const checkout = await createBookingCheckout(accessToken, {
+        ...schedulePayload,
         id_pra_asesmen: getIdPraAsesmenParam(),
       });
 
@@ -403,7 +441,7 @@ export default function PatientBookingSchedulePage() {
               className="inline-flex h-14 items-center gap-2 border-b-2 border-primary px-6 text-[16px] font-semibold text-primary"
             >
               <CalendarDays className="h-5 w-5" aria-hidden="true" />
-              Buat Booking
+              {isReschedule ? "Reschedule" : "Buat Booking"}
             </button>
 
             <a
@@ -417,8 +455,17 @@ export default function PatientBookingSchedulePage() {
         </div>
 
         <h2 className="mb-12 text-[34px] font-extrabold leading-none tracking-[-0.02em] text-[#a98ad6]">
-          Booking Konsultasi
+          {isReschedule ? "Reschedule Konsultasi" : "Booking Konsultasi"}
         </h2>
+
+        {isReschedule ? (
+          <DashboardCard className="mb-8 border border-[#c4ddc5] bg-[#eef7ef] px-5 py-4">
+            <p className="text-sm font-medium leading-6 text-primary">
+              Pilih jadwal baru untuk booking yang sudah dibayar. Pembayaran lama tetap
+              dipakai dan sistem tidak akan membuka Midtrans lagi.
+            </p>
+          </DashboardCard>
+        ) : null}
 
         <div
           className={cn(
@@ -713,6 +760,36 @@ export default function PatientBookingSchedulePage() {
                 </div>
               </section>
 
+              {!isReschedule ? (
+                <section className="mt-8 rounded-[14px] border border-amber-200 bg-amber-50 px-4 py-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle
+                      className="mt-0.5 h-5 w-5 shrink-0 text-amber-700"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">
+                        Kebijakan pembayaran dan reschedule
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-amber-900/80">
+                        Dana konsultasi tidak dikembalikan jika pasien lupa atau tidak hadir.
+                        Reschedule hanya berlaku jika disetujui psikolog; jika psikolog tidak
+                        menerima reschedule, jadwal tetap mengikuti booking awal.
+                      </p>
+                      <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm font-medium leading-6 text-amber-950">
+                        <input
+                          type="checkbox"
+                          checked={policyAccepted}
+                          onChange={(event) => setPolicyAccepted(event.target.checked)}
+                          className="mt-1 h-4 w-4 rounded border-amber-300 text-primary focus:ring-primary"
+                        />
+                        Saya memahami dan menyetujui kebijakan pembayaran serta reschedule.
+                      </label>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
               {/* BUTTON */}
               <button
                 type="button"
@@ -721,11 +798,16 @@ export default function PatientBookingSchedulePage() {
                   isConfirming ||
                   !selectedDate ||
                   !selectedTime ||
+                  (!isReschedule && !policyAccepted) ||
                   isPastTimeSlot(selectedDate, selectedTime, now)
                 }
                 className="mt-8 inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#7a9479] px-8 text-[16px] font-semibold text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition hover:-translate-y-0.5 hover:bg-[#6a8669] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
               >
-                {isConfirming ? "Mengonfirmasi..." : "Konfirmasi Booking"}
+                {isConfirming
+                  ? "Mengonfirmasi..."
+                  : isReschedule
+                    ? "Simpan Jadwal Baru"
+                    : "Konfirmasi Booking"}
                 <ChevronRight className="h-5 w-5" />
               </button>
               {error ? (

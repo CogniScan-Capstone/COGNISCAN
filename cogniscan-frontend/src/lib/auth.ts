@@ -160,6 +160,12 @@ export type BookingCheckoutPayload = {
   id_pra_asesmen?: number | null;
 };
 
+export type BookingReschedulePayload = {
+  tanggal_konsultasi: string;
+  waktu_konsultasi: string;
+  mode_konsultasi: ConsultationMethod;
+};
+
 export type BookingCheckoutResponse = {
   id_pemesanan_konsultasi: number;
   id_transaksi_pembayaran: number;
@@ -667,6 +673,30 @@ export async function createBookingCheckout(
   return response.json() as Promise<BookingCheckoutResponse>;
 }
 
+export async function reschedulePatientBooking(
+  accessToken: string,
+  idPemesananKonsultasi: number,
+  payload: BookingReschedulePayload,
+): Promise<BookingReceipt> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/booking/${idPemesananKonsultasi}/reschedule`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<BookingReceipt>;
+}
+
 export async function fetchPatientBookings(
   accessToken: string,
 ): Promise<BookingReceipt[]> {
@@ -785,7 +815,7 @@ export function dashboardPathForRole(role: BackendUser["peran"]) {
 
 export function entryPathForUser(user: BackendUser) {
   if (user.peran === "psikolog" && !user.apakah_sudah_ganti_password) {
-    return "/psikolog/ganti-password";
+    return "/reset-password";
   }
 
   return dashboardPathForRole(user.peran);

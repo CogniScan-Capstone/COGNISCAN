@@ -88,7 +88,7 @@ export function Field({
 
 export function PhoneField({
   muted = false,
-  label = "Phone Number",
+  label = "Nomor WhatsApp",
   value,
   onChange,
   required,

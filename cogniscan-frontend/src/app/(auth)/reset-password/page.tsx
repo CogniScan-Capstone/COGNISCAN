@@ -1,66 +1,55 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, Eye, EyeOff, LockKeyhole } from "lucide-react";
-import { AuthShell } from "@/components/auth/AuthShell";
-import { PrimaryAuthButton } from "@/components/auth/fields";
-
-const checks = ["Minimal 8 Karakter", "Huruf Kapital (A-Z)", "Angka (0-9)", "Simbol (@, #, $)"];
+import { useRouter } from "next/navigation";
+import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
+import {
+  changeTemporaryPassword,
+  dashboardPathForRole,
+  fetchCurrentUser,
+  type BackendUser,
+} from "@/lib/auth";
+import { supabase } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
-  const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
 
-  return (
-    <AuthShell compact className="max-w-[450px]">
-      <form className="px-8 pb-9 pt-7 sm:px-8">
-        <h1 className="mb-8 text-center text-2xl font-extrabold tracking-[-0.01em] text-[#8d5367]">
-          Buat Password Baru
-        </h1>
-        <label className="relative block">
-          <span className="sr-only">Password baru</span>
-          <LockKeyhole
-            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary"
-            aria-hidden="true"
-          />
-          <input
-            type={showPassword ? "text" : "password"}
-            placeholder="Masukkan password baru"
-            className="h-12 w-full rounded-[10px] border border-[#c9cec4] bg-[#fdfcf9] px-12 text-[15px] text-on-surface outline-none transition focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((value) => !value)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#4f584d] transition hover:text-[#343832]"
-            aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
-          >
-            {showPassword ? (
-              <EyeOff className="h-5 w-5" aria-hidden="true" />
-            ) : (
-              <Eye className="h-5 w-5" aria-hidden="true" />
-            )}
-          </button>
-        </label>
+  async function handleSubmitPassword(password: string) {
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
 
-        <div className="mt-5 grid grid-cols-4 gap-2">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-1.5 rounded-full bg-primary" />
-          ))}
-        </div>
+    if (!accessToken) {
+      throw new Error(
+        "Sesi reset password tidak ditemukan. Silakan masuk ulang atau buka ulang tautan reset password.",
+      );
+    }
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          {checks.map((check) => (
-            <p key={check} className="flex items-center gap-2 text-xs text-on-surface-variant">
-              <CheckCircle2 className="h-4 w-4 fill-primary text-white" aria-hidden="true" />
-              {check}
-            </p>
-          ))}
-        </div>
+    let currentUser: BackendUser | null = null;
+    try {
+      currentUser = await fetchCurrentUser(accessToken);
+    } catch {
+      currentUser = null;
+    }
 
-        <PrimaryAuthButton className="mt-8 text-base">Simpan Password Baru</PrimaryAuthButton>
-        <p className="mx-auto mt-5 max-w-[310px] text-center text-xs leading-5 text-on-surface-variant">
-          Kamu akan otomatis diarahkan ke dashboard setelah password berhasil disimpan.
-        </p>
-      </form>
-    </AuthShell>
-  );
+    if (
+      currentUser?.peran === "psikolog" &&
+      !currentUser.apakah_sudah_ganti_password
+    ) {
+      await changeTemporaryPassword(accessToken, password);
+      router.replace("/psikolog/dashboard");
+      router.refresh();
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    router.replace(
+      currentUser ? dashboardPathForRole(currentUser.peran) : "/sign-in",
+    );
+    router.refresh();
+  }
+
+  return <ResetPasswordForm onSubmitPassword={handleSubmitPassword} />;
 }

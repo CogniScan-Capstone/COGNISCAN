@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from api.models.pasien import Pasien
     from api.models.pra_asesmen import PraAsesmen
     from api.models.psikolog import Psikolog
+    from api.models.reminder_konsultasi import ReminderKonsultasi
     from api.models.transaksi_pembayaran import TransaksiPembayaran
 
 
@@ -44,3 +45,4 @@ class PemesananKonsultasi(Base):
     pra_asesmen: Mapped["PraAsesmen"] = relationship(back_populates="pemesanan_konsultasi")
     hasil_konsultasi: Mapped["HasilKonsultasi"] = relationship(back_populates="pemesanan", uselist=False)
     transaksi_pembayaran: Mapped["TransaksiPembayaran"] = relationship(back_populates="pemesanan", uselist=False)
+    reminder_konsultasi: Mapped[list["ReminderKonsultasi"]] = relationship(back_populates="pemesanan")

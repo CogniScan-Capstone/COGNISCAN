@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     # Jitsi public room host. Room dibuat otomatis saat link pertama kali dibuka.
     JITSI_BASE_URL: str = "https://meet.jit.si"
 
+    # WAHA WhatsApp HTTP API untuk reminder konsultasi pasien.
+    WAHA_ENABLED: bool = False
+    WAHA_BASE_URL: str | None = None
+    WAHA_API_KEY: str | None = None
+    WAHA_SESSION: str = "default"
+    WAHA_SEND_TIMEOUT_SECONDS: float = 15.0
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS string menjadi list."""
@@ -129,6 +136,12 @@ class Settings(BaseSettings):
                 )
 
         return None
+
+    @property
+    def waha_send_text_url(self) -> str | None:
+        if not self.WAHA_BASE_URL:
+            return None
+        return f"{self.WAHA_BASE_URL.rstrip('/')}/api/sendText"
 
 
 # Singleton — import ini dari file lain

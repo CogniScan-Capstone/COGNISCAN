@@ -17,6 +17,12 @@ class BookingCheckoutRequest(BaseModel):
     id_pra_asesmen: int | None = Field(default=None, gt=0)
 
 
+class BookingRescheduleRequest(BaseModel):
+    tanggal_konsultasi: date
+    waktu_konsultasi: time
+    mode_konsultasi: ConsultationMode
+
+
 class BookingCheckoutResponse(BaseModel):
     id_pemesanan_konsultasi: int
     id_transaksi_pembayaran: int
@@ -58,3 +64,11 @@ class BookingReceiptResponse(BaseModel):
     status_konsultasi: str | None = None
     status_pembayaran: str | None = None
     tanggal_booking: datetime | None = None
+
+
+class BookingReminderDispatchResponse(BaseModel):
+    checked: int
+    sent: int
+    skipped: int
+    failed: int
+    message: str

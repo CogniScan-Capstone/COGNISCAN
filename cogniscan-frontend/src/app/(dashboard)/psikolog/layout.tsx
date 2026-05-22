@@ -17,7 +17,10 @@ export default function PsikologDashboardLayout({ children }: { children: ReactN
     async function verifyPsikologAccess() {
       // Skip re-verification if already verified — allows instant tab switching
       if (verifiedRef.current) {
-        // Still check password-change redirect on route change
+        if (pathname === "/psikolog/ganti-password") {
+          router.replace("/psikolog/dashboard");
+          return;
+        }
         if (isMounted) setIsAllowed(true);
         return;
       }
@@ -40,8 +43,8 @@ export default function PsikologDashboardLayout({ children }: { children: ReactN
         const mustChangePassword = !user.apakah_sudah_ganti_password;
         const isChangePasswordPage = pathname === "/psikolog/ganti-password";
 
-        if (mustChangePassword && !isChangePasswordPage) {
-          router.replace("/psikolog/ganti-password");
+        if (mustChangePassword) {
+          router.replace("/reset-password");
           return;
         }
 
