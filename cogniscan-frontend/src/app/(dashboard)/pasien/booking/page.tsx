@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
+  Ban,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -19,6 +20,7 @@ import {
   patientUser as defaultPatientUser,
 } from "@/components/patient";
 import {
+  cancelPatientBooking,
   fetchPatientBookings,
   fetchPatientPreAssessments,
   type BookingReceipt,
@@ -39,11 +41,25 @@ function hasFinalFeedback(report: PreAssessment) {
 }
 
 function isPaidBooking(booking: BookingReceipt) {
-  return booking.status_pembayaran === "dibayar" || booking.status_transaksi === "berhasil";
+  const finalStatuses = new Set([
+    "selesai",
+    "ditutup",
+    "dibatalkan",
+    "dibatalkan_pasien",
+    "payment_kedaluwarsa",
+  ]);
+  return (
+    (booking.status_pembayaran === "dibayar" || booking.status_transaksi === "berhasil") &&
+    !finalStatuses.has(booking.status_konsultasi || "")
+  );
 }
 
 function isPendingBooking(booking: BookingReceipt) {
-  return booking.status_pembayaran === "belum_bayar" || booking.status_transaksi === "menunggu";
+  return (
+    booking.status_pembayaran === "belum_bayar" ||
+    booking.status_transaksi === "menunggu" ||
+    booking.status_transaksi === "proses"
+  );
 }
 
 function formatDate(value?: string | null) {
@@ -74,6 +90,17 @@ function methodLabel(method?: string | null) {
 }
 
 function statusLabel(booking: BookingReceipt) {
+  if (
+    booking.status_pembayaran === "kedaluwarsa" ||
+    booking.status_konsultasi === "payment_kedaluwarsa"
+  ) {
+    return "Pembayaran Kedaluwarsa";
+  }
+  if (booking.status_konsultasi === "dibatalkan_pasien") return "Dibatalkan Pasien";
+  if (booking.status_konsultasi === "dibatalkan") return "Dibatalkan";
+  if (booking.status_konsultasi === "ditutup") return "Ditutup";
+  if (booking.status_konsultasi === "selesai") return "Selesai";
+  if (booking.status_konsultasi === "terlewat") return "Terlewat";
   if (isPaidBooking(booking)) return "Sudah Dibayar";
   if (isPendingBooking(booking)) return "Menunggu Pembayaran";
   return booking.status_transaksi || booking.status_konsultasi || "Booking";
@@ -96,6 +123,7 @@ export default function PatientBookingPage() {
   const [bookings, setBookings] = useState<BookingReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -149,6 +177,26 @@ export default function PatientBookingPage() {
   const latestReport = sortedReports[0] ?? null;
   const paidBooking = bookings.find(isPaidBooking) ?? null;
   const pendingBooking = bookings.find(isPendingBooking) ?? null;
+
+  async function handleCancelBooking(idPemesananKonsultasi: number) {
+    setActionError("");
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+    }
+
+    const updatedBooking = await cancelPatientBooking(accessToken, idPemesananKonsultasi, {
+      konfirmasi_no_refund: false,
+    });
+    setBookings((current) =>
+      current.map((booking) =>
+        booking.id_pemesanan_konsultasi === updatedBooking.id_pemesanan_konsultasi
+          ? updatedBooking
+          : booking,
+      ),
+    );
+  }
 
   return (
     <DashboardLayout
@@ -205,12 +253,29 @@ export default function PatientBookingPage() {
             </p>
           </DashboardCard>
         ) : activeTab === "buat" ? (
-          <BookingGate
-            eligibleReport={eligibleReport}
-            latestReport={latestReport}
-            paidBooking={paidBooking}
-            pendingBooking={pendingBooking}
-          />
+          <>
+            {actionError ? (
+              <p className="mb-4 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {actionError}
+              </p>
+            ) : null}
+            <BookingGate
+              eligibleReport={eligibleReport}
+              latestReport={latestReport}
+              paidBooking={paidBooking}
+              pendingBooking={pendingBooking}
+              onCancelBooking={async (id) => {
+                try {
+                  await handleCancelBooking(id);
+                } catch (err) {
+                  setActionError(
+                    err instanceof Error ? err.message : "Gagal membatalkan booking.",
+                  );
+                  throw err;
+                }
+              }}
+            />
+          </>
         ) : (
           <BookingHistory bookings={bookings} />
         )}
@@ -224,11 +289,13 @@ function BookingGate({
   latestReport,
   paidBooking,
   pendingBooking,
+  onCancelBooking,
 }: {
   eligibleReport: PreAssessment | null;
   latestReport: PreAssessment | null;
   paidBooking: BookingReceipt | null;
   pendingBooking: BookingReceipt | null;
+  onCancelBooking: (idPemesananKonsultasi: number) => Promise<void>;
 }) {
   if (paidBooking) {
     return (
@@ -266,7 +333,13 @@ function BookingGate({
               Kamu sudah memilih jadwal. Lanjutkan pembayaran agar jadwal masuk ke kalender psikolog.
             </p>
           </div>
-          <BookingSummaryCard booking={pendingBooking} />
+          <div className="w-full max-w-[380px] space-y-3">
+            <BookingSummaryCard booking={pendingBooking} />
+            <CancelPendingBookingButton
+              bookingId={pendingBooking.id_pemesanan_konsultasi}
+              onCancelBooking={onCancelBooking}
+            />
+          </div>
         </div>
       </DashboardCard>
     );
@@ -344,6 +417,58 @@ function BookingGate({
         ))}
       </div>
     </DashboardCard>
+  );
+}
+
+function CancelPendingBookingButton({
+  bookingId,
+  onCancelBooking,
+}: {
+  bookingId: number;
+  onCancelBooking: (idPemesananKonsultasi: number) => Promise<void>;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function handleCancel() {
+    if (loading) return;
+    setLoading(true);
+    setMessage("");
+
+    try {
+      await onCancelBooking(bookingId);
+      setMessage("Booking pending dibatalkan. Slot sudah dilepas untuk dipilih ulang.");
+    } catch {
+      setMessage("");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-[14px] border border-amber-200 bg-amber-50 px-4 py-4">
+      <p className="text-[13px] font-medium leading-6 text-amber-900">
+        Belum ingin membayar sekarang? Batalkan booking pending agar slot kembali tersedia.
+      </p>
+      <button
+        type="button"
+        onClick={handleCancel}
+        disabled={loading}
+        className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-amber-300 bg-white px-4 text-[13px] font-bold text-amber-900 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-70"
+      >
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <Ban className="h-4 w-4" aria-hidden="true" />
+        )}
+        Batalkan Booking Pending
+      </button>
+      {message ? (
+        <p className="mt-3 text-[12px] font-semibold leading-5 text-primary">
+          {message}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

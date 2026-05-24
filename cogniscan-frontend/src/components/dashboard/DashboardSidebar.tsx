@@ -1,11 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useBackendUser } from "@/lib/useBackendUser";
+import { supabase } from "@/lib/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export type DashboardNavItem = {
   label: string;
@@ -34,6 +47,20 @@ export function DashboardSidebar({
   profileHref,
 }: DashboardSidebarProps) {
   const backendUser = useBackendUser();
+  const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await supabase.auth.signOut();
+      router.push(logoutHref);
+    } catch (error) {
+      console.error("Gagal keluar:", error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
   const displayUser = {
     ...user,
     name: backendUser?.nama_lengkap?.trim() || user.name,
@@ -107,13 +134,35 @@ export function DashboardSidebar({
               {profileContent}
             </div>
           )}
-          <Link
-            href={logoutHref}
-            aria-label="Keluar"
-            className="rounded-md p-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary"
-          >
-            <LogOut className="h-5 w-5" aria-hidden="true" />
-          </Link>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                type="button"
+                aria-label="Keluar"
+                className="cursor-pointer rounded-md p-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary"
+              >
+                <LogOut className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Keluar dari CogniScan?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Apakah Anda yakin ingin keluar dari akun Anda? Anda harus masuk kembali untuk mengakses dashboard Anda.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Batal</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  variant="destructive"
+                >
+                  {isLoggingOut ? "Keluar..." : "Keluar"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </aside>

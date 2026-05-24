@@ -1,87 +1,102 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
 export default function Navbar() {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Close mobile menu on resize to desktop
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth >= 968) setMobileOpen(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [mobileOpen]);
+
+  const navLinks = [
+    { href: "#cara-kerja", label: "Cara Kerja" },
+    { href: "#fitur", label: "Fitur" },
+    { href: "#faq", label: "Pertanyaan" },
+    { href: "#untuk-siapa", label: "Daftar Sebagai Psikolog" },
+  ];
+
   return (
-    <nav
-      className="sticky top-0 z-100"
-      style={{
-        background: "rgba(227, 224, 215, 0.6)",
-        backdropFilter: "blur(24px)",
-        WebkitBackdropFilter: "blur(24px)",
-      }}
-    >
-      <div
-        className="flex items-center justify-between"
-        style={{
-          padding: "16px 32px",
-          maxWidth: "1240px",
-          marginLeft: "auto",
-          marginRight: "auto",
-        }}
-      >
-        {/* Logo */}
-        <Link href="#" className="no-underline">
-          <Image
-            src="/logo.png"
-            alt="CogniScan Logo"
-            width={150}
-            height={40}
-            priority
-          />
-        </Link>
-
-        {/* Nav links */}
-        <div className="flex items-center" style={{ gap: "36px" }}>
-          <Link
-            href="#cara-kerja"
-            className="hidden md:inline no-underline transition-colors hover:text-primary"
-            style={{
-              color: "var(--on-surface-variant)",
-              fontSize: "14px",
-              fontWeight: 500,
-            }}
-          >
-            Cara Kerja
-          </Link>
-          <Link
-            href="#fitur"
-            className="hidden md:inline no-underline transition-colors hover:text-primary"
-            style={{
-              color: "var(--on-surface-variant)",
-              fontSize: "14px",
-              fontWeight: 500,
-            }}
-          >
-            Fitur
+    <>
+      <nav className={`landing-nav ${scrolled ? "landing-nav--scrolled" : ""}`}>
+        <div className="landing-nav__inner">
+          {/* Logo */}
+          <Link href="#" className="landing-nav__logo">
+            <Image
+              src="/logo.png"
+              alt="CogniScan Logo"
+              width={160}
+              height={44}
+              priority
+            />
           </Link>
 
-          <Link
-            href="#faq"
-            className="hidden md:inline no-underline transition-colors hover:text-primary"
-            style={{
-              color: "var(--on-surface-variant)",
-              fontSize: "14px",
-              fontWeight: 500,
-            }}
+          {/* Desktop nav links */}
+          <div className="landing-nav__links">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="landing-nav__link"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Mobile hamburger */}
+          <button
+            className={`landing-nav__hamburger ${mobileOpen ? "landing-nav__hamburger--open" : ""}`}
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label="Toggle menu"
           >
-            Pertanyaan
-          </Link>
-          <Link
-            href="#untuk-siapa"
-            className="hidden md:inline no-underline transition-colors hover:text-primary"
-            style={{
-              color: "var(--on-surface-variant)",
-              fontSize: "14px",
-              fontWeight: 500,
-            }}
-          >
-            Daftar Sebagai Psikolog
-          </Link>
+            <span />
+            <span />
+            <span />
+          </button>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {/* Mobile menu overlay */}
+      {mobileOpen && (
+        <div className="landing-nav__mobile-overlay" onClick={() => setMobileOpen(false)}>
+          <div
+            className="landing-nav__mobile-menu"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="landing-nav__mobile-link"
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

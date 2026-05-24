@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from api.models.pra_asesmen import PraAsesmen
     from api.models.psikolog import Psikolog
     from api.models.reminder_konsultasi import ReminderKonsultasi
+    from api.models.permintaan_reschedule_konsultasi import PermintaanRescheduleKonsultasi
     from api.models.transaksi_pembayaran import TransaksiPembayaran
 
 
@@ -37,6 +38,8 @@ class PemesananKonsultasi(Base):
     total_biaya: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     status_pembayaran: Mapped[str | None] = mapped_column(Text, default="belum_bayar")
     tanggal_booking: Mapped[str | None] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    alasan_pembatalan_pasien: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dibatalkan_pada: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     pasien: Mapped["Pasien"] = relationship(back_populates="pemesanan_konsultasi")
@@ -46,3 +49,7 @@ class PemesananKonsultasi(Base):
     hasil_konsultasi: Mapped["HasilKonsultasi"] = relationship(back_populates="pemesanan", uselist=False)
     transaksi_pembayaran: Mapped["TransaksiPembayaran"] = relationship(back_populates="pemesanan", uselist=False)
     reminder_konsultasi: Mapped[list["ReminderKonsultasi"]] = relationship(back_populates="pemesanan")
+    permintaan_reschedule: Mapped[list["PermintaanRescheduleKonsultasi"]] = relationship(
+        back_populates="pemesanan",
+        order_by="PermintaanRescheduleKonsultasi.diminta_pada.desc()",
+    )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, status
@@ -25,6 +25,9 @@ from api.services.midtrans_service import (
     verify_midtrans_signature,
 )
 from api.services.meeting_service import ensure_online_meeting_room
+
+
+PAYMENT_EXPIRY_MINUTES = 24 * 60
 
 
 def _generate_order_id(id_transaksi_pembayaran: int) -> str:
@@ -61,6 +64,35 @@ def _confirm_paid_booking(
     ensure_online_meeting_room(booking)
     if booking.jadwal is not None:
         booking.jadwal.apakah_tersedia = False
+
+
+def _as_utc_datetime(value) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _expire_pending_booking_if_deadline_passed(
+    transaction: TransaksiPembayaran,
+    booking: PemesananKonsultasi,
+) -> bool:
+    if booking.status_pembayaran != "belum_bayar":
+        return False
+    if transaction.status_transaksi not in {"menunggu", "proses"}:
+        return False
+
+    deadline = _as_utc_datetime(transaction.batas_waktu_bayar)
+    if deadline is None or deadline > datetime.now(timezone.utc):
+        return False
+
+    transaction.status_transaksi = "kedaluwarsa"
+    booking.status_pembayaran = "kedaluwarsa"
+    booking.status_konsultasi = "payment_kedaluwarsa"
+    if booking.jadwal is not None:
+        booking.jadwal.apakah_tersedia = True
+    return True
 
 
 async def _get_patient_booking(
@@ -112,14 +144,36 @@ async def create_midtrans_payment_for_booking(
         )
 
     transaction = booking.transaksi_pembayaran
+    if transaction is not None:
+        if _expire_pending_booking_if_deadline_passed(transaction, booking):
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Batas waktu pembayaran sudah kedaluwarsa. Silakan buat booking ulang.",
+            )
+        if (
+            transaction.status_transaksi in {"gagal", "kedaluwarsa", "dibatalkan"}
+            or booking.status_pembayaran in {"gagal", "kedaluwarsa", "dibatalkan"}
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Transaksi booking ini sudah tidak dapat dibayar. Silakan buat booking ulang.",
+            )
+
     if transaction is None:
         transaction = TransaksiPembayaran(
             id_pemesanan_konsultasi=booking.id_pemesanan_konsultasi,
             jumlah_bayar=amount,
             status_transaksi="proses",
+            batas_waktu_bayar=datetime.now(timezone.utc)
+            + timedelta(minutes=PAYMENT_EXPIRY_MINUTES),
         )
         db.add(transaction)
         await db.flush()
+    elif transaction.batas_waktu_bayar is None:
+        transaction.batas_waktu_bayar = datetime.now(timezone.utc) + timedelta(
+            minutes=PAYMENT_EXPIRY_MINUTES
+        )
 
     order_id = transaction.midtrans_order_id or _generate_order_id(
         transaction.id_transaksi_pembayaran
@@ -127,6 +181,7 @@ async def create_midtrans_payment_for_booking(
 
     # Gunakan kembali snap token dan redirect url jika sudah ada untuk menghindari error "order_id sudah digunakan"
     if transaction.midtrans_snap_token and transaction.midtrans_redirect_url:
+        await db.commit()
         return MidtransPaymentCreateResponse(
             id_pemesanan_konsultasi=booking.id_pemesanan_konsultasi,
             id_transaksi_pembayaran=transaction.id_transaksi_pembayaran,
@@ -243,7 +298,13 @@ async def process_midtrans_notification(
             booking.status_konsultasi = "menunggu_pembayaran"
         elif internal_status in {"gagal", "kedaluwarsa", "dibatalkan"}:
             booking.status_pembayaran = internal_status
-            booking.status_konsultasi = "menunggu_pembayaran"
+            booking.status_konsultasi = (
+                "payment_kedaluwarsa"
+                if internal_status == "kedaluwarsa"
+                else "dibatalkan"
+                if internal_status == "dibatalkan"
+                else "menunggu_pembayaran"
+            )
             if booking.jadwal is not None:
                 booking.jadwal.apakah_tersedia = True
 
@@ -294,7 +355,13 @@ async def sync_payment_status_if_needed(
                     _confirm_paid_booking(transaction, booking)
                 elif internal_status in {"gagal", "kedaluwarsa", "dibatalkan"}:
                     booking.status_pembayaran = internal_status
-                    booking.status_konsultasi = "menunggu_pembayaran"
+                    booking.status_konsultasi = (
+                        "payment_kedaluwarsa"
+                        if internal_status == "kedaluwarsa"
+                        else "dibatalkan"
+                        if internal_status == "dibatalkan"
+                        else "menunggu_pembayaran"
+                    )
                     if booking.jadwal is not None:
                         booking.jadwal.apakah_tersedia = True
 
@@ -365,6 +432,8 @@ async def get_payment_receipt_by_order_id(
         if booking.jadwal and booking.jadwal.waktu_mulai
         else None,
         tanggal_booking=booking.tanggal_booking,
+        alasan_pembatalan_pasien=booking.alasan_pembatalan_pasien,
+        dibatalkan_pada=booking.dibatalkan_pada,
         waktu_bayar=transaction.waktu_bayar,
         midtrans_transaction_id=transaction.midtrans_transaction_id,
         midtrans_transaction_status=transaction.midtrans_transaction_status,

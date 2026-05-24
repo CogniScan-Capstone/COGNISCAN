@@ -28,6 +28,22 @@ function hasFeedback(report: PreAssessment) {
   );
 }
 
+function followUpBadge(report: PreAssessment) {
+  if (report.rekomendasi_tindak_lanjut_psikolog === "lanjutkan") {
+    return {
+      label: "Konsultasi Disarankan",
+      tone: "success" as const,
+    };
+  }
+  if (report.rekomendasi_tindak_lanjut_psikolog === "tidak-perlu") {
+    return {
+      label: "Konsultasi Belum Perlu",
+      tone: "info" as const,
+    };
+  }
+  return null;
+}
+
 function reportStatusCopy(report: PreAssessment) {
   if (hasFeedback(report)) {
     return {
@@ -227,6 +243,7 @@ export default function PatientMessagesPage() {
                   const topicSlug = report.konteks_pemicu || "";
                   const currentTopicName = getScreeningTopicLabel(topicSlug);
                   const copy = reportStatusCopy(report);
+                  const followUp = hasFeedback(report) ? followUpBadge(report) : null;
                   const StatusIcon = copy.icon;
 
                   return (
@@ -252,6 +269,11 @@ export default function PatientMessagesPage() {
                               {activeTab === "selesai" ? (
                                 <StatusBadge tone="neutral" className="h-6 bg-surface-container text-[11px] tracking-[0.08em]">
                                   {currentTopicName}
+                                </StatusBadge>
+                              ) : null}
+                              {followUp ? (
+                                <StatusBadge tone={followUp.tone} className="h-6 text-[11px] tracking-[0.08em]">
+                                  {followUp.label}
                                 </StatusBadge>
                               ) : null}
                             </div>

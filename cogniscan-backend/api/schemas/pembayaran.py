@@ -49,6 +49,8 @@ class PaymentReceiptResponse(BaseModel):
     tanggal_konsultasi: date | None = None
     waktu_konsultasi: str | None = None
     tanggal_booking: datetime | None = None
+    alasan_pembatalan_pasien: str | None = None
+    dibatalkan_pada: datetime | None = None
     waktu_bayar: datetime | None = None
     midtrans_transaction_id: str | None = None
     midtrans_transaction_status: str | None = None

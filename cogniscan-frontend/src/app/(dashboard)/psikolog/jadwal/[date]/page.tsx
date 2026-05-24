@@ -5,12 +5,15 @@ import { use, useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
+  CalendarPlus,
   Clock,
   ExternalLink,
   Loader2,
   Mail,
   MapPin,
+  Plus,
   Search,
+  Trash2,
   User,
   Video,
 } from "lucide-react";
@@ -22,7 +25,11 @@ import {
   psikologUser as defaultPsikologUser,
 } from "@/components/psikolog";
 import {
+  createPsikologAvailability,
+  deletePsikologAvailability,
+  fetchPsikologAvailability,
   fetchPsikologScheduleBookings,
+  type PsikologAvailabilitySlot,
   type PsikologScheduleBooking,
 } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
@@ -30,7 +37,17 @@ import { useBackendUser } from "@/lib/useBackendUser";
 import { cn } from "@/lib/utils";
 
 type SessionMethod = "online" | "offline";
-type SessionStatus = "terjadwal" | "berlangsung" | "selesai";
+type SessionStatus =
+  | "terjadwal"
+  | "berlangsung"
+  | "selesai"
+  | "terlewat"
+  | "menunggu_reschedule"
+  | "reschedule_disetujui"
+  | "reschedule_ditolak"
+  | "ditutup"
+  | "dibatalkan_pasien"
+  | "payment_kedaluwarsa";
 type MethodFilter = "semua" | "online" | "offline";
 
 type Session = {
@@ -59,18 +76,60 @@ const statusLabel: Record<SessionStatus, string> = {
   terjadwal: "Terjadwal",
   berlangsung: "Berlangsung",
   selesai: "Selesai",
+  terlewat: "Terlewat",
+  menunggu_reschedule: "Menunggu Reschedule",
+  reschedule_disetujui: "Reschedule Disetujui",
+  reschedule_ditolak: "Reschedule Ditolak",
+  ditutup: "Ditutup",
+  dibatalkan_pasien: "Dibatalkan Pasien",
+  payment_kedaluwarsa: "Pembayaran Kedaluwarsa",
 };
 
 const statusDot: Record<SessionStatus, string> = {
   terjadwal: "bg-on-surface-muted",
   berlangsung: "bg-[#d37300]",
   selesai: "bg-primary",
+  terlewat: "bg-[#d37300]",
+  menunggu_reschedule: "bg-[#d37300]",
+  reschedule_disetujui: "bg-primary",
+  reschedule_ditolak: "bg-[#d13a31]",
+  ditutup: "bg-on-surface-muted",
+  dibatalkan_pasien: "bg-[#d13a31]",
+  payment_kedaluwarsa: "bg-on-surface-muted",
 };
 
 const statusText: Record<SessionStatus, string> = {
   terjadwal: "text-on-surface-muted",
   berlangsung: "text-[#d37300]",
   selesai: "text-primary",
+  terlewat: "text-[#d37300]",
+  menunggu_reschedule: "text-[#d37300]",
+  reschedule_disetujui: "text-primary",
+  reschedule_ditolak: "text-[#d13a31]",
+  ditutup: "text-on-surface-muted",
+  dibatalkan_pasien: "text-[#d13a31]",
+  payment_kedaluwarsa: "text-on-surface-muted",
+};
+
+const timeOptions = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "19:00"];
+
+const slotStatusCopy: Record<string, { label: string; className: string }> = {
+  tersedia: {
+    label: "Tersedia",
+    className: "border-[#c4ddc5] bg-[#eef7ef] text-primary",
+  },
+  terisi: {
+    label: "Terisi",
+    className: "border-[#dbcfee] bg-[#e8e0f0] text-[#6f5794]",
+  },
+  nonaktif: {
+    label: "Nonaktif",
+    className: "border-outline-variant bg-surface-container text-on-surface-muted",
+  },
+  lampau: {
+    label: "Lampau",
+    className: "border-outline-variant bg-surface-container text-on-surface-muted",
+  },
 };
 
 function formatDateId(dateStr: string) {
@@ -122,6 +181,13 @@ function normalizeMethod(value?: string | null): SessionMethod {
 function normalizeStatus(value?: string | null): SessionStatus {
   if (value === "selesai") return "selesai";
   if (value === "berlangsung") return "berlangsung";
+  if (value === "terlewat") return "terlewat";
+  if (value === "menunggu_reschedule") return "menunggu_reschedule";
+  if (value === "reschedule_disetujui") return "reschedule_disetujui";
+  if (value === "reschedule_ditolak") return "reschedule_ditolak";
+  if (value === "dibatalkan_pasien") return "dibatalkan_pasien";
+  if (value === "payment_kedaluwarsa") return "payment_kedaluwarsa";
+  if (value === "ditutup" || value === "dibatalkan") return "ditutup";
   return "terjadwal";
 }
 
@@ -157,8 +223,13 @@ export default function JadwalDetailPage({
   const [query, setQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState<MethodFilter>("semua");
   const [bookings, setBookings] = useState<PsikologScheduleBooking[]>([]);
+  const [availability, setAvailability] = useState<PsikologAvailabilitySlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [slotTime, setSlotTime] = useState("09:00");
+  const [savingSlot, setSavingSlot] = useState(false);
+  const [slotMessage, setSlotMessage] = useState("");
+  const [slotError, setSlotError] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -173,15 +244,25 @@ export default function JadwalDetailPage({
           throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
         }
 
-        const dataBookings = await fetchPsikologScheduleBookings(accessToken, {
-          startDate: date,
-          endDate: date,
-        });
-        if (mounted) setBookings(dataBookings);
+        const [dataBookings, dataAvailability] = await Promise.all([
+          fetchPsikologScheduleBookings(accessToken, {
+            startDate: date,
+            endDate: date,
+          }),
+          fetchPsikologAvailability(accessToken, {
+            startDate: date,
+            endDate: date,
+          }),
+        ]);
+        if (mounted) {
+          setBookings(dataBookings);
+          setAvailability(dataAvailability);
+        }
       } catch (err) {
         if (mounted) {
           setError(err instanceof Error ? err.message : "Gagal memuat jadwal pasien.");
           setBookings([]);
+          setAvailability([]);
         }
       } finally {
         if (mounted) setLoading(false);
@@ -215,6 +296,63 @@ export default function JadwalDetailPage({
       );
     });
   }, [methodFilter, query, sessions]);
+
+  async function getAccessToken() {
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+    }
+    return accessToken;
+  }
+
+  async function reloadAvailability() {
+    const accessToken = await getAccessToken();
+    const dataAvailability = await fetchPsikologAvailability(accessToken, {
+      startDate: date,
+      endDate: date,
+    });
+    setAvailability(dataAvailability);
+  }
+
+  async function handleCreateSlot() {
+    if (!slotTime || savingSlot) return;
+    setSavingSlot(true);
+    setSlotError("");
+    setSlotMessage("");
+
+    try {
+      const accessToken = await getAccessToken();
+      await createPsikologAvailability(accessToken, {
+        tanggal_praktik: date,
+        waktu_mulai: slotTime,
+      });
+      setSlotMessage("Slot berhasil ditambahkan.");
+      await reloadAvailability();
+    } catch (err) {
+      setSlotError(err instanceof Error ? err.message : "Gagal menambahkan slot.");
+    } finally {
+      setSavingSlot(false);
+    }
+  }
+
+  async function handleDeleteSlot(idJadwalPsikolog: number) {
+    if (savingSlot) return;
+    setSavingSlot(true);
+    setSlotError("");
+    setSlotMessage("");
+
+    try {
+      const accessToken = await getAccessToken();
+      const result = await deletePsikologAvailability(accessToken, idJadwalPsikolog);
+      setSlotMessage(result.message || "Slot berhasil dihapus.");
+      await reloadAvailability();
+    } catch (err) {
+      setSlotError(err instanceof Error ? err.message : "Gagal menghapus slot.");
+    } finally {
+      setSavingSlot(false);
+    }
+  }
 
   return (
     <DashboardLayout
@@ -258,6 +396,108 @@ export default function JadwalDetailPage({
               />
             </div>
           </div>
+        </DashboardCard>
+
+        <DashboardCard className="px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h3 className="inline-flex items-center gap-2 text-[18px] font-bold text-on-surface">
+                <CalendarPlus className="h-5 w-5 text-primary" aria-hidden="true" />
+                Slot Availability
+              </h3>
+              <p className="mt-1 text-[14px] text-on-surface-variant">
+                Slot kosong bisa dihapus. Slot terisi dikunci agar jadwal pasien tetap aman.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={slotTime}
+                onChange={(event) => setSlotTime(event.target.value)}
+                className="h-10 rounded-full border border-outline-variant bg-white px-4 text-sm font-semibold text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                {timeOptions.map((time) => (
+                  <option key={time} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleCreateSlot}
+                disabled={savingSlot}
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#365f39] disabled:cursor-wait disabled:opacity-70"
+              >
+                {savingSlot ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+                Tambah Slot
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {availability.length === 0 ? (
+              <p className="rounded-[12px] border border-dashed border-outline-variant px-4 py-5 text-sm font-medium text-on-surface-variant md:col-span-2 xl:col-span-3">
+                Belum ada slot pada tanggal ini.
+              </p>
+            ) : (
+              availability.map((slot) => {
+                const statusInfo = slotStatusCopy[slot.status_slot] ?? slotStatusCopy.nonaktif;
+                const canDelete = slot.status_slot === "tersedia";
+                return (
+                  <div
+                    key={slot.id_jadwal_psikolog}
+                    className="flex items-center justify-between gap-3 rounded-[12px] border border-outline-variant bg-white px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-[17px] font-bold text-on-surface">
+                        {slot.waktu_mulai || "-"}
+                        {slot.waktu_selesai ? (
+                          <span className="text-sm font-medium text-on-surface-muted">
+                            {" "}
+                            - {slot.waktu_selesai}
+                          </span>
+                        ) : null}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex h-6 items-center rounded-full border px-2.5 text-[11px] font-bold",
+                            statusInfo.className,
+                          )}
+                        >
+                          {statusInfo.label}
+                        </span>
+                        {slot.nama_pasien ? (
+                          <span className="text-xs font-medium text-on-surface-variant">
+                            {slot.nama_pasien}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSlot(slot.id_jadwal_psikolog)}
+                      disabled={!canDelete || savingSlot}
+                      aria-label="Hapus slot"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-outline-variant text-on-surface-variant transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {slotMessage ? (
+            <p className="mt-4 rounded-[10px] border border-[#c4ddc5] bg-[#eef7ef] px-4 py-3 text-sm font-semibold text-primary">
+              {slotMessage}
+            </p>
+          ) : null}
+          {slotError ? (
+            <p className="mt-4 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              {slotError}
+            </p>
+          ) : null}
         </DashboardCard>
 
         <DashboardCard className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">

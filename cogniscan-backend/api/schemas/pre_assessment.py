@@ -42,6 +42,7 @@ class PraAsesmenPasienResponse(BaseModel):
     ringkasan_kondisi: str | None = None
     rekomendasi: str | None = None
     feedback_psikolog: str | None = None
+    rekomendasi_tindak_lanjut_psikolog: str | None = None
     status_validasi: str | None = None
     divalidasi_pada: datetime | None = None
     dibuat_pada: datetime | None = None

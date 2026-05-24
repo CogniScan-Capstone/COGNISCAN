@@ -32,6 +32,16 @@ function methodLabel(booking: BookingReceipt) {
 }
 
 function statusLabel(booking: BookingReceipt) {
+  if (
+    booking.status_pembayaran === "kedaluwarsa" ||
+    booking.status_konsultasi === "payment_kedaluwarsa"
+  ) {
+    return "Pembayaran Kedaluwarsa";
+  }
+  if (booking.status_konsultasi === "dibatalkan_pasien") return "Dibatalkan Pasien";
+  if (booking.status_konsultasi === "dibatalkan") return "Dibatalkan";
+  if (booking.status_konsultasi === "ditutup") return "Ditutup";
+  if (booking.status_konsultasi === "selesai") return "Selesai";
   if (booking.status_pembayaran === "dibayar" || booking.status_transaksi === "berhasil") {
     return "Terkonfirmasi";
   }

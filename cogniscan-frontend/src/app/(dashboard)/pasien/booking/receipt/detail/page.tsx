@@ -69,6 +69,14 @@ function methodLabel(receipt: BookingReceipt) {
 }
 
 function statusLabel(receipt: BookingReceipt) {
+  if (
+    receipt.status_pembayaran === "kedaluwarsa" ||
+    receipt.status_konsultasi === "payment_kedaluwarsa"
+  ) {
+    return "Pembayaran Kedaluwarsa";
+  }
+  if (receipt.status_konsultasi === "dibatalkan_pasien") return "Konsultasi Dibatalkan";
+  if (receipt.status_konsultasi === "dibatalkan") return "Booking Dibatalkan";
   if (receipt.status_pembayaran === "dibayar" || receipt.status_transaksi === "berhasil") {
     return "Pembayaran Berhasil";
   }
@@ -230,10 +238,7 @@ export default function BookingReceiptDetailPage() {
   }
 
   const method = receipt.metode_konsultasi || receipt.mode_konsultasi || "-";
-  const title =
-    receipt.status_pembayaran === "dibayar" || receipt.status_transaksi === "berhasil"
-      ? "Pembayaran Berhasil"
-      : "Menunggu Pembayaran";
+  const title = statusLabel(receipt);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-surface px-5 py-10 text-on-surface">
@@ -303,6 +308,15 @@ export default function BookingReceiptDetailPage() {
               {formatTransactionTime(receipt.tanggal_booking)}
             </dd>
           </div>
+
+          {receipt.alasan_pembatalan_pasien ? (
+            <div className="grid grid-cols-[1fr_auto] items-center gap-5 bg-red-50 px-1 py-3">
+              <dt className="text-red-700">Alasan Pembatalan</dt>
+              <dd className="max-w-[260px] text-right font-medium leading-6 text-red-800">
+                {receipt.alasan_pembatalan_pasien}
+              </dd>
+            </div>
+          ) : null}
         </dl>
 
         {receipt.status_pembayaran === "belum_bayar" && (

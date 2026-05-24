@@ -1,14 +1,24 @@
 # Progress CogniScan
 
-Tanggal update: 2026-05-22 (Session 5)
+Tanggal update: 2026-05-25
 
 Dokumen ini menyimpan konteks kerja terbaru untuk sesi berikutnya. Fokus utama saat ini adalah stabilisasi alur end-to-end setelah feedback psikolog: screening teks/voice, assignment psikolog, booking jadwal, pembayaran Midtrans, link konsultasi Jitsi, reschedule paid booking tanpa pembayaran ulang, reminder WhatsApp WAHA, dan tab konsultasi dinamis.
 
 ## Ringkasan Status
 
-Status terkini (2026-05-22):
-- Aplikasi sudah melewati Phase 6B dan Phase 7 MVP utama sudah tersambung: feedback psikolog, pesan pasien, booking, pembayaran, link meeting, jadwal psikolog, tab konsultasi pasien, reschedule paid booking, dan reminder WAHA.
-- Sisa utama sekarang adalah hardening, validasi E2E, flow request/approval reschedule oleh psikolog, scheduler production untuk WAHA, rekam medis/hasil konsultasi, cancel/terlewat/expiry booking, dan manajemen slot jadwal psikolog yang lebih lengkap.
+Status terkini (2026-05-25):
+- Aplikasi sudah melewati Phase 6B dan Phase 7 MVP utama sudah tersambung: feedback psikolog, pesan pasien, booking, pembayaran, link meeting, availability jadwal psikolog, tab konsultasi pasien, flow request/approval reschedule, reschedule paid booking tanpa pembayaran ulang, cancel/no-show/expiry booking, dan reminder WAHA.
+- Sisa utama sekarang adalah hardening, validasi E2E, scheduler production untuk WAHA, rekam medis/hasil konsultasi, testing otomatis, privacy/audit hardening, dan dokumentasi operasional terbaru.
+
+Fitur yang baru diselesaikan (2026-05-25):
+- **Availability jadwal psikolog nyata**: slot booking pasien membaca data `jadwal_psikolog` dari backend; psikolog bisa membuat slot tunggal/bulk, melihat slot tersedia/terisi/lampau, dan menghapus slot kosong.
+- **Flow request/approval reschedule**: pasien mengajukan reschedule, psikolog approve/reject dari panel jadwal, dan pasien baru bisa memilih slot baru setelah request disetujui tanpa pembayaran ulang.
+- **Konsultasi terlewat/no-show**: booking paid yang melewati waktu selesai + grace period 15 menit otomatis berubah menjadi `terlewat`; pasien bisa mengajukan reschedule atau menutup booking.
+- **Cancel booking pending**: pasien bisa membatalkan booking yang belum dibayar; transaksi ditandai `dibatalkan`, slot dilepas, dan riwayat tetap ada.
+- **Cancel konsultasi paid**: pasien bisa membatalkan konsultasi berbayar sebelum waktu mulai dengan konfirmasi no-refund; status menjadi `dibatalkan_pasien`, alasan pembatalan disimpan, slot future dilepas, dan tidak ada refund otomatis.
+- **Payment expiry**: pending payment memiliki batas waktu 24 jam; jika kedaluwarsa, status menjadi `payment_kedaluwarsa`, slot dilepas, dan ada endpoint admin/cron `POST /api/booking/status/refresh`.
+- **Grace period link online**: link Jitsi hanya menjadi CTA masuk ruang saat window konsultasi aktif, yaitu dari waktu mulai sampai waktu selesai + 15 menit.
+- **Label status pasien/psikolog/receipt**: UI pasien dan psikolog sekarang menampilkan label jelas untuk `terlewat`, `dibatalkan_pasien`, `payment_kedaluwarsa`, `menunggu_reschedule`, `reschedule_disetujui`, dan `reschedule_ditolak`.
 
 Fitur yang baru diselesaikan (2026-05-22):
 - **Midtrans payment flow**: backend memiliki service pembayaran/Midtrans, transaksi menyimpan field Snap/order/payment/status Midtrans, frontend booking memakai Snap UI, receipt/detail membaca status pembayaran dinamis, dan webhook/status sync tersedia.
@@ -656,6 +666,22 @@ Yang perlu dijaga:
 - WAHA dianggap siap hanya jika env aktif dan session WAHA sudah login/connected; env terisi saja belum cukup.
 
 ## Verifikasi Terakhir
+
+Yang sudah dijalankan pada update 2026-05-25:
+- Database:
+  - `conda run -n cogniscan-backend alembic upgrade head` berhasil sampai revision `f5a6b7c8d9e0`.
+  - `conda run -n cogniscan-backend alembic heads` menampilkan `f5a6b7c8d9e0 (head)`.
+- Backend:
+  - `python -m py_compile` untuk schema/model/service/router booking-payment-jadwal yang diubah berhasil.
+  - `python -c "from api.main import app; app.openapi(); print('openapi ok', len(app.routes))"` berhasil dengan `openapi ok 55`.
+- Frontend:
+  - `npm.cmd run lint` berhasil.
+  - `npx.cmd tsc --noEmit` berhasil.
+- Repository:
+  - `git diff --check` berhasil; warning yang muncul hanya LF/CRLF normal dari Git.
+- Server lokal:
+  - `http://localhost:3000` merespons `200 OK`.
+  - `http://127.0.0.1:8000/docs` merespons `200 OK`.
 
 Yang sudah dijalankan pada update 2026-05-22:
 - Backend syntax/import:

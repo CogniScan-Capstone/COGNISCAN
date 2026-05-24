@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Loader2,
 } from "lucide-react";
 
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
@@ -19,7 +20,13 @@ import {
   patientUser,
 } from "@/components/patient";
 
-import { createBookingCheckout, reschedulePatientBooking } from "@/lib/auth";
+import {
+  createBookingCheckout,
+  fetchBookingAvailability,
+  fetchBookingRescheduleAvailability,
+  reschedulePatientBooking,
+  type BookingAvailabilitySlot,
+} from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -65,17 +72,6 @@ const dayNames = [
   "Sabtu",
 ];
 
-const times = [
-  "09:00",
-  "10:00",
-  "11:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "19:00",
-];
-
 const methods = [
   { id: "online", label: "Online (Video Call)" },
   { id: "offline", label: "Offline (Tatap Muka)" },
@@ -106,8 +102,6 @@ type DayCell = {
   day: number;
   muted: boolean;
 };
-
-const fullDates = ["2026-05-10", "2026-05-12", "2026-05-18", "2026-05-25"];
 
 function buildCalendarDays(year: number, month: number): DayCell[] {
   const startWeekday = new Date(year, month, 1).getDay();
@@ -175,6 +169,15 @@ function formatDatePayload(date: Date) {
   return formatDateKey(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function monthRange(date: Date) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  return {
+    startDate: formatDateKey(year, month, 1),
+    endDate: formatDateKey(year, month, new Date(year, month + 1, 0).getDate()),
+  };
+}
+
 function startOfDay(date: Date) {
   const value = new Date(date);
   value.setHours(0, 0, 0, 0);
@@ -198,10 +201,6 @@ function slotDateTime(date: Date, time: string) {
 
 function isPastTimeSlot(date: Date, time: string, now: Date) {
   return slotDateTime(date, time).getTime() <= now.getTime();
-}
-
-function availableTimesForDate(date: Date, now: Date) {
-  return times.filter((time) => !isPastTimeSlot(date, time, now));
 }
 
 function getPositiveIntSearchParam(name: string) {
@@ -252,6 +251,7 @@ function loadMidtransSnap(scriptUrl: string, clientKey: string) {
 export default function PatientBookingSchedulePage() {
   const router = useRouter();
   const [rescheduleBookingId] = useState(() => getRescheduleBookingIdParam());
+  const [idPraAsesmen] = useState(() => getIdPraAsesmenParam());
   const [viewDate, setViewDate] = useState(() => {
     const current = new Date();
     return new Date(current.getFullYear(), current.getMonth(), 1);
@@ -268,6 +268,8 @@ export default function PatientBookingSchedulePage() {
   const [error, setError] = useState("");
   const [paymentNotice, setPaymentNotice] = useState("");
   const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState<BookingAvailabilitySlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(true);
   const [now, setNow] = useState(() => new Date());
 
   const [today] = useState(() => {
@@ -302,42 +304,96 @@ export default function PatientBookingSchedulePage() {
     return () => window.clearInterval(timerId);
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadSlots() {
+      setSlotsLoading(true);
+      setError("");
+
+      try {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (!accessToken) {
+          throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+        }
+
+        const range = monthRange(viewDate);
+        const slots = rescheduleBookingId
+          ? await fetchBookingRescheduleAvailability(accessToken, rescheduleBookingId, range)
+          : await fetchBookingAvailability(accessToken, {
+              idPraAsesmen,
+              ...range,
+            });
+
+        if (!mounted) return;
+        setAvailableSlots(slots);
+      } catch (err) {
+        if (mounted) {
+          setAvailableSlots([]);
+          setError(err instanceof Error ? err.message : "Gagal memuat slot jadwal.");
+        }
+      } finally {
+        if (mounted) setSlotsLoading(false);
+      }
+    }
+
+    loadSlots();
+
+    return () => {
+      mounted = false;
+    };
+  }, [idPraAsesmen, rescheduleBookingId, viewDate]);
+
   const cells = buildCalendarDays(viewDate.getFullYear(), viewDate.getMonth());
   const isReschedule = rescheduleBookingId !== null;
   const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const previousMonthUnavailable =
     new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1).getTime() <
     currentMonth.getTime();
+  const availableSlotsByDate = availableSlots.reduce((map, slot) => {
+    if (!slot.tanggal_praktik || !slot.waktu_mulai) return map;
+    const slotDate = new Date(`${slot.tanggal_praktik}T00:00:00`);
+    if (isPastDate(slotDate, today) || isPastTimeSlot(slotDate, slot.waktu_mulai, now)) {
+      return map;
+    }
+    const slots = map.get(slot.tanggal_praktik) ?? [];
+    slots.push(slot);
+    map.set(slot.tanggal_praktik, slots);
+    return map;
+  }, new Map<string, BookingAvailabilitySlot[]>());
+
+  availableSlotsByDate.forEach((slots) => {
+    slots.sort((a, b) => (a.waktu_mulai || "").localeCompare(b.waktu_mulai || ""));
+  });
+
+  const selectedDateKey = selectedDate ? formatDatePayload(selectedDate) : "";
+  const selectedDateSlots = selectedDateKey
+    ? availableSlotsByDate.get(selectedDateKey) ?? []
+    : [];
+  const selectedSlot = selectedDateSlots.find((slot) => slot.waktu_mulai === selectedTime) ?? null;
 
   function canSelectDate(date: Date) {
     if (isPastDate(date, today)) return false;
-    if (fullDates.includes(formatDatePayload(date))) return false;
-    if (isSameYMD(
-      { year: date.getFullYear(), month: date.getMonth(), day: date.getDate() },
-      today,
-    )) {
-      return availableTimesForDate(date, now).length > 0;
-    }
-    return true;
+    return (availableSlotsByDate.get(formatDatePayload(date)) ?? []).length > 0;
   }
 
   function handleSelectDate(date: Date) {
     if (!canSelectDate(date)) return;
 
-    const availableTimes = availableTimesForDate(date, now);
+    const dateSlots = availableSlotsByDate.get(formatDatePayload(date)) ?? [];
     setSelectedDate(date);
-    setSelectedTime((currentTime) =>
-      currentTime && !isPastTimeSlot(date, currentTime, now)
-        ? currentTime
-        : availableTimes[0] ?? "",
-    );
+    setSelectedTime((currentTime) => {
+      const currentStillAvailable = dateSlots.some((slot) => slot.waktu_mulai === currentTime);
+      return currentStillAvailable ? currentTime : dateSlots[0]?.waktu_mulai ?? "";
+    });
   }
 
   async function handleConfirmBooking() {
     if (!selectedDate || !selectedTime || isConfirming) return;
 
-    if (!canSelectDate(selectedDate) || isPastTimeSlot(selectedDate, selectedTime, now)) {
-      setError("Pilih tanggal dan waktu konsultasi yang belum lewat.");
+    if (!canSelectDate(selectedDate) || !selectedSlot || isPastTimeSlot(selectedDate, selectedTime, now)) {
+      setError("Pilih slot jadwal psikolog yang masih tersedia.");
       return;
     }
 
@@ -348,7 +404,11 @@ export default function PatientBookingSchedulePage() {
 
     setIsConfirming(true);
     setError("");
-    setPaymentNotice("");
+    setPaymentNotice(
+      isReschedule
+        ? "Menyimpan perubahan jadwal..."
+        : "Membuat booking dan menyiapkan pembayaran...",
+    );
 
     try {
       const { data } = await supabase.auth.getSession();
@@ -364,6 +424,7 @@ export default function PatientBookingSchedulePage() {
       };
 
       if (isReschedule) {
+        setPaymentNotice("Menyimpan perubahan jadwal...");
         const updatedBooking = await reschedulePatientBooking(
           accessToken,
           rescheduleBookingId,
@@ -382,34 +443,41 @@ export default function PatientBookingSchedulePage() {
 
       const checkout = await createBookingCheckout(accessToken, {
         ...schedulePayload,
-        id_pra_asesmen: getIdPraAsesmenParam(),
+        id_pra_asesmen: idPraAsesmen,
       });
+      setPaymentNotice("Memuat tampilan pembayaran Midtrans...");
 
       try {
         await loadMidtransSnap(checkout.snap_script_url, checkout.client_key);
       } catch {
-        window.location.href = checkout.redirect_url;
+        setPaymentNotice("Mengalihkan ke halaman pembayaran Midtrans...");
+        window.location.assign(checkout.redirect_url);
         return;
       }
 
       if (!window.snap) {
-        window.location.href = checkout.redirect_url;
+        setPaymentNotice("Mengalihkan ke halaman pembayaran Midtrans...");
+        window.location.assign(checkout.redirect_url);
         return;
       }
 
+      setPaymentNotice("Membuka pembayaran Midtrans...");
       window.snap.pay(checkout.snap_token, {
         onSuccess: () => {
+          setPaymentNotice("Pembayaran berhasil. Membuka receipt...");
           router.push(
             `/pasien/booking/receipt/detail?order_id=${encodeURIComponent(checkout.order_id)}`,
           );
         },
         onPending: () => {
+          setPaymentNotice("Pembayaran tercatat menunggu. Membuka receipt...");
           router.push(
             `/pasien/booking/receipt/detail?order_id=${encodeURIComponent(checkout.order_id)}`,
           );
         },
         onError: () => {
           setError("Pembayaran Midtrans gagal diproses. Silakan coba buat pembayaran lagi.");
+          setPaymentNotice("");
           setIsConfirming(false);
         },
         onClose: () => {
@@ -421,6 +489,7 @@ export default function PatientBookingSchedulePage() {
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal membuat booking.");
+      setPaymentNotice("");
       setIsConfirming(false);
     }
   }
@@ -628,13 +697,10 @@ export default function PatientBookingSchedulePage() {
                 const isSelected =
                   selectedDate && isSameYMD(cell, selectedDate);
 
-                const isFull = fullDates.includes(
-                  formatDateKey(cell.year, cell.month, cell.day),
-                );
                 const cellDate = dateFromCell(cell);
                 const isPast = isPastDate(cellDate, today);
-                const isUnavailableToday = isToday && availableTimesForDate(cellDate, now).length === 0;
-                const isDisabled = isFull || isPast || isUnavailableToday;
+                const hasAvailableSlot = canSelectDate(cellDate);
+                const isDisabled = cell.muted || isPast || !hasAvailableSlot;
 
                 return (
                   <button
@@ -673,6 +739,17 @@ export default function PatientBookingSchedulePage() {
                 );
               })}
             </div>
+
+            {slotsLoading ? (
+              <div className="mt-5 flex items-center gap-2 rounded-[10px] bg-surface-container px-3 py-2 text-sm font-medium text-on-surface-variant">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Memuat slot psikolog...
+              </div>
+            ) : availableSlotsByDate.size === 0 ? (
+              <p className="mt-5 rounded-[10px] border border-outline-variant bg-surface-container/40 px-3 py-2 text-sm font-medium text-on-surface-variant">
+                Belum ada slot tersedia di bulan ini.
+              </p>
+            ) : null}
           </DashboardCard>
 
           {/* DETAIL CARD */}
@@ -688,32 +765,34 @@ export default function PatientBookingSchedulePage() {
                   Pilih Waktu
                 </h4>
 
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {times.map((time) => {
-                    const active = selectedTime === time;
-                    const isUnavailable = selectedDate
-                      ? isPastTimeSlot(selectedDate, time, now)
-                      : false;
+                {selectedDateSlots.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {selectedDateSlots.map((slot) => {
+                      const time = slot.waktu_mulai || "";
+                      const active = selectedTime === time;
 
-                    return (
-                      <button
-                        key={time}
-                        type="button"
-                        disabled={isUnavailable}
-                        onClick={() => setSelectedTime(time)}
-                        className={cn(
-                          "h-10 rounded-full border border-outline-variant bg-white text-[15px] font-medium transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 disabled:hover:border-outline-variant",
+                      return (
+                        <button
+                          key={slot.id_jadwal_psikolog}
+                          type="button"
+                          onClick={() => setSelectedTime(time)}
+                          className={cn(
+                            "h-10 rounded-full border border-outline-variant bg-white text-[15px] font-medium transition-colors hover:border-primary hover:text-primary",
 
-                          active &&
-                            !isUnavailable &&
-                            "border-[#7a9479] bg-[#7a9479] text-white hover:border-[#7a9479] hover:text-white",
-                        )}
-                      >
-                        {time}
-                      </button>
-                    );
-                  })}
-                </div>
+                            active &&
+                              "border-[#7a9479] bg-[#7a9479] text-white hover:border-[#7a9479] hover:text-white",
+                          )}
+                        >
+                          {time}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="rounded-[10px] border border-outline-variant bg-surface-container/40 px-4 py-3 text-sm font-medium text-on-surface-variant">
+                    Belum ada slot tersedia pada tanggal ini.
+                  </p>
+                )}
               </section>
 
               {/* METHOD */}
@@ -791,6 +870,12 @@ export default function PatientBookingSchedulePage() {
               ) : null}
 
               {/* BUTTON */}
+              {isConfirming && paymentNotice ? (
+                <div className="mt-8 flex items-center gap-3 rounded-[12px] border border-[#c2d8c6] bg-[#eef7ef] px-4 py-3 text-sm font-semibold text-primary">
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+                  <span>{paymentNotice}</span>
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={handleConfirmBooking}
@@ -798,24 +883,35 @@ export default function PatientBookingSchedulePage() {
                   isConfirming ||
                   !selectedDate ||
                   !selectedTime ||
+                  !selectedSlot ||
                   (!isReschedule && !policyAccepted) ||
                   isPastTimeSlot(selectedDate, selectedTime, now)
                 }
-                className="mt-8 inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#7a9479] px-8 text-[16px] font-semibold text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition hover:-translate-y-0.5 hover:bg-[#6a8669] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
+                className={cn(
+                  "inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#7a9479] px-8 text-[16px] font-semibold text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition hover:-translate-y-0.5 hover:bg-[#6a8669] disabled:opacity-70 disabled:hover:translate-y-0",
+                  isConfirming ? "mt-4 cursor-wait" : "mt-8 disabled:cursor-not-allowed",
+                )}
               >
-                {isConfirming
-                  ? "Mengonfirmasi..."
-                  : isReschedule
-                    ? "Simpan Jadwal Baru"
-                    : "Konfirmasi Booking"}
-                <ChevronRight className="h-5 w-5" />
+                {isConfirming ? (
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                ) : null}
+                <span>
+                  {isConfirming
+                    ? isReschedule
+                      ? "Menyimpan Jadwal..."
+                      : "Menyiapkan Pembayaran..."
+                    : isReschedule
+                      ? "Simpan Jadwal Baru"
+                      : "Konfirmasi Booking"}
+                </span>
+                {!isConfirming ? <ChevronRight className="h-5 w-5" /> : null}
               </button>
               {error ? (
                 <p className="mt-4 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
                   {error}
                 </p>
               ) : null}
-              {paymentNotice ? (
+              {!isConfirming && paymentNotice ? (
                 <p className="mt-4 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
                   {paymentNotice}
                 </p>

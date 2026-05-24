@@ -166,6 +166,28 @@ export type BookingReschedulePayload = {
   mode_konsultasi: ConsultationMethod;
 };
 
+export type BookingCancelPayload = {
+  alasan_pasien?: string | null;
+  konfirmasi_no_refund?: boolean;
+};
+
+export type RescheduleRequest = {
+  id_permintaan_reschedule: number;
+  id_pemesanan_konsultasi: number;
+  id_pasien?: number | null;
+  nama_pasien?: string | null;
+  id_psikolog?: number | null;
+  nama_psikolog?: string | null;
+  status: "pending" | "disetujui" | "ditolak" | "dibatalkan" | "selesai" | string;
+  alasan_pasien: string;
+  catatan_psikolog?: string | null;
+  diminta_pada?: string | null;
+  direspons_pada?: string | null;
+  tanggal_konsultasi?: string | null;
+  waktu_konsultasi?: string | null;
+  waktu_selesai?: string | null;
+};
+
 export type BookingCheckoutResponse = {
   id_pemesanan_konsultasi: number;
   id_transaksi_pembayaran: number;
@@ -208,10 +230,13 @@ export type BookingReceipt = {
   status_konsultasi?: string | null;
   status_pembayaran?: string | null;
   tanggal_booking?: string | null;
+  alasan_pembatalan_pasien?: string | null;
+  dibatalkan_pada?: string | null;
   waktu_bayar?: string | null;
   midtrans_transaction_id?: string | null;
   midtrans_transaction_status?: string | null;
   midtrans_fraud_status?: string | null;
+  reschedule_request?: RescheduleRequest | null;
 };
 
 export type PsikologScheduleBooking = {
@@ -231,6 +256,63 @@ export type PsikologScheduleBooking = {
   lokasi_konsultasi?: string | null;
   konteks_pemicu?: string | null;
   indikator_urgensi?: string | null;
+  reschedule_request?: RescheduleRequest | null;
+};
+
+export type BookingAvailabilitySlot = {
+  id_jadwal_psikolog: number;
+  id_psikolog?: number | null;
+  nama_psikolog?: string | null;
+  tanggal_praktik?: string | null;
+  waktu_mulai?: string | null;
+  waktu_selesai?: string | null;
+  lokasi_konsultasi?: string | null;
+  tarif_konsultasi?: string | number | null;
+};
+
+export type PsikologAvailabilitySlot = {
+  id_jadwal_psikolog: number;
+  id_psikolog?: number | null;
+  tanggal_praktik?: string | null;
+  waktu_mulai?: string | null;
+  waktu_selesai?: string | null;
+  apakah_tersedia?: boolean | null;
+  status_slot: "tersedia" | "terisi" | "nonaktif" | "lampau" | string;
+  id_pemesanan_konsultasi?: number | null;
+  nama_pasien?: string | null;
+  mode_konsultasi?: string | null;
+  status_konsultasi?: string | null;
+  status_pembayaran?: string | null;
+};
+
+export type BookingStatusRefreshResponse = {
+  checked: number;
+  payment_expired: number;
+  missed: number;
+  slots_released: number;
+  message: string;
+};
+
+export type PsikologAvailabilityCreatePayload = {
+  tanggal_praktik: string;
+  waktu_mulai: string;
+  waktu_selesai?: string | null;
+};
+
+export type PsikologAvailabilityBulkCreatePayload = {
+  start_date: string;
+  end_date: string;
+  weekdays: number[];
+  slots: Array<{
+    waktu_mulai: string;
+    waktu_selesai?: string | null;
+  }>;
+};
+
+export type PsikologAvailabilityBulkCreateResponse = {
+  created_count: number;
+  skipped_count: number;
+  slots: PsikologAvailabilitySlot[];
 };
 
 export type PatientLatestScreeningStatus = {
@@ -653,6 +735,58 @@ export async function assignPreAssessmentPsychologist(
   return response.json() as Promise<PreAssessment>;
 }
 
+export async function fetchBookingAvailability(
+  accessToken: string,
+  params: { idPraAsesmen?: number | null; startDate?: string; endDate?: string } = {},
+): Promise<BookingAvailabilitySlot[]> {
+  const searchParams = new URLSearchParams();
+  if (params.idPraAsesmen) searchParams.set("id_pra_asesmen", String(params.idPraAsesmen));
+  if (params.startDate) searchParams.set("start_date", params.startDate);
+  if (params.endDate) searchParams.set("end_date", params.endDate);
+
+  const query = searchParams.toString();
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/booking/availability${query ? `?${query}` : ""}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<BookingAvailabilitySlot[]>;
+}
+
+export async function fetchBookingRescheduleAvailability(
+  accessToken: string,
+  idPemesananKonsultasi: number,
+  params: { startDate?: string; endDate?: string } = {},
+): Promise<BookingAvailabilitySlot[]> {
+  const searchParams = new URLSearchParams();
+  if (params.startDate) searchParams.set("start_date", params.startDate);
+  if (params.endDate) searchParams.set("end_date", params.endDate);
+
+  const query = searchParams.toString();
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/booking/${idPemesananKonsultasi}/availability${query ? `?${query}` : ""}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<BookingAvailabilitySlot[]>;
+}
+
 export async function createBookingCheckout(
   accessToken: string,
   payload: BookingCheckoutPayload,
@@ -687,6 +821,75 @@ export async function reschedulePatientBooking(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<BookingReceipt>;
+}
+
+export async function cancelPatientBooking(
+  accessToken: string,
+  idPemesananKonsultasi: number,
+  payload: BookingCancelPayload,
+): Promise<BookingReceipt> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/booking/${idPemesananKonsultasi}/cancel`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<BookingReceipt>;
+}
+
+export async function requestPatientBookingReschedule(
+  accessToken: string,
+  idPemesananKonsultasi: number,
+  alasanPasien: string,
+): Promise<BookingReceipt> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/booking/${idPemesananKonsultasi}/reschedule-request`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ alasan_pasien: alasanPasien }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<BookingReceipt>;
+}
+
+export async function closeMissedPatientBooking(
+  accessToken: string,
+  idPemesananKonsultasi: number,
+): Promise<BookingReceipt> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/booking/${idPemesananKonsultasi}/close-missed`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
   );
 
@@ -756,6 +959,164 @@ export async function fetchPsikologScheduleBookings(
   }
 
   return response.json() as Promise<PsikologScheduleBooking[]>;
+}
+
+export async function fetchPsikologAvailability(
+  accessToken: string,
+  params: { startDate?: string; endDate?: string } = {},
+): Promise<PsikologAvailabilitySlot[]> {
+  const searchParams = new URLSearchParams();
+  if (params.startDate) searchParams.set("start_date", params.startDate);
+  if (params.endDate) searchParams.set("end_date", params.endDate);
+
+  const query = searchParams.toString();
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/jadwal/psikolog/availability${query ? `?${query}` : ""}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PsikologAvailabilitySlot[]>;
+}
+
+export async function createPsikologAvailability(
+  accessToken: string,
+  payload: PsikologAvailabilityCreatePayload,
+): Promise<PsikologAvailabilitySlot> {
+  const response = await fetchApi(`${API_BASE_URL}/api/jadwal/psikolog/availability`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PsikologAvailabilitySlot>;
+}
+
+export async function createPsikologAvailabilityBulk(
+  accessToken: string,
+  payload: PsikologAvailabilityBulkCreatePayload,
+): Promise<PsikologAvailabilityBulkCreateResponse> {
+  const response = await fetchApi(`${API_BASE_URL}/api/jadwal/psikolog/availability/bulk`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PsikologAvailabilityBulkCreateResponse>;
+}
+
+export async function deletePsikologAvailability(
+  accessToken: string,
+  idJadwalPsikolog: number,
+): Promise<{ message: string }> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/jadwal/psikolog/availability/${idJadwalPsikolog}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<{ message: string }>;
+}
+
+export async function fetchPsikologRescheduleRequests(
+  accessToken: string,
+  params: { status?: string | null } = { status: "pending" },
+): Promise<RescheduleRequest[]> {
+  const searchParams = new URLSearchParams();
+  if (params.status) searchParams.set("status", params.status);
+
+  const query = searchParams.toString();
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/jadwal/psikolog/reschedule-requests${query ? `?${query}` : ""}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<RescheduleRequest[]>;
+}
+
+export async function approvePsikologRescheduleRequest(
+  accessToken: string,
+  idPermintaanReschedule: number,
+  catatanPsikolog?: string,
+): Promise<RescheduleRequest> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/jadwal/psikolog/reschedule-requests/${idPermintaanReschedule}/approve`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ catatan_psikolog: catatanPsikolog || null }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<RescheduleRequest>;
+}
+
+export async function rejectPsikologRescheduleRequest(
+  accessToken: string,
+  idPermintaanReschedule: number,
+  catatanPsikolog: string,
+): Promise<RescheduleRequest> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/jadwal/psikolog/reschedule-requests/${idPermintaanReschedule}/reject`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ catatan_psikolog: catatanPsikolog }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<RescheduleRequest>;
 }
 
 export async function fetchPatientDashboardSummary(

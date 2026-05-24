@@ -23,6 +23,21 @@ import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
 
 const rebookablePaymentStatuses = new Set(["gagal", "kedaluwarsa", "dibatalkan"]);
+type FollowUpRecommendation = "lanjutkan" | "tidak-perlu";
+
+const followUpCopy: Record<FollowUpRecommendation, { label: string }> = {
+  lanjutkan: {
+    label: "Konsultasi Disarankan",
+  },
+  "tidak-perlu": {
+    label: "Konsultasi Belum Perlu",
+  },
+};
+
+function normalizeFollowUpRecommendation(value?: string | null): FollowUpRecommendation | null {
+  if (value === "lanjutkan" || value === "tidak-perlu") return value;
+  return null;
+}
 
 function isPaidBooking(booking: BookingReceipt) {
   return booking.status_pembayaran === "dibayar" || booking.status_transaksi === "berhasil";
@@ -171,6 +186,9 @@ function PatientMessageDetailContent() {
     relatedBooking && !paidBooking && isPendingBooking(relatedBooking)
       ? relatedBooking
       : null;
+  const followUpRecommendation = normalizeFollowUpRecommendation(
+    report.rekomendasi_tindak_lanjut_psikolog,
+  );
 
   return (
     <DashboardLayout
@@ -207,7 +225,32 @@ function PatientMessageDetailContent() {
 
             <div className="mt-10 space-y-5 text-[16px] leading-8 text-on-surface-variant">
               {hasFeedback ? (
-                <p className="whitespace-pre-wrap">{report.feedback_psikolog}</p>
+                <>
+                  <p className="whitespace-pre-wrap">{report.feedback_psikolog}</p>
+
+                  {followUpRecommendation ? (
+                    <div className="mt-7 flex flex-wrap items-center gap-3">
+                      <span
+                        className={[
+                          "inline-flex h-9 items-center gap-2 rounded-full border px-4 text-[12px] font-extrabold uppercase tracking-[0.08em]",
+                          followUpRecommendation === "lanjutkan"
+                            ? "border-[#c2d8c6] bg-[#e5efe5] text-primary"
+                            : "border-[#c7d5ec] bg-[#e8effb] text-[#47658f]",
+                        ].join(" ")}
+                      >
+                        {followUpRecommendation === "lanjutkan" ? (
+                          <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        {followUpCopy[followUpRecommendation].label}
+                      </span>
+                      <span className="text-[13px] font-semibold text-on-surface-muted">
+                        Rekomendasi tindak lanjut dari psikolog
+                      </span>
+                    </div>
+                  ) : null}
+                </>
               ) : (
                 <div className="rounded-[12px] border border-dashed border-outline-variant bg-surface-container/30 px-6 py-8 text-center">
                   <p className="text-[15px] italic text-on-surface-muted">
@@ -312,13 +355,27 @@ function PatientMessageDetailContent() {
                 ) : (
                   <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex gap-4">
-                      <CalendarDays className="mt-1 h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+                      <CalendarDays
+                        className={[
+                          "mt-1 h-6 w-6 shrink-0",
+                          followUpRecommendation === "tidak-perlu" ? "text-[#47658f]" : "text-primary",
+                        ].join(" ")}
+                        aria-hidden="true"
+                      />
                       <div>
                         <h4 className="text-[18px] font-extrabold text-on-surface">
-                          Ingin lanjut konsultasi?
+                          {followUpRecommendation === "lanjutkan"
+                            ? "Konsultasi lanjutan disarankan"
+                            : followUpRecommendation === "tidak-perlu"
+                              ? "Konsultasi lanjutan tetap tersedia"
+                            : "Ingin lanjut konsultasi?"}
                         </h4>
                         <p className="mt-2 text-[15px] leading-7 text-on-surface-variant">
-                          Pilih jadwal konsultasi dengan psikolog yang meninjau feedback ini.
+                          {followUpRecommendation === "lanjutkan"
+                            ? "Pilih jadwal konsultasi dengan psikolog yang meninjau feedback ini."
+                            : followUpRecommendation === "tidak-perlu"
+                              ? "Psikolog menilai konsultasi belum terlalu diperlukan, tetapi kamu tetap bisa menjadwalkan sesi jika ingin membahas feedback ini lebih detail."
+                            : "Pilih jadwal konsultasi jika kamu ingin membahas feedback ini lebih lanjut."}
                         </p>
                       </div>
                     </div>
@@ -339,7 +396,9 @@ function PatientMessageDetailContent() {
                         }
                         className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-extrabold text-white transition hover:bg-[#365f39]"
                       >
-                        Lanjut Konsultasi
+                        {followUpRecommendation === "tidak-perlu"
+                          ? "Tetap Lanjut Konsultasi"
+                          : "Lanjut Konsultasi"}
                         <ArrowRight className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>

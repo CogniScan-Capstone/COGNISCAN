@@ -23,6 +23,40 @@ class BookingRescheduleRequest(BaseModel):
     mode_konsultasi: ConsultationMode
 
 
+class BookingCancelRequest(BaseModel):
+    alasan_pasien: str | None = Field(default=None, max_length=1000)
+    konfirmasi_no_refund: bool = False
+
+
+class BookingRescheduleRequestCreate(BaseModel):
+    alasan_pasien: str = Field(..., min_length=10, max_length=1000)
+
+
+class BookingRescheduleDecisionRequest(BaseModel):
+    catatan_psikolog: str | None = Field(default=None, max_length=1000)
+
+
+class BookingRescheduleRejectRequest(BaseModel):
+    catatan_psikolog: str = Field(..., min_length=5, max_length=1000)
+
+
+class BookingRescheduleRequestResponse(BaseModel):
+    id_permintaan_reschedule: int
+    id_pemesanan_konsultasi: int
+    id_pasien: int | None = None
+    nama_pasien: str | None = None
+    id_psikolog: int | None = None
+    nama_psikolog: str | None = None
+    status: str
+    alasan_pasien: str
+    catatan_psikolog: str | None = None
+    diminta_pada: datetime | None = None
+    direspons_pada: datetime | None = None
+    tanggal_konsultasi: date | None = None
+    waktu_konsultasi: str | None = None
+    waktu_selesai: str | None = None
+
+
 class BookingCheckoutResponse(BaseModel):
     id_pemesanan_konsultasi: int
     id_transaksi_pembayaran: int
@@ -64,6 +98,20 @@ class BookingReceiptResponse(BaseModel):
     status_konsultasi: str | None = None
     status_pembayaran: str | None = None
     tanggal_booking: datetime | None = None
+    alasan_pembatalan_pasien: str | None = None
+    dibatalkan_pada: datetime | None = None
+    reschedule_request: BookingRescheduleRequestResponse | None = None
+
+
+class BookingAvailabilitySlotResponse(BaseModel):
+    id_jadwal_psikolog: int
+    id_psikolog: int | None = None
+    nama_psikolog: str | None = None
+    tanggal_praktik: date | None = None
+    waktu_mulai: str | None = None
+    waktu_selesai: str | None = None
+    lokasi_konsultasi: str | None = None
+    tarif_konsultasi: Decimal | None = None
 
 
 class BookingReminderDispatchResponse(BaseModel):
@@ -71,4 +119,12 @@ class BookingReminderDispatchResponse(BaseModel):
     sent: int
     skipped: int
     failed: int
+    message: str
+
+
+class BookingStatusRefreshResponse(BaseModel):
+    checked: int
+    payment_expired: int
+    missed: int
+    slots_released: int
     message: str
