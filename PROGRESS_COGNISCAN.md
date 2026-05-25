@@ -11,7 +11,7 @@ Status terkini (2026-05-25):
 - Sisa utama sekarang adalah hardening, validasi E2E manual, apply migration terbaru ke database aktif, scheduler production untuk WAHA, rekam medis lanjutan, testing otomatis, privacy/audit hardening, dan dokumentasi operasional terbaru.
 
 Fitur yang baru diselesaikan (2026-05-25):
-- **Hasil konsultasi psikolog**: psikolog bisa menutup sesi dari detail jadwal, menandai pasien hadir/tidak hadir, menulis ringkasan untuk pasien, rekomendasi, catatan internal, dan kebutuhan sesi lanjutan.
+- **Hasil konsultasi psikolog**: psikolog bisa menutup sesi dari detail jadwal, menandai pasien hadir/tidak hadir, menulis ringkasan untuk pasien, rekomendasi, dan catatan internal.
 - **Follow-up booking tanpa screening ulang**: pasien bisa booking sesi lanjutan dari konsultasi yang sudah selesai/ditutup memakai `id_booking_sebelumnya`, tanpa membuat `pra_asesmen` baru.
 - **UX screening teks/voice**: halaman jawab pertanyaan sekarang memakai segmented control `Tulis Jawaban` / `Rekam Suara`, input dibuat eksklusif, consent dipindah dekat tombol global, dan visualizer rekaman membaca frekuensi mikrofon real-time.
 - **Availability jadwal psikolog nyata**: slot booking pasien membaca data `jadwal_psikolog` dari backend; psikolog bisa membuat slot tunggal/bulk, melihat slot tersedia/terisi/lampau, dan menghapus slot kosong.
@@ -286,7 +286,7 @@ Yang sudah ada:
 - Booking normal pasien wajib meminta persetujuan kebijakan no-refund/no-show dan reschedule sebelum membuka Midtrans.
 - Reschedule paid booking mempertahankan transaksi lama, membuka slot lama, mengunci slot baru, dan tidak membuat Snap transaction baru.
 - Booking yang melewati waktu selesai + grace period masuk status `menunggu_konfirmasi_psikolog`, lalu psikolog menentukan `selesai` atau `terlewat`.
-- Hasil konsultasi menyimpan `pasien_hadir`, `ringkasan_untuk_pasien`, `rekomendasi`, `catatan_internal`, dan `perlu_sesi_lanjutan`.
+- Hasil konsultasi menyimpan `pasien_hadir`, `ringkasan_untuk_pasien`, `rekomendasi`, dan `catatan_internal`; sesi lanjutan tidak dibatasi oleh checkbox psikolog.
 - Receipt dan list konsultasi pasien membawa ringkasan/rekomendasi hasil konsultasi yang memang boleh dilihat pasien.
 - Reminder WhatsApp memakai WAHA `POST /api/sendText`, konfigurasi env `WAHA_ENABLED`, `WAHA_BASE_URL`, `WAHA_API_KEY`, `WAHA_SESSION`, dan `WAHA_SEND_TIMEOUT_SECONDS`.
 - Tabel `reminder_konsultasi` menjadi log idempotency agar pasien tidak menerima reminder dobel untuk booking dan tipe reminder yang sama.
@@ -445,7 +445,7 @@ Yang sudah ada:
 - Konsultasi offline menampilkan alamat praktik psikolog, hari, tanggal, dan waktu.
 - `/psikolog/jadwal` dan detail tanggal membaca booking pasien dari backend.
 - Status `menunggu_konfirmasi_psikolog` ditampilkan sebagai kondisi pasca-waktu konsultasi yang masih menunggu keputusan psikolog.
-- Detail jadwal psikolog memiliki form `Selesaikan Konsultasi` untuk menandai hadir/tidak hadir, ringkasan pasien, rekomendasi, catatan internal, dan perlu sesi lanjutan.
+- Detail jadwal psikolog memiliki form `Selesaikan Konsultasi` untuk menandai hadir/tidak hadir, ringkasan pasien, rekomendasi, dan catatan internal.
 - Pasien melihat ringkasan dan rekomendasi hasil konsultasi yang memang ditujukan untuk pasien, bukan catatan internal.
 - Konsultasi yang sudah `selesai` atau `ditutup` bisa membuka CTA `Booking Sesi Lanjutan`.
 

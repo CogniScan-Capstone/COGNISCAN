@@ -66,6 +66,21 @@ def _slot_end_time(tanggal: date_type, start_time):
     return (start + timedelta(minutes=CONSULTATION_DURATION_MINUTES)).time()
 
 
+def _time_to_minutes(value) -> int | None:
+    if value is None:
+        return None
+    if hasattr(value, "hour") and hasattr(value, "minute"):
+        return int(value.hour) * 60 + int(value.minute)
+
+    parts = str(value)[:5].split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        return int(parts[0]) * 60 + int(parts[1])
+    except ValueError:
+        return None
+
+
 def _slot_start_datetime(tanggal: date_type, start_time) -> datetime:
     return datetime.combine(tanggal, start_time).replace(tzinfo=SCHEDULE_TIMEZONE)
 
@@ -192,6 +207,11 @@ async def _find_overlapping_slot(
     if exclude_id is not None:
         query = query.where(JadwalPsikolog.id_jadwal_psikolog != exclude_id)
 
+    new_start = _time_to_minutes(waktu_mulai)
+    new_end = _time_to_minutes(waktu_selesai)
+    if new_start is None or new_end is None:
+        return None
+
     result = await db.execute(query)
     for slot in result.scalars().all():
         existing_start = slot.waktu_mulai
@@ -201,7 +221,11 @@ async def _find_overlapping_slot(
             tanggal_praktik,
             existing_start,
         )
-        if existing_start and waktu_mulai < existing_end and waktu_selesai > existing_start:
+        existing_start_minutes = _time_to_minutes(existing_start)
+        existing_end_minutes = _time_to_minutes(existing_end)
+        if existing_start_minutes is None or existing_end_minutes is None:
+            continue
+        if existing_start_minutes < new_end and existing_end_minutes > new_start:
             return slot
     return None
 
