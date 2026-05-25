@@ -632,11 +632,6 @@ function ConsultationCard({
                   <span className="font-medium">{booking.hasil_konsultasi_rekomendasi}</span>
                 </p>
               ) : null}
-              {booking.perlu_sesi_lanjutan ? (
-                <p className="mt-2 font-semibold text-primary">
-                  Psikolog membuka opsi sesi lanjutan untuk konsultasi ini.
-                </p>
-              ) : null}
             </div>
           ) : null}
 

@@ -69,7 +69,6 @@ type Session = {
   resultSummary?: string | null;
   resultRecommendation?: string | null;
   patientAttended?: boolean | null;
-  needsFollowup?: boolean | null;
 };
 
 const topicToneClass: Record<Session["topicTone"], string> = {
@@ -123,6 +122,10 @@ const statusText: Record<SessionStatus, string> = {
 };
 
 const timeOptions = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "19:00"];
+
+function normalizeSlotTime(value?: string | null) {
+  return value ? value.slice(0, 5) : "";
+}
 
 const slotStatusCopy: Record<string, { label: string; className: string }> = {
   tersedia: {
@@ -220,7 +223,6 @@ function toSession(booking: PsikologScheduleBooking): Session {
     resultSummary: booking.hasil_konsultasi_ringkasan,
     resultRecommendation: booking.hasil_konsultasi_rekomendasi,
     patientAttended: booking.hasil_konsultasi_pasien_hadir,
-    needsFollowup: booking.perlu_sesi_lanjutan,
   };
 }
 
@@ -246,6 +248,12 @@ export default function JadwalDetailPage({
   const [savingSlot, setSavingSlot] = useState(false);
   const [slotMessage, setSlotMessage] = useState("");
   const [slotError, setSlotError] = useState("");
+  const existingSlotTimes = useMemo(
+    () => new Set(availability.map((slot) => normalizeSlotTime(slot.waktu_mulai)).filter(Boolean)),
+    [availability],
+  );
+  const selectedSlotAlreadyExists = existingSlotTimes.has(slotTime);
+  const nextAvailableSlotTime = timeOptions.find((time) => !existingSlotTimes.has(time));
 
   useEffect(() => {
     let mounted = true;
@@ -349,6 +357,12 @@ export default function JadwalDetailPage({
 
   async function handleCreateSlot() {
     if (!slotTime || savingSlot) return;
+    if (selectedSlotAlreadyExists) {
+      setSlotMessage("");
+      setSlotError(`Slot ${slotTime} sudah ada pada tanggal ini.`);
+      return;
+    }
+
     setSavingSlot(true);
     setSlotError("");
     setSlotMessage("");
@@ -457,16 +471,17 @@ export default function JadwalDetailPage({
                 className="h-10 rounded-full border border-outline-variant bg-white px-4 text-sm font-semibold text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
                 {timeOptions.map((time) => (
-                  <option key={time} value={time}>
+                  <option key={time} value={time} disabled={existingSlotTimes.has(time)}>
                     {time}
+                    {existingSlotTimes.has(time) ? " (sudah ada)" : ""}
                   </option>
                 ))}
               </select>
               <button
                 type="button"
                 onClick={handleCreateSlot}
-                disabled={savingSlot}
-                className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#365f39] disabled:cursor-wait disabled:opacity-70"
+                disabled={savingSlot || selectedSlotAlreadyExists || !nextAvailableSlotTime}
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#365f39] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {savingSlot ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
                 Tambah Slot
@@ -621,7 +636,6 @@ function SessionCard({
   const [ringkasan, setRingkasan] = useState(session.resultSummary || "");
   const [rekomendasi, setRekomendasi] = useState(session.resultRecommendation || "");
   const [catatanInternal, setCatatanInternal] = useState("");
-  const [perluSesiLanjutan, setPerluSesiLanjutan] = useState(Boolean(session.needsFollowup));
   const [savingResult, setSavingResult] = useState(false);
   const [resultError, setResultError] = useState("");
 
@@ -636,6 +650,13 @@ function SessionCard({
       session.resultRecommendation ||
       (session.patientAttended !== null && session.patientAttended !== undefined),
   );
+  const canOpenMeetingLink = [
+    "terjadwal",
+    "berlangsung",
+    "menunggu_konfirmasi_psikolog",
+    "menunggu_reschedule",
+    "reschedule_ditolak",
+  ].includes(session.status);
 
   async function handleSubmitResult() {
     if (savingResult) return;
@@ -652,7 +673,6 @@ function SessionCard({
         ringkasan_untuk_pasien: ringkasan.trim() || null,
         catatan_internal: catatanInternal.trim() || null,
         rekomendasi_tindak_lanjut: rekomendasi.trim() || null,
-        perlu_sesi_lanjutan: pasienHadir && perluSesiLanjutan,
       });
       setFormOpen(false);
     } catch (err) {
@@ -702,7 +722,7 @@ function SessionCard({
             {session.method === "online" ? (
               <p className="inline-flex items-center gap-1.5">
                 <Video className="h-3.5 w-3.5" aria-hidden="true" />
-                {session.meetLink ? (
+                {session.meetLink && canOpenMeetingLink ? (
                   <>
                     <a
                       href={session.meetLink.startsWith("http") ? session.meetLink : `https://${session.meetLink}`}
@@ -717,6 +737,8 @@ function SessionCard({
                       aria-hidden="true"
                     />
                   </>
+                ) : session.meetLink ? (
+                  <span>Link meeting dinonaktifkan karena status konsultasi {statusLabel[session.status].toLowerCase()}.</span>
                 ) : (
                   <span>Link meeting belum dibuat</span>
                 )}
@@ -769,10 +791,7 @@ function SessionCard({
 
       {hasResult && !formOpen ? (
         <div className="mt-5 rounded-[12px] border border-[#c4ddc5] bg-[#eef7ef] px-4 py-3 text-sm text-primary">
-          <p className="font-semibold">
-            Hasil konsultasi sudah tersimpan
-            {session.needsFollowup ? " dan sesi lanjutan dibuka." : "."}
-          </p>
+          <p className="font-semibold">Hasil konsultasi sudah tersimpan.</p>
           {session.resultSummary ? (
             <p className="mt-1 leading-6 text-[#3f5a3f]">{session.resultSummary}</p>
           ) : null}
@@ -790,16 +809,6 @@ function SessionCard({
                 className="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/20"
               />
               Pasien hadir
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
-              <input
-                type="checkbox"
-                checked={perluSesiLanjutan}
-                onChange={(event) => setPerluSesiLanjutan(event.target.checked)}
-                disabled={!pasienHadir}
-                className="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/20 disabled:opacity-50"
-              />
-              Buka sesi lanjutan
             </label>
           </div>
 

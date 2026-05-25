@@ -103,6 +103,43 @@ type DayCell = {
   muted: boolean;
 };
 
+const BOOKING_TIME_ZONE = "Asia/Jakarta";
+
+function bookingTimeParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BOOKING_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return {
+    year: Number(value.year),
+    month: Number(value.month) - 1,
+    day: Number(value.day),
+    hour: Number(value.hour),
+    minute: Number(value.minute),
+  };
+}
+
+function bookingDate(date: Date) {
+  const parts = bookingTimeParts(date);
+  return new Date(parts.year, parts.month, parts.day);
+}
+
+function bookingDateTimeKey(date: Date) {
+  const parts = bookingTimeParts(date);
+  return `${formatDateKey(parts.year, parts.month, parts.day)}T${String(parts.hour).padStart(
+    2,
+    "0",
+  )}:${String(parts.minute).padStart(2, "0")}`;
+}
+
 function buildCalendarDays(year: number, month: number): DayCell[] {
   const startWeekday = new Date(year, month, 1).getDay();
 
@@ -192,15 +229,8 @@ function isPastDate(date: Date, today: Date) {
   return startOfDay(date).getTime() < today.getTime();
 }
 
-function slotDateTime(date: Date, time: string) {
-  const [hours, minutes] = time.split(":").map(Number);
-  const value = new Date(date);
-  value.setHours(hours, minutes, 0, 0);
-  return value;
-}
-
 function isPastTimeSlot(date: Date, time: string, now: Date) {
-  return slotDateTime(date, time).getTime() <= now.getTime();
+  return `${formatDatePayload(date)}T${time}` <= bookingDateTimeKey(now);
 }
 
 function getPositiveIntSearchParam(name: string) {
@@ -258,7 +288,7 @@ export default function PatientBookingSchedulePage() {
   const [followupBookingId] = useState(() => getFollowupBookingIdParam());
   const [idPraAsesmen] = useState(() => getIdPraAsesmenParam());
   const [viewDate, setViewDate] = useState(() => {
-    const current = new Date();
+    const current = bookingDate(new Date());
     return new Date(current.getFullYear(), current.getMonth(), 1);
   });
 
@@ -276,14 +306,6 @@ export default function PatientBookingSchedulePage() {
   const [availableSlots, setAvailableSlots] = useState<BookingAvailabilitySlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(true);
   const [now, setNow] = useState(() => new Date());
-
-  const [today] = useState(() => {
-    const current = new Date();
-
-    current.setHours(0, 0, 0, 0);
-
-    return current;
-  });
 
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -353,6 +375,7 @@ export default function PatientBookingSchedulePage() {
 
   const cells = buildCalendarDays(viewDate.getFullYear(), viewDate.getMonth());
   const isReschedule = rescheduleBookingId !== null;
+  const today = bookingDate(now);
   const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const previousMonthUnavailable =
     new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1).getTime() <
