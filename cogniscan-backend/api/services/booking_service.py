@@ -54,6 +54,7 @@ FINAL_CONSULTATION_STATUSES = {
 }
 MISSABLE_CONSULTATION_STATUSES = {"terkonfirmasi", "reschedule_ditolak"}
 ACTIVE_RESCHEDULE_REQUEST_STATUSES = {"pending", "disetujui"}
+FOLLOWUP_SOURCE_STATUSES = {"selesai", "ditutup"}
 
 
 def _as_decimal(value) -> Decimal:
@@ -88,6 +89,13 @@ def _latest_reschedule_request(
     if statuses is not None:
         requests = [request for request in requests if request.status in statuses]
     return requests[0] if requests else None
+
+
+def _loaded_consultation_result(booking: PemesananKonsultasi):
+    loaded_value = inspect(booking).attrs.hasil_konsultasi.loaded_value
+    if loaded_value is NO_VALUE:
+        return None
+    return loaded_value
 
 
 def _booking_end_datetime(booking: PemesananKonsultasi) -> datetime | None:
@@ -189,7 +197,7 @@ def refresh_consultation_status_if_missed(booking: PemesananKonsultasi) -> bool:
     if missed_at > datetime.now(BOOKING_TIMEZONE):
         return False
 
-    booking.status_konsultasi = "terlewat"
+    booking.status_konsultasi = "menunggu_konfirmasi_psikolog"
     return True
 
 
@@ -302,6 +310,47 @@ async def _get_checkout_pre_assessment(
         )
 
     return pra_asesmen
+
+
+async def _get_followup_source_booking(
+    db: AsyncSession,
+    patient: Pasien,
+    id_booking_sebelumnya: int,
+) -> PemesananKonsultasi:
+    result = await db.execute(
+        select(PemesananKonsultasi)
+        .where(
+            PemesananKonsultasi.id_pemesanan_konsultasi == id_booking_sebelumnya,
+            PemesananKonsultasi.id_pasien == patient.id_pasien,
+        )
+        .options(
+            selectinload(PemesananKonsultasi.psikolog),
+            selectinload(PemesananKonsultasi.jadwal),
+            selectinload(PemesananKonsultasi.hasil_konsultasi),
+            selectinload(PemesananKonsultasi.transaksi_pembayaran),
+        )
+        .limit(1)
+    )
+    booking = result.scalar_one_or_none()
+    if booking is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Booking sebelumnya tidak ditemukan",
+        )
+
+    if booking.id_psikolog is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Booking sebelumnya belum memiliki psikolog",
+        )
+
+    if booking.status_konsultasi not in FOLLOWUP_SOURCE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Booking lanjutan hanya bisa dibuat dari konsultasi yang sudah selesai atau ditutup",
+        )
+
+    return booking
 
 
 async def _get_available_slot(
@@ -451,10 +500,31 @@ async def list_patient_booking_availability(
     db: AsyncSession,
     current_user: Pengguna,
     id_pra_asesmen: int | None = None,
+    id_booking_sebelumnya: int | None = None,
     start_date: date_type | None = None,
     end_date: date_type | None = None,
 ) -> list[BookingAvailabilitySlotResponse]:
     patient = await _get_patient(db=db, current_user=current_user)
+    if id_pra_asesmen and id_booking_sebelumnya:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pilih salah satu konteks booking: pra asesmen atau booking sebelumnya",
+        )
+
+    if id_booking_sebelumnya:
+        source_booking = await _get_followup_source_booking(
+            db=db,
+            patient=patient,
+            id_booking_sebelumnya=id_booking_sebelumnya,
+        )
+        return await _list_available_slots_for_psikolog(
+            db=db,
+            psikolog=source_booking.psikolog,
+            id_psikolog=source_booking.id_psikolog or 0,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
     pra_asesmen = await _get_checkout_pre_assessment(
         db=db,
         patient=patient,
@@ -551,6 +621,44 @@ async def _ensure_pre_assessment_has_no_active_booking(
         )
 
 
+async def _ensure_patient_has_no_active_booking_with_psikolog(
+    db: AsyncSession,
+    patient: Pasien,
+    id_psikolog: int,
+) -> None:
+    result = await db.execute(
+        select(PemesananKonsultasi)
+        .where(
+            PemesananKonsultasi.id_pasien == patient.id_pasien,
+            PemesananKonsultasi.id_psikolog == id_psikolog,
+        )
+        .options(
+            selectinload(PemesananKonsultasi.transaksi_pembayaran),
+            selectinload(PemesananKonsultasi.jadwal),
+        )
+        .order_by(PemesananKonsultasi.tanggal_booking.desc())
+    )
+    existing_bookings = list(result.scalars().all())
+
+    for booking in existing_bookings:
+        if booking.transaksi_pembayaran is not None:
+            await sync_payment_status_if_needed(db, booking.transaksi_pembayaran)
+        _expire_pending_payment_if_due(booking)
+
+    active_booking = next(
+        (booking for booking in existing_bookings if not _is_rebookable_booking(booking)),
+        None,
+    )
+    if active_booking is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Kamu masih memiliki booking aktif dengan psikolog ini. "
+                "Selesaikan, reschedule, atau batalkan booking tersebut sebelum membuat sesi baru."
+            ),
+        )
+
+
 async def create_booking_checkout(
     db: AsyncSession,
     current_user: Pengguna,
@@ -559,6 +667,75 @@ async def create_booking_checkout(
     _ensure_schedule_not_in_past(payload.tanggal_konsultasi, payload.waktu_konsultasi)
 
     patient = await _get_patient(db=db, current_user=current_user)
+    if payload.id_pra_asesmen and payload.id_booking_sebelumnya:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Checkout hanya boleh memakai salah satu konteks: pra asesmen atau booking sebelumnya",
+        )
+
+    if payload.id_booking_sebelumnya:
+        source_booking = await _get_followup_source_booking(
+            db=db,
+            patient=patient,
+            id_booking_sebelumnya=payload.id_booking_sebelumnya,
+        )
+        await _ensure_patient_has_no_active_booking_with_psikolog(
+            db=db,
+            patient=patient,
+            id_psikolog=source_booking.id_psikolog or 0,
+        )
+        slot = await _get_available_slot_for_psikolog(
+            db=db,
+            id_psikolog=source_booking.id_psikolog or 0,
+            tanggal_konsultasi=payload.tanggal_konsultasi,
+            waktu_konsultasi=payload.waktu_konsultasi,
+        )
+
+        amount = _booking_fee(source_booking.psikolog)
+        booking = PemesananKonsultasi(
+            id_pasien=patient.id_pasien,
+            id_psikolog=source_booking.id_psikolog,
+            id_jadwal_psikolog=slot.id_jadwal_psikolog,
+            id_pra_asesmen=None,
+            id_booking_sebelumnya=source_booking.id_pemesanan_konsultasi,
+            mode_konsultasi=payload.mode_konsultasi,
+            platform_pertemuan=JITSI_PLATFORM_NAME if payload.mode_konsultasi == "online" else None,
+            total_biaya=amount,
+            status_konsultasi="menunggu_pembayaran",
+            status_pembayaran="belum_bayar",
+        )
+        db.add(booking)
+        await db.flush()
+
+        slot.apakah_tersedia = False
+
+        payment = await create_midtrans_payment_for_booking(
+            db=db,
+            current_user=current_user,
+            id_pemesanan_konsultasi=booking.id_pemesanan_konsultasi,
+        )
+
+        return BookingCheckoutResponse(
+            id_pemesanan_konsultasi=booking.id_pemesanan_konsultasi,
+            id_transaksi_pembayaran=payment.id_transaksi_pembayaran,
+            id_pra_asesmen=None,
+            id_booking_sebelumnya=source_booking.id_pemesanan_konsultasi,
+            id_psikolog=source_booking.id_psikolog or 0,
+            nama_psikolog=source_booking.psikolog.nama_lengkap if source_booking.psikolog else None,
+            tanggal_konsultasi=payload.tanggal_konsultasi,
+            waktu_konsultasi=_display_time(payload.waktu_konsultasi),
+            mode_konsultasi=payload.mode_konsultasi,
+            order_id=payment.order_id,
+            snap_token=payment.snap_token,
+            redirect_url=payment.redirect_url,
+            client_key=payment.client_key,
+            snap_script_url=payment.snap_script_url,
+            jumlah_bayar=payment.jumlah_bayar,
+            status_transaksi=payment.status_transaksi,
+            status_konsultasi=booking.status_konsultasi,
+            status_pembayaran=booking.status_pembayaran,
+        )
+
     pra_asesmen = await _get_checkout_pre_assessment(
         db=db,
         patient=patient,
@@ -568,6 +745,11 @@ async def create_booking_checkout(
         db=db,
         patient=patient,
         pra_asesmen=pra_asesmen,
+    )
+    await _ensure_patient_has_no_active_booking_with_psikolog(
+        db=db,
+        patient=patient,
+        id_psikolog=pra_asesmen.id_psikolog or 0,
     )
     slot = await _get_available_slot(db=db, pra_asesmen=pra_asesmen, payload=payload)
 
@@ -599,6 +781,7 @@ async def create_booking_checkout(
         id_pemesanan_konsultasi=booking.id_pemesanan_konsultasi,
         id_transaksi_pembayaran=payment.id_transaksi_pembayaran,
         id_pra_asesmen=pra_asesmen.id_pra_asesmen,
+        id_booking_sebelumnya=None,
         id_psikolog=pra_asesmen.id_psikolog or 0,
         nama_psikolog=pra_asesmen.psikolog.nama_lengkap if pra_asesmen.psikolog else None,
         tanggal_konsultasi=payload.tanggal_konsultasi,
@@ -633,6 +816,7 @@ async def _get_patient_booking(
             selectinload(PemesananKonsultasi.psikolog),
             selectinload(PemesananKonsultasi.jadwal),
             selectinload(PemesananKonsultasi.transaksi_pembayaran),
+            selectinload(PemesananKonsultasi.hasil_konsultasi),
             selectinload(PemesananKonsultasi.permintaan_reschedule),
         )
     )
@@ -895,9 +1079,11 @@ def _receipt_response(
 ) -> BookingReceiptResponse:
     transaction = booking.transaksi_pembayaran
     latest_request = reschedule_request or _latest_reschedule_request(booking)
+    consultation_result = _loaded_consultation_result(booking)
     return BookingReceiptResponse(
         id_pemesanan_konsultasi=booking.id_pemesanan_konsultasi,
         id_pra_asesmen=booking.id_pra_asesmen,
+        id_booking_sebelumnya=booking.id_booking_sebelumnya,
         id_transaksi_pembayaran=transaction.id_transaksi_pembayaran if transaction else None,
         order_id=transaction.midtrans_order_id if transaction else None,
         nama_psikolog=booking.psikolog.nama_lengkap if booking.psikolog else None,
@@ -922,6 +1108,31 @@ def _receipt_response(
         tanggal_booking=booking.tanggal_booking,
         alasan_pembatalan_pasien=booking.alasan_pembatalan_pasien,
         dibatalkan_pada=booking.dibatalkan_pada,
+        hasil_konsultasi_ringkasan=(
+            consultation_result.ringkasan_untuk_pasien
+            if consultation_result
+            else None
+        ),
+        hasil_konsultasi_rekomendasi=(
+            consultation_result.rekomendasi_tindak_lanjut
+            if consultation_result
+            else None
+        ),
+        hasil_konsultasi_pasien_hadir=(
+            consultation_result.pasien_hadir
+            if consultation_result
+            else None
+        ),
+        perlu_sesi_lanjutan=(
+            consultation_result.perlu_sesi_lanjutan
+            if consultation_result
+            else None
+        ),
+        hasil_konsultasi_dibuat_pada=(
+            consultation_result.dibuat_pada
+            if consultation_result
+            else None
+        ),
         reschedule_request=_reschedule_request_response(latest_request)
         if latest_request
         else None,
@@ -941,6 +1152,7 @@ async def list_patient_bookings(
             selectinload(PemesananKonsultasi.psikolog),
             selectinload(PemesananKonsultasi.jadwal),
             selectinload(PemesananKonsultasi.transaksi_pembayaran),
+            selectinload(PemesananKonsultasi.hasil_konsultasi),
             selectinload(PemesananKonsultasi.permintaan_reschedule),
         )
         .order_by(PemesananKonsultasi.tanggal_booking.desc())

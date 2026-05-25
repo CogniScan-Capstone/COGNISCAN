@@ -221,6 +221,10 @@ function getRescheduleBookingIdParam() {
   return getPositiveIntSearchParam("reschedule_booking_id");
 }
 
+function getFollowupBookingIdParam() {
+  return getPositiveIntSearchParam("followup_booking_id");
+}
+
 function loadMidtransSnap(scriptUrl: string, clientKey: string) {
   return new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(
@@ -251,6 +255,7 @@ function loadMidtransSnap(scriptUrl: string, clientKey: string) {
 export default function PatientBookingSchedulePage() {
   const router = useRouter();
   const [rescheduleBookingId] = useState(() => getRescheduleBookingIdParam());
+  const [followupBookingId] = useState(() => getFollowupBookingIdParam());
   const [idPraAsesmen] = useState(() => getIdPraAsesmenParam());
   const [viewDate, setViewDate] = useState(() => {
     const current = new Date();
@@ -323,6 +328,7 @@ export default function PatientBookingSchedulePage() {
           ? await fetchBookingRescheduleAvailability(accessToken, rescheduleBookingId, range)
           : await fetchBookingAvailability(accessToken, {
               idPraAsesmen,
+              followupBookingId,
               ...range,
             });
 
@@ -343,7 +349,7 @@ export default function PatientBookingSchedulePage() {
     return () => {
       mounted = false;
     };
-  }, [idPraAsesmen, rescheduleBookingId, viewDate]);
+  }, [followupBookingId, idPraAsesmen, rescheduleBookingId, viewDate]);
 
   const cells = buildCalendarDays(viewDate.getFullYear(), viewDate.getMonth());
   const isReschedule = rescheduleBookingId !== null;
@@ -372,6 +378,7 @@ export default function PatientBookingSchedulePage() {
     ? availableSlotsByDate.get(selectedDateKey) ?? []
     : [];
   const selectedSlot = selectedDateSlots.find((slot) => slot.waktu_mulai === selectedTime) ?? null;
+  const isFollowup = followupBookingId !== null;
 
   function canSelectDate(date: Date) {
     if (isPastDate(date, today)) return false;
@@ -443,7 +450,8 @@ export default function PatientBookingSchedulePage() {
 
       const checkout = await createBookingCheckout(accessToken, {
         ...schedulePayload,
-        id_pra_asesmen: idPraAsesmen,
+        id_pra_asesmen: isFollowup ? null : idPraAsesmen,
+        id_booking_sebelumnya: isFollowup ? followupBookingId : null,
       });
       setPaymentNotice("Memuat tampilan pembayaran Midtrans...");
 

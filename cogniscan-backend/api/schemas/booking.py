@@ -15,6 +15,7 @@ class BookingCheckoutRequest(BaseModel):
     waktu_konsultasi: time
     mode_konsultasi: ConsultationMode
     id_pra_asesmen: int | None = Field(default=None, gt=0)
+    id_booking_sebelumnya: int | None = Field(default=None, gt=0)
 
 
 class BookingRescheduleRequest(BaseModel):
@@ -60,7 +61,8 @@ class BookingRescheduleRequestResponse(BaseModel):
 class BookingCheckoutResponse(BaseModel):
     id_pemesanan_konsultasi: int
     id_transaksi_pembayaran: int
-    id_pra_asesmen: int
+    id_pra_asesmen: int | None = None
+    id_booking_sebelumnya: int | None = None
     id_psikolog: int
     nama_psikolog: str | None = None
     tanggal_konsultasi: date
@@ -82,6 +84,7 @@ class BookingReceiptResponse(BaseModel):
 
     id_pemesanan_konsultasi: int
     id_pra_asesmen: int | None = None
+    id_booking_sebelumnya: int | None = None
     id_transaksi_pembayaran: int | None = None
     order_id: str | None = None
     nama_psikolog: str | None = None
@@ -100,6 +103,11 @@ class BookingReceiptResponse(BaseModel):
     tanggal_booking: datetime | None = None
     alasan_pembatalan_pasien: str | None = None
     dibatalkan_pada: datetime | None = None
+    hasil_konsultasi_ringkasan: str | None = None
+    hasil_konsultasi_rekomendasi: str | None = None
+    hasil_konsultasi_pasien_hadir: bool | None = None
+    perlu_sesi_lanjutan: bool | None = None
+    hasil_konsultasi_dibuat_pada: datetime | None = None
     reschedule_request: BookingRescheduleRequestResponse | None = None
 
 

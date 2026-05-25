@@ -469,6 +469,7 @@ def _to_schedule_response(
     pra_asesmen = booking.pra_asesmen
     sesi_jurnal = pra_asesmen.sesi_jurnal if pra_asesmen else None
     jadwal = booking.jadwal
+    hasil_konsultasi = booking.hasil_konsultasi
     latest_request = booking.permintaan_reschedule[0] if booking.permintaan_reschedule else None
 
     return PsikologScheduleBookingResponse(
@@ -488,6 +489,26 @@ def _to_schedule_response(
         lokasi_konsultasi=psikolog.alamat_praktik,
         konteks_pemicu=sesi_jurnal.konteks_pemicu if sesi_jurnal else None,
         indikator_urgensi=pra_asesmen.indikator_urgensi if pra_asesmen else None,
+        hasil_konsultasi_ringkasan=(
+            hasil_konsultasi.ringkasan_untuk_pasien
+            if hasil_konsultasi
+            else None
+        ),
+        hasil_konsultasi_rekomendasi=(
+            hasil_konsultasi.rekomendasi_tindak_lanjut
+            if hasil_konsultasi
+            else None
+        ),
+        hasil_konsultasi_pasien_hadir=(
+            hasil_konsultasi.pasien_hadir
+            if hasil_konsultasi
+            else None
+        ),
+        perlu_sesi_lanjutan=(
+            hasil_konsultasi.perlu_sesi_lanjutan
+            if hasil_konsultasi
+            else None
+        ),
         reschedule_request=_reschedule_request_response(latest_request)
         if latest_request
         else None,
@@ -517,6 +538,7 @@ async def list_psikolog_paid_schedule_bookings(
             selectinload(PemesananKonsultasi.psikolog),
             selectinload(PemesananKonsultasi.jadwal),
             selectinload(PemesananKonsultasi.transaksi_pembayaran),
+            selectinload(PemesananKonsultasi.hasil_konsultasi),
             selectinload(PemesananKonsultasi.permintaan_reschedule)
             .selectinload(PermintaanRescheduleKonsultasi.pasien),
             selectinload(PemesananKonsultasi.pra_asesmen)

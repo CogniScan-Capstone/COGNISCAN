@@ -6,6 +6,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   CalendarPlus,
+  CheckCircle2,
   Clock,
   ExternalLink,
   Loader2,
@@ -29,6 +30,8 @@ import {
   deletePsikologAvailability,
   fetchPsikologAvailability,
   fetchPsikologScheduleBookings,
+  submitPsikologConsultationResult,
+  type ConsultationResultPayload,
   type PsikologAvailabilitySlot,
   type PsikologScheduleBooking,
 } from "@/lib/auth";
@@ -40,6 +43,7 @@ type SessionMethod = "online" | "offline";
 type SessionStatus =
   | "terjadwal"
   | "berlangsung"
+  | "menunggu_konfirmasi_psikolog"
   | "selesai"
   | "terlewat"
   | "menunggu_reschedule"
@@ -62,6 +66,10 @@ type Session = {
   meetLink?: string | null;
   location?: string | null;
   status: SessionStatus;
+  resultSummary?: string | null;
+  resultRecommendation?: string | null;
+  patientAttended?: boolean | null;
+  needsFollowup?: boolean | null;
 };
 
 const topicToneClass: Record<Session["topicTone"], string> = {
@@ -75,6 +83,7 @@ const topicToneClass: Record<Session["topicTone"], string> = {
 const statusLabel: Record<SessionStatus, string> = {
   terjadwal: "Terjadwal",
   berlangsung: "Berlangsung",
+  menunggu_konfirmasi_psikolog: "Menunggu Konfirmasi",
   selesai: "Selesai",
   terlewat: "Terlewat",
   menunggu_reschedule: "Menunggu Reschedule",
@@ -88,6 +97,7 @@ const statusLabel: Record<SessionStatus, string> = {
 const statusDot: Record<SessionStatus, string> = {
   terjadwal: "bg-on-surface-muted",
   berlangsung: "bg-[#d37300]",
+  menunggu_konfirmasi_psikolog: "bg-[#d37300]",
   selesai: "bg-primary",
   terlewat: "bg-[#d37300]",
   menunggu_reschedule: "bg-[#d37300]",
@@ -101,6 +111,7 @@ const statusDot: Record<SessionStatus, string> = {
 const statusText: Record<SessionStatus, string> = {
   terjadwal: "text-on-surface-muted",
   berlangsung: "text-[#d37300]",
+  menunggu_konfirmasi_psikolog: "text-[#d37300]",
   selesai: "text-primary",
   terlewat: "text-[#d37300]",
   menunggu_reschedule: "text-[#d37300]",
@@ -181,6 +192,7 @@ function normalizeMethod(value?: string | null): SessionMethod {
 function normalizeStatus(value?: string | null): SessionStatus {
   if (value === "selesai") return "selesai";
   if (value === "berlangsung") return "berlangsung";
+  if (value === "menunggu_konfirmasi_psikolog") return "menunggu_konfirmasi_psikolog";
   if (value === "terlewat") return "terlewat";
   if (value === "menunggu_reschedule") return "menunggu_reschedule";
   if (value === "reschedule_disetujui") return "reschedule_disetujui";
@@ -205,6 +217,10 @@ function toSession(booking: PsikologScheduleBooking): Session {
     meetLink: booking.link_pertemuan,
     location: booking.lokasi_konsultasi || "Alamat praktik belum diatur",
     status: normalizeStatus(booking.status_konsultasi),
+    resultSummary: booking.hasil_konsultasi_ringkasan,
+    resultRecommendation: booking.hasil_konsultasi_rekomendasi,
+    patientAttended: booking.hasil_konsultasi_pasien_hadir,
+    needsFollowup: booking.perlu_sesi_lanjutan,
   };
 }
 
@@ -315,6 +331,22 @@ export default function JadwalDetailPage({
     setAvailability(dataAvailability);
   }
 
+  async function reloadScheduleContext() {
+    const accessToken = await getAccessToken();
+    const [dataBookings, dataAvailability] = await Promise.all([
+      fetchPsikologScheduleBookings(accessToken, {
+        startDate: date,
+        endDate: date,
+      }),
+      fetchPsikologAvailability(accessToken, {
+        startDate: date,
+        endDate: date,
+      }),
+    ]);
+    setBookings(dataBookings);
+    setAvailability(dataAvailability);
+  }
+
   async function handleCreateSlot() {
     if (!slotTime || savingSlot) return;
     setSavingSlot(true);
@@ -352,6 +384,15 @@ export default function JadwalDetailPage({
     } finally {
       setSavingSlot(false);
     }
+  }
+
+  async function handleSubmitConsultationResult(
+    bookingId: number,
+    payload: ConsultationResultPayload,
+  ) {
+    const accessToken = await getAccessToken();
+    await submitPsikologConsultationResult(accessToken, bookingId, payload);
+    await reloadScheduleContext();
   }
 
   return (
@@ -555,105 +596,281 @@ export default function JadwalDetailPage({
             </DashboardCard>
           ) : (
             visible.map((s) => (
-              <DashboardCard key={s.id} className="px-6 py-5">
-                <div className="grid gap-5 md:grid-cols-[120px_minmax(0,1fr)_auto] md:items-center">
-                  <div className="flex items-center gap-3 md:flex-col md:items-start md:gap-1">
-                    <Clock
-                      className="h-5 w-5 text-[#6f5794]"
-                      aria-hidden="true"
-                    />
-                    <div>
-                      <p className="text-[20px] font-bold text-on-surface">
-                        {s.time}
-                      </p>
-                      <p className="text-[12px] text-on-surface-muted">
-                        {s.endTime ? `s.d. ${s.endTime}` : "WIB"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-[16px] font-bold text-on-surface">
-                        {s.name}
-                      </h3>
-                      <span
-                        className={cn(
-                          "inline-flex h-6 items-center rounded-full border px-2.5 text-[10px] font-bold uppercase tracking-[0.1em]",
-                          topicToneClass[s.topicTone],
-                        )}
-                      >
-                        {s.topic}
-                      </span>
-                    </div>
-                    <div className="mt-2 grid gap-1.5 text-[13px] text-on-surface-variant sm:grid-cols-2">
-                      <p className="inline-flex items-center gap-1.5">
-                        <Mail className="h-3.5 w-3.5" aria-hidden="true" />
-                        {s.email}
-                      </p>
-                      {s.method === "online" ? (
-                        <p className="inline-flex items-center gap-1.5">
-                          <Video className="h-3.5 w-3.5" aria-hidden="true" />
-                          {s.meetLink ? (
-                            <>
-                              <a
-                                href={s.meetLink.startsWith("http") ? s.meetLink : `https://${s.meetLink}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-medium text-primary hover:underline"
-                              >
-                                {s.meetLink.replace(/^https?:\/\//, "")}
-                              </a>
-                              <ExternalLink
-                                className="h-3 w-3 text-on-surface-muted"
-                                aria-hidden="true"
-                              />
-                            </>
-                          ) : (
-                            <span>Link meeting belum dibuat</span>
-                          )}
-                        </p>
-                      ) : null}
-                      {s.method === "offline" ? (
-                        <p className="inline-flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-                          {s.location}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-start gap-2 md:items-end">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-2 text-[13px] font-semibold",
-                        statusText[s.status],
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "h-2 w-2 rounded-full",
-                          statusDot[s.status],
-                        )}
-                      />
-                      {statusLabel[s.status]}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-[12px] font-medium text-on-surface-variant">
-                      {s.method === "online" ? (
-                        <Video className="h-3.5 w-3.5" aria-hidden="true" />
-                      ) : (
-                        <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-                      )}
-                      {s.method === "online" ? "Online" : "Offline"}
-                    </span>
-                  </div>
-                </div>
-              </DashboardCard>
+              <SessionCard
+                key={s.id}
+                session={s}
+                onSubmitResult={handleSubmitConsultationResult}
+              />
             ))
           )}
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+function SessionCard({
+  session,
+  onSubmitResult,
+}: {
+  session: Session;
+  onSubmitResult: (bookingId: number, payload: ConsultationResultPayload) => Promise<void>;
+}) {
+  const [formOpen, setFormOpen] = useState(false);
+  const [pasienHadir, setPasienHadir] = useState(true);
+  const [ringkasan, setRingkasan] = useState(session.resultSummary || "");
+  const [rekomendasi, setRekomendasi] = useState(session.resultRecommendation || "");
+  const [catatanInternal, setCatatanInternal] = useState("");
+  const [perluSesiLanjutan, setPerluSesiLanjutan] = useState(Boolean(session.needsFollowup));
+  const [savingResult, setSavingResult] = useState(false);
+  const [resultError, setResultError] = useState("");
+
+  const canSubmitResult = [
+    "terjadwal",
+    "berlangsung",
+    "menunggu_konfirmasi_psikolog",
+    "reschedule_ditolak",
+  ].includes(session.status);
+  const hasResult = Boolean(
+    session.resultSummary ||
+      session.resultRecommendation ||
+      (session.patientAttended !== null && session.patientAttended !== undefined),
+  );
+
+  async function handleSubmitResult() {
+    if (savingResult) return;
+    if (pasienHadir && ringkasan.trim().length < 10) {
+      setResultError("Ringkasan untuk pasien wajib diisi minimal 10 karakter.");
+      return;
+    }
+
+    setSavingResult(true);
+    setResultError("");
+    try {
+      await onSubmitResult(Number(session.id), {
+        pasien_hadir: pasienHadir,
+        ringkasan_untuk_pasien: ringkasan.trim() || null,
+        catatan_internal: catatanInternal.trim() || null,
+        rekomendasi_tindak_lanjut: rekomendasi.trim() || null,
+        perlu_sesi_lanjutan: pasienHadir && perluSesiLanjutan,
+      });
+      setFormOpen(false);
+    } catch (err) {
+      setResultError(err instanceof Error ? err.message : "Gagal menyimpan hasil konsultasi.");
+    } finally {
+      setSavingResult(false);
+    }
+  }
+
+  return (
+    <DashboardCard className="px-6 py-5">
+      <div className="grid gap-5 md:grid-cols-[120px_minmax(0,1fr)_auto] md:items-center">
+        <div className="flex items-center gap-3 md:flex-col md:items-start md:gap-1">
+          <Clock
+            className="h-5 w-5 text-[#6f5794]"
+            aria-hidden="true"
+          />
+          <div>
+            <p className="text-[20px] font-bold text-on-surface">
+              {session.time}
+            </p>
+            <p className="text-[12px] text-on-surface-muted">
+              {session.endTime ? `s.d. ${session.endTime}` : "WIB"}
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-[16px] font-bold text-on-surface">
+              {session.name}
+            </h3>
+            <span
+              className={cn(
+                "inline-flex h-6 items-center rounded-full border px-2.5 text-[10px] font-bold uppercase tracking-[0.1em]",
+                topicToneClass[session.topicTone],
+              )}
+            >
+              {session.topic}
+            </span>
+          </div>
+          <div className="mt-2 grid gap-1.5 text-[13px] text-on-surface-variant sm:grid-cols-2">
+            <p className="inline-flex items-center gap-1.5">
+              <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+              {session.email}
+            </p>
+            {session.method === "online" ? (
+              <p className="inline-flex items-center gap-1.5">
+                <Video className="h-3.5 w-3.5" aria-hidden="true" />
+                {session.meetLink ? (
+                  <>
+                    <a
+                      href={session.meetLink.startsWith("http") ? session.meetLink : `https://${session.meetLink}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {session.meetLink.replace(/^https?:\/\//, "")}
+                    </a>
+                    <ExternalLink
+                      className="h-3 w-3 text-on-surface-muted"
+                      aria-hidden="true"
+                    />
+                  </>
+                ) : (
+                  <span>Link meeting belum dibuat</span>
+                )}
+              </p>
+            ) : null}
+            {session.method === "offline" ? (
+              <p className="inline-flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                {session.location}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex flex-col items-start gap-2 md:items-end">
+          <span
+            className={cn(
+              "inline-flex items-center gap-2 text-[13px] font-semibold",
+              statusText[session.status],
+            )}
+          >
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                statusDot[session.status],
+              )}
+            />
+            {statusLabel[session.status]}
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-[12px] font-medium text-on-surface-variant">
+            {session.method === "online" ? (
+              <Video className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {session.method === "online" ? "Online" : "Offline"}
+          </span>
+          {canSubmitResult ? (
+            <button
+              type="button"
+              onClick={() => setFormOpen((open) => !open)}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-primary px-4 text-[13px] font-semibold text-white transition hover:bg-[#365f39]"
+            >
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              Selesaikan
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {hasResult && !formOpen ? (
+        <div className="mt-5 rounded-[12px] border border-[#c4ddc5] bg-[#eef7ef] px-4 py-3 text-sm text-primary">
+          <p className="font-semibold">
+            Hasil konsultasi sudah tersimpan
+            {session.needsFollowup ? " dan sesi lanjutan dibuka." : "."}
+          </p>
+          {session.resultSummary ? (
+            <p className="mt-1 leading-6 text-[#3f5a3f]">{session.resultSummary}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {formOpen ? (
+        <div className="mt-5 rounded-[14px] border border-outline-variant bg-surface-container/40 p-4">
+          <div className="flex flex-wrap gap-4">
+            <label className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
+              <input
+                type="checkbox"
+                checked={pasienHadir}
+                onChange={(event) => setPasienHadir(event.target.checked)}
+                className="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/20"
+              />
+              Pasien hadir
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
+              <input
+                type="checkbox"
+                checked={perluSesiLanjutan}
+                onChange={(event) => setPerluSesiLanjutan(event.target.checked)}
+                disabled={!pasienHadir}
+                className="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/20 disabled:opacity-50"
+              />
+              Buka sesi lanjutan
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <label className="text-sm font-semibold text-on-surface">
+              Ringkasan untuk pasien
+              <textarea
+                value={ringkasan}
+                onChange={(event) => setRingkasan(event.target.value)}
+                rows={4}
+                placeholder={pasienHadir ? "Ringkasan singkat yang aman dibaca pasien." : "Opsional jika pasien tidak hadir."}
+                className="mt-2 w-full resize-none rounded-[10px] border border-outline-variant bg-white px-3 py-3 text-sm font-medium leading-6 text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+            <label className="text-sm font-semibold text-on-surface">
+              Rekomendasi tindak lanjut
+              <textarea
+                value={rekomendasi}
+                onChange={(event) => setRekomendasi(event.target.value)}
+                rows={4}
+                placeholder="Contoh: latihan refleksi, sesi lanjutan, atau rujukan bila diperlukan."
+                className="mt-2 w-full resize-none rounded-[10px] border border-outline-variant bg-white px-3 py-3 text-sm font-medium leading-6 text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+          </div>
+
+          <label className="mt-4 block text-sm font-semibold text-on-surface">
+            Catatan internal
+            <textarea
+              value={catatanInternal}
+              onChange={(event) => setCatatanInternal(event.target.value)}
+              rows={3}
+              placeholder="Catatan profesional internal, tidak ditampilkan ke pasien."
+              className="mt-2 w-full resize-none rounded-[10px] border border-outline-variant bg-white px-3 py-3 text-sm font-medium leading-6 text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleSubmitResult}
+              disabled={savingResult}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#365f39] disabled:cursor-wait disabled:opacity-70"
+            >
+              {savingResult ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              )}
+              Simpan Hasil
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFormOpen(false);
+                setResultError("");
+              }}
+              className="inline-flex h-10 items-center justify-center rounded-full border border-outline-variant px-5 text-sm font-semibold text-on-surface-variant transition hover:border-primary hover:text-primary"
+            >
+              Batal
+            </button>
+          </div>
+
+          {resultError ? (
+            <p className="mt-3 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              {resultError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </DashboardCard>
   );
 }
 

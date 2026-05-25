@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.core.database import Base
@@ -23,10 +23,17 @@ class HasilKonsultasi(Base):
     id_pemesanan_konsultasi: Mapped[int | None] = mapped_column(
         ForeignKey("pemesanan_konsultasi.id_pemesanan_konsultasi"), nullable=True
     )
+    pasien_hadir: Mapped[bool | None] = mapped_column(Boolean, default=True)
+    ringkasan_untuk_pasien: Mapped[str | None] = mapped_column(Text, nullable=True)
     catatan_evaluasi: Mapped[str | None] = mapped_column(Text, nullable=True)
+    catatan_internal: Mapped[str | None] = mapped_column(Text, nullable=True)
     rekomendasi_tindak_lanjut: Mapped[str | None] = mapped_column(Text, nullable=True)
+    perlu_sesi_lanjutan: Mapped[bool | None] = mapped_column(Boolean, default=False)
     dibuat_pada: Mapped[str | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+    diperbarui_pada: Mapped[str | None] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now()
     )
 
     # Relationships

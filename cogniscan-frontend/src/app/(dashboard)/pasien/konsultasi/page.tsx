@@ -37,6 +37,7 @@ import { useBackendUser } from "@/lib/useBackendUser";
 type ConsultationTab = "menunggu" | "selesai";
 type ConsultationStatus =
   | "terjadwal"
+  | "menunggu_konfirmasi_psikolog"
   | "terlewat"
   | "menunggu_reschedule"
   | "reschedule_disetujui"
@@ -65,6 +66,7 @@ function consultationTab(booking: BookingReceipt): ConsultationTab {
 function normalizeConsultationStatus(booking: BookingReceipt): ConsultationStatus {
   const status = booking.status_konsultasi;
   if (status === "selesai") return "selesai";
+  if (status === "menunggu_konfirmasi_psikolog") return "menunggu_konfirmasi_psikolog";
   if (status === "terlewat") return "terlewat";
   if (status === "menunggu_reschedule") return "menunggu_reschedule";
   if (status === "reschedule_disetujui") return "reschedule_disetujui";
@@ -85,6 +87,7 @@ const statusCopy: Record<
   }
 > = {
   terjadwal: { label: "Terjadwal", tone: "success", icon: Clock3 },
+  menunggu_konfirmasi_psikolog: { label: "Menunggu Konfirmasi Psikolog", tone: "warning", icon: Clock3 },
   terlewat: { label: "Terlewat", tone: "warning", icon: AlertTriangle },
   menunggu_reschedule: { label: "Menunggu Reschedule", tone: "warning", icon: RotateCcw },
   reschedule_disetujui: { label: "Reschedule Disetujui", tone: "success", icon: CheckCircle2 },
@@ -407,6 +410,7 @@ function ConsultationCard({
     status === "reschedule_ditolak";
   const canCloseMissed = status === "terlewat";
   const canChooseNewSchedule = status === "reschedule_disetujui";
+  const canBookFollowup = status === "selesai" || status === "ditutup";
   const scheduleFuture = isScheduleFuture(booking, now);
   const canCancelPaid =
     scheduleFuture &&
@@ -546,6 +550,10 @@ function ConsultationCard({
                   Masuk Ruang Konsultasi
                   <ExternalLink className="h-4 w-4" aria-hidden="true" />
                 </a>
+              ) : status === "menunggu_konfirmasi_psikolog" ? (
+                <p className="mt-2 text-[14px] leading-6 text-on-surface-variant">
+                  Jadwal konsultasi sudah lewat dan sedang menunggu psikolog menyimpan hasil sesi.
+                </p>
               ) : status === "terlewat" || status === "ditutup" ? (
                 <p className="mt-2 text-[14px] leading-6 text-on-surface-variant">
                   Sesi online pada jadwal ini sudah lewat. Kamu bisa mengajukan
@@ -612,6 +620,26 @@ function ConsultationCard({
             </div>
           ) : null}
 
+          {(booking.hasil_konsultasi_ringkasan || booking.hasil_konsultasi_rekomendasi) ? (
+            <div className="mb-4 rounded-[12px] border border-[#c4ddc5] bg-[#eef7ef] px-4 py-3 text-sm text-[#3f5a3f]">
+              <p className="font-semibold text-primary">Ringkasan hasil konsultasi</p>
+              {booking.hasil_konsultasi_ringkasan ? (
+                <p className="mt-1 leading-6">{booking.hasil_konsultasi_ringkasan}</p>
+              ) : null}
+              {booking.hasil_konsultasi_rekomendasi ? (
+                <p className="mt-2 leading-6">
+                  Rekomendasi:{" "}
+                  <span className="font-medium">{booking.hasil_konsultasi_rekomendasi}</span>
+                </p>
+              ) : null}
+              {booking.perlu_sesi_lanjutan ? (
+                <p className="mt-2 font-semibold text-primary">
+                  Psikolog membuka opsi sesi lanjutan untuk konsultasi ini.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap gap-3">
             {canChooseNewSchedule ? (
               <Link
@@ -620,6 +648,16 @@ function ConsultationCard({
               >
                 <CalendarDays className="h-4 w-4" aria-hidden="true" />
                 Pilih Jadwal Baru
+              </Link>
+            ) : null}
+
+            {canBookFollowup ? (
+              <Link
+                href={`/pasien/booking/jadwal?followup_booking_id=${booking.id_pemesanan_konsultasi}`}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[14px] font-semibold text-white transition hover:bg-[#365f39]"
+              >
+                <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                Booking Sesi Lanjutan
               </Link>
             ) : null}
 

@@ -42,6 +42,9 @@ function statusLabel(booking: BookingReceipt) {
   if (booking.status_konsultasi === "dibatalkan") return "Dibatalkan";
   if (booking.status_konsultasi === "ditutup") return "Ditutup";
   if (booking.status_konsultasi === "selesai") return "Selesai";
+  if (booking.status_konsultasi === "menunggu_konfirmasi_psikolog") {
+    return "Menunggu Konfirmasi Psikolog";
+  }
   if (booking.status_pembayaran === "dibayar" || booking.status_transaksi === "berhasil") {
     return "Terkonfirmasi";
   }

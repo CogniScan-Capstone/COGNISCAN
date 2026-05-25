@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check, Loader2, Mic, Square, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Loader2, Mic, PenLine, Square, Trash2 } from "lucide-react";
 import {
   finalizeJournalSession,
   startJournalSession,
@@ -24,6 +24,22 @@ const recordingMimeTypes = [
   "audio/mp4",
 ];
 
+type InputMode = "text" | "voice";
+const visualizerBarCount = 16;
+
+function createIdleAudioLevels() {
+  return Array.from({ length: visualizerBarCount }, (_, index) => 10 + (index % 4) * 4);
+}
+
+function getAudioContextConstructor() {
+  if (typeof window === "undefined") return null;
+  return (
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ||
+    null
+  );
+}
+
 function getSupportedRecordingMimeType() {
   if (typeof MediaRecorder === "undefined") return "";
   return recordingMimeTypes.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";
@@ -39,6 +55,7 @@ export default function ScreeningQuestionPage() {
   const router = useRouter();
   const params = useParams<{ topic?: string }>();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [inputMode, setInputMode] = useState<InputMode>("text");
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [voiceAnswers, setVoiceAnswers] = useState<Record<number, Blob>>({});
   const [hasConsent, setHasConsent] = useState(false);
@@ -48,13 +65,19 @@ export default function ScreeningQuestionPage() {
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
   const [voicePreviewUrl, setVoicePreviewUrl] = useState("");
-  const [isVoiceUploading, setIsVoiceUploading] = useState(false);
+  const [audioLevels, setAudioLevels] = useState<number[]>(createIdleAudioLevels);
+  const isVoiceUploading = false;
   const [voiceStatusMessage, setVoiceStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const visualizerFrameRef = useRef<number | null>(null);
 
   const topicSlug = useMemo(() => {
     const rawTopic = Array.isArray(params.topic) ? params.topic[0] : params.topic;
@@ -66,8 +89,13 @@ export default function ScreeningQuestionPage() {
   const currentQuestion = questions[currentIndex] ?? questions[0];
   const currentAnswer = answers[currentIndex] ?? "";
   const currentAnsweredByVoice = Boolean(voiceAnswers[currentIndex]);
+  const currentVoiceReady = Boolean(voiceBlob || currentAnsweredByVoice);
+  const currentInputValid =
+    inputMode === "text"
+      ? currentAnswer.trim().length > 0
+      : currentVoiceReady;
   const canContinue =
-    (currentAnswer.trim().length > 0 || currentAnsweredByVoice) &&
+    currentInputValid &&
     hasConsent &&
     !isRecording &&
     !isVoiceUploading;
@@ -81,8 +109,8 @@ export default function ScreeningQuestionPage() {
       ? "Menganalisis"
       : "Menyimpan"
     : isLastQuestion
-      ? "Selesai"
-      : "Selanjutnya";
+      ? "Selesai Screening"
+      : "Simpan & Lanjut";
 
   useEffect(() => {
     return () => {
@@ -90,6 +118,7 @@ export default function ScreeningQuestionPage() {
         window.clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
       }
+      stopAudioVisualizer(false);
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
@@ -132,6 +161,81 @@ export default function ScreeningQuestionPage() {
     streamRef.current = null;
   }
 
+  function stopAudioVisualizer(resetLevels = true) {
+    if (visualizerFrameRef.current) {
+      window.cancelAnimationFrame(visualizerFrameRef.current);
+      visualizerFrameRef.current = null;
+    }
+
+    audioSourceRef.current?.disconnect();
+    analyserRef.current?.disconnect();
+    audioSourceRef.current = null;
+    analyserRef.current = null;
+    audioDataRef.current = null;
+
+    const audioContext = audioContextRef.current;
+    audioContextRef.current = null;
+    if (audioContext && audioContext.state !== "closed") {
+      void audioContext.close().catch(() => undefined);
+    }
+
+    if (resetLevels) setAudioLevels(createIdleAudioLevels());
+  }
+
+  function startAudioVisualizer(stream: MediaStream) {
+    stopAudioVisualizer();
+
+    const AudioContextConstructor = getAudioContextConstructor();
+    if (!AudioContextConstructor) return;
+
+    try {
+      const audioContext = new AudioContextConstructor();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+
+      analyser.fftSize = 64;
+      analyser.smoothingTimeConstant = 0.76;
+      source.connect(analyser);
+
+      audioContextRef.current = audioContext;
+      audioSourceRef.current = source;
+      analyserRef.current = analyser;
+      audioDataRef.current = new Uint8Array(analyser.frequencyBinCount);
+
+      if (audioContext.state === "suspended") {
+        void audioContext.resume().catch(() => undefined);
+      }
+
+      const updateLevels = () => {
+        const currentAnalyser = analyserRef.current;
+        const dataArray = audioDataRef.current;
+        if (!currentAnalyser || !dataArray) return;
+
+        currentAnalyser.getByteFrequencyData(dataArray);
+        const bucketSize = Math.max(1, Math.floor(dataArray.length / visualizerBarCount));
+        const nextLevels = Array.from({ length: visualizerBarCount }, (_, barIndex) => {
+          const start = barIndex * bucketSize;
+          const end = Math.min(start + bucketSize, dataArray.length);
+          let total = 0;
+
+          for (let index = start; index < end; index += 1) {
+            total += dataArray[index];
+          }
+
+          const average = total / Math.max(1, end - start);
+          return Math.max(8, Math.min(42, 8 + (average / 255) * 34));
+        });
+
+        setAudioLevels(nextLevels);
+        visualizerFrameRef.current = window.requestAnimationFrame(updateLevels);
+      };
+
+      updateLevels();
+    } catch {
+      stopAudioVisualizer();
+    }
+  }
+
   function clearVoiceNote(nextStatusMessage = "") {
     setVoicePreviewUrl((currentUrl) => {
       if (currentUrl) URL.revokeObjectURL(currentUrl);
@@ -139,6 +243,7 @@ export default function ScreeningQuestionPage() {
     });
     setVoiceBlob(null);
     setRecordingSeconds(0);
+    setAudioLevels(createIdleAudioLevels());
     setVoiceStatusMessage(nextStatusMessage);
   }
 
@@ -151,6 +256,23 @@ export default function ScreeningQuestionPage() {
     clearVoiceNote();
   }
 
+  function selectInputMode(mode: InputMode) {
+    if (isSubmitting || isVoiceUploading || isRecording) return;
+    setErrorMessage("");
+    setInputMode(mode);
+
+    if (mode === "text") {
+      removeCurrentVoiceAnswer();
+      return;
+    }
+
+    setAnswers((prev) => {
+      const nextAnswers = { ...prev };
+      delete nextAnswers[currentIndex];
+      return nextAnswers;
+    });
+  }
+
   function isQuestionAnswered(
     questionIndex: number,
     nextVoiceAnswers: Record<number, Blob> = voiceAnswers,
@@ -160,18 +282,20 @@ export default function ScreeningQuestionPage() {
 
   async function startRecording() {
     if (isSubmitting || isVoiceUploading || isRecording) return;
-    if (!hasConsent) {
-      setErrorMessage("Centang persetujuan pemrosesan AI sebelum merekam voice note.");
-      return;
-    }
     if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setErrorMessage("Browser ini belum mendukung perekaman voice note.");
       return;
     }
 
+    setInputMode("voice");
     setErrorMessage("");
     clearVoiceNote();
     audioChunksRef.current = [];
+    setAnswers((prev) => {
+      const nextAnswers = { ...prev };
+      delete nextAnswers[currentIndex];
+      return nextAnswers;
+    });
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -180,6 +304,7 @@ export default function ScreeningQuestionPage() {
 
       streamRef.current = stream;
       recorderRef.current = recorder;
+      startAudioVisualizer(stream);
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) audioChunksRef.current.push(event.data);
@@ -188,6 +313,7 @@ export default function ScreeningQuestionPage() {
       recorder.onstop = () => {
         clearRecordingTimer();
         setIsRecording(false);
+        stopAudioVisualizer();
         stopActiveStream();
 
         const recordedMimeType = recorder.mimeType || mimeType || "audio/webm";
@@ -218,6 +344,7 @@ export default function ScreeningQuestionPage() {
     } catch (error) {
       clearRecordingTimer();
       setIsRecording(false);
+      stopAudioVisualizer();
       stopActiveStream();
       setErrorMessage(
         error instanceof Error
@@ -230,46 +357,6 @@ export default function ScreeningQuestionPage() {
   function stopRecording() {
     if (!recorderRef.current || recorderRef.current.state === "inactive") return;
     recorderRef.current.stop();
-  }
-
-  async function processVoiceNote() {
-    if (!voiceBlob || isVoiceUploading || isSubmitting || isRecording) return;
-    if (!hasConsent) {
-      setErrorMessage("Centang persetujuan pemrosesan AI sebelum menyimpan voice note.");
-      return;
-    }
-
-    setErrorMessage("");
-
-    try {
-      const nextVoiceAnswers = {
-        ...voiceAnswers,
-        [currentIndex]: voiceBlob,
-      };
-      setVoiceAnswers(nextVoiceAnswers);
-      setAnswers((prev) => {
-        const nextAnswers = { ...prev };
-        delete nextAnswers[currentIndex];
-        return nextAnswers;
-      });
-      clearVoiceNote();
-
-      if (!isLastQuestion) {
-        setCurrentIndex((index) => index + 1);
-        return;
-      }
-
-      setIsSubmitting(true);
-      await finalizeScreening(nextVoiceAnswers);
-    } catch (error) {
-      setVoiceStatusMessage("");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Gagal menyimpan voice note.",
-      );
-    } finally {
-      setIsVoiceUploading(false);
-      setIsSubmitting(false);
-    }
   }
 
   async function saveAnswerByIndex(
@@ -342,8 +429,10 @@ export default function ScreeningQuestionPage() {
       return;
     }
 
+    const targetIndex = currentIndex - 1;
     clearVoiceNote();
-    setCurrentIndex((index) => index - 1);
+    setInputMode(voiceAnswers[targetIndex] ? "voice" : "text");
+    setCurrentIndex(targetIndex);
   };
 
   const goNext = async () => {
@@ -352,14 +441,33 @@ export default function ScreeningQuestionPage() {
     setErrorMessage("");
 
     try {
+      const nextVoiceAnswers = { ...voiceAnswers };
+
+      if (inputMode === "voice") {
+        if (voiceBlob) {
+          nextVoiceAnswers[currentIndex] = voiceBlob;
+          setVoiceAnswers(nextVoiceAnswers);
+          setAnswers((prev) => {
+            const nextAnswers = { ...prev };
+            delete nextAnswers[currentIndex];
+            return nextAnswers;
+          });
+        }
+      } else if (nextVoiceAnswers[currentIndex]) {
+        delete nextVoiceAnswers[currentIndex];
+        setVoiceAnswers(nextVoiceAnswers);
+      }
+
       if (!isLastQuestion) {
+        const targetIndex = currentIndex + 1;
         clearVoiceNote();
-        setCurrentIndex((index) => index + 1);
+        setInputMode(nextVoiceAnswers[targetIndex] ? "voice" : "text");
+        setCurrentIndex(targetIndex);
         return;
       }
 
       setIsSubmitting(true);
-      await finalizeScreening();
+      await finalizeScreening(nextVoiceAnswers);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Gagal menyimpan screening.",
@@ -371,8 +479,6 @@ export default function ScreeningQuestionPage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-surface px-5 pb-36 pt-14 text-on-surface">
-      <div className="absolute bottom-[-180px] right-[-140px] h-[520px] w-[520px] rounded-full bg-[#a98ad6]/25 blur-[2px]" />
-
       <div className="relative z-10 mx-auto max-w-[760px]">
         <header className="mb-12">
           <div className="mb-3 flex items-center justify-between gap-6">
@@ -405,114 +511,164 @@ export default function ScreeningQuestionPage() {
             {String(currentIndex + 1).padStart(2, "0")}
           </span>
           <div className="relative">
-            <h1 className="max-w-[640px] text-[30px] font-medium leading-[1.18] tracking-[-0.02em] text-[#a98ad6]">
+            <h1 className="max-w-[660px] text-[30px] font-semibold leading-[1.18] text-on-surface">
               {currentQuestion.question}
             </h1>
-            <textarea
-              value={currentAnswer}
-              onChange={(event) =>
-                setAnswers((prev) => ({
-                  ...prev,
-                  [currentIndex]: event.target.value,
-                }))
-              }
-              disabled={isSubmitting || isVoiceUploading || currentAnsweredByVoice}
-              rows={7}
-              placeholder={
-                currentAnsweredByVoice
-                  ? "Jawaban voice note sudah disimpan sementara."
-                  : currentQuestion.placeholder
-              }
-              className="mt-8 w-full resize-none rounded-[12px] border border-surface-variant bg-surface px-6 py-5 text-[16px] text-on-surface outline-none transition placeholder:text-on-surface-muted/45 focus:border-primary-container focus:ring-4 focus:ring-primary-container/15 disabled:cursor-not-allowed disabled:opacity-70"
-            />
-            <div className="mt-5 rounded-[14px] border border-outline-variant bg-surface-container/45 px-4 py-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-extrabold uppercase tracking-[0.12em] text-on-surface-variant">
-                    Voice note
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-on-surface-muted" aria-live="polite">
-                    {isRecording
-                      ? `Merekam ${formatRecordingSeconds(recordingSeconds)}`
-                      : voiceStatusMessage ||
-                        (currentAnsweredByVoice
-                          ? "Voice note pertanyaan ini sudah disimpan sementara."
-                          : "Audio disimpan sementara di browser dan dikirim saat selesai.")}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {isRecording ? (
-                    <button
-                      type="button"
-                      onClick={stopRecording}
-                      className="inline-flex h-10 items-center gap-2 rounded-full bg-red-600 px-4 text-sm font-bold text-white transition hover:bg-red-700"
-                    >
-                      <Square className="h-4 w-4" aria-hidden="true" />
-                      Stop
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={startRecording}
-                      disabled={isSubmitting || isVoiceUploading}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-primary px-4 text-sm font-bold text-primary transition hover:bg-primary-container/10 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      <Mic className="h-4 w-4" aria-hidden="true" />
-                      {currentAnsweredByVoice ? "Rekam Ulang" : "Rekam"}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={removeCurrentVoiceAnswer}
-                    disabled={!voiceBlob && !voicePreviewUrl && !currentAnsweredByVoice}
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-outline-variant px-3 text-on-surface-variant transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
-                    aria-label="Hapus voice note"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
 
-              {voicePreviewUrl ? (
-                <audio controls src={voicePreviewUrl} className="mt-4 w-full" />
-              ) : null}
-
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={processVoiceNote}
-                  disabled={!voiceBlob || isRecording || isVoiceUploading || isSubmitting}
-                  className={cn(
-                    "inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-extrabold text-white transition",
-                    voiceBlob && !isRecording && !isVoiceUploading && !isSubmitting
-                      ? "bg-primary-container hover:bg-[#789477]"
-                      : "cursor-not-allowed bg-primary-container/45",
-                  )}
-                >
-                  {isVoiceUploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Upload className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  Simpan & Lanjut
-                </button>
-              </div>
+            <div className="mt-8 grid grid-cols-2 rounded-[12px] border border-outline-variant bg-surface-container p-1">
+              <button
+                type="button"
+                onClick={() => selectInputMode("text")}
+                disabled={isSubmitting || isVoiceUploading || isRecording}
+                className={cn(
+                  "inline-flex h-11 items-center justify-center gap-2 rounded-[8px] text-sm font-extrabold transition disabled:cursor-wait disabled:opacity-60",
+                  inputMode === "text"
+                    ? "bg-white text-primary shadow-sm"
+                    : "text-on-surface-variant hover:text-on-surface",
+                )}
+              >
+                <PenLine className="h-4 w-4" aria-hidden="true" />
+                Tulis Jawaban
+              </button>
+              <button
+                type="button"
+                onClick={() => selectInputMode("voice")}
+                disabled={isSubmitting || isVoiceUploading || isRecording}
+                className={cn(
+                  "inline-flex h-11 items-center justify-center gap-2 rounded-[8px] text-sm font-extrabold transition disabled:cursor-wait disabled:opacity-60",
+                  inputMode === "voice"
+                    ? "bg-white text-primary shadow-sm"
+                    : "text-on-surface-variant hover:text-on-surface",
+                )}
+              >
+                <Mic className="h-4 w-4" aria-hidden="true" />
+                Rekam Suara
+              </button>
             </div>
-            {journalSessionId === null ? (
-              <label className="mt-5 flex items-start gap-3 rounded-[12px] border border-outline-variant bg-surface-container/60 px-4 py-4 text-[14px] leading-6 text-on-surface-variant">
-                <input
-                  type="checkbox"
-                  checked={hasConsent}
-                  onChange={(event) => setHasConsent(event.target.checked)}
+
+            <div className="mt-5">
+              {inputMode === "text" ? (
+                <textarea
+                  value={currentAnswer}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    setAnswers((prev) => ({
+                      ...prev,
+                      [currentIndex]: nextValue,
+                    }));
+                    if (voiceAnswers[currentIndex]) {
+                      setVoiceAnswers((prev) => {
+                        const nextVoiceAnswers = { ...prev };
+                        delete nextVoiceAnswers[currentIndex];
+                        return nextVoiceAnswers;
+                      });
+                    }
+                  }}
                   disabled={isSubmitting || isVoiceUploading}
-                  className="mt-0.5 h-5 w-5 shrink-0 rounded border-outline-variant text-primary-container focus:ring-primary-container/20"
+                  rows={8}
+                  placeholder={currentQuestion.placeholder}
+                  className="w-full resize-none rounded-[12px] border border-surface-variant bg-surface px-6 py-5 text-[16px] leading-7 text-on-surface outline-none transition placeholder:text-on-surface-muted/55 focus:border-primary-container focus:ring-4 focus:ring-primary-container/15 disabled:cursor-not-allowed disabled:opacity-70"
                 />
-                <span>
-                  Saya setuju jawaban screening diproses oleh sistem AI CogniScan
-                  untuk membuat pra-asesmen awal.
-                </span>
-              </label>
-            ) : null}
+              ) : (
+                <div className="rounded-[14px] border border-outline-variant bg-surface-container/45 px-5 py-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-extrabold uppercase tracking-[0.12em] text-on-surface-variant">
+                        Voice note
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-on-surface-muted" aria-live="polite">
+                        {isRecording
+                          ? `Merekam ${formatRecordingSeconds(recordingSeconds)}`
+                          : voiceStatusMessage ||
+                            (currentAnsweredByVoice
+                              ? "Voice note pertanyaan ini sudah tersimpan sementara."
+                              : "Audio direkam di RAM browser dan dikirim saat screening selesai.")}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {isRecording ? (
+                        <button
+                          type="button"
+                          onClick={stopRecording}
+                          className="inline-flex h-11 items-center gap-2 rounded-full bg-red-600 px-5 text-sm font-bold text-white shadow-[0_0_0_6px_rgba(220,38,38,0.12)] transition hover:bg-red-700"
+                        >
+                          <Square className="h-4 w-4" aria-hidden="true" />
+                          Stop
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={startRecording}
+                          disabled={isSubmitting || isVoiceUploading}
+                          className="inline-flex h-11 items-center gap-2 rounded-full border border-primary px-5 text-sm font-bold text-primary transition hover:bg-primary-container/10 disabled:cursor-wait disabled:opacity-60"
+                        >
+                          <Mic className="h-4 w-4" aria-hidden="true" />
+                          {currentAnsweredByVoice || voiceBlob ? "Rekam Ulang" : "Rekam"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={removeCurrentVoiceAnswer}
+                        disabled={!voiceBlob && !voicePreviewUrl && !currentAnsweredByVoice}
+                        className="inline-flex h-11 items-center justify-center rounded-full border border-outline-variant px-3 text-on-surface-variant transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                        aria-label="Hapus voice note"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-[12px] bg-white px-4 py-4">
+                    {isRecording ? (
+                      <div className="flex items-center gap-4">
+                        <span className="relative flex h-4 w-4">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
+                          <span className="relative inline-flex h-4 w-4 rounded-full bg-red-600" />
+                        </span>
+                        <div className="flex h-10 flex-1 items-end gap-1.5" aria-hidden="true">
+                          {audioLevels.map((height, index) => (
+                            <span
+                              key={index}
+                              className="w-full max-w-3 rounded-full bg-red-500/80 transition-[height] duration-75 ease-linear"
+                              style={{
+                                height: `${height}px`,
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-sm font-extrabold tabular-nums text-red-700">
+                          {formatRecordingSeconds(recordingSeconds)}
+                        </span>
+                      </div>
+                    ) : voicePreviewUrl ? (
+                      <audio controls src={voicePreviewUrl} className="w-full" />
+                    ) : currentAnsweredByVoice ? (
+                      <p className="text-sm font-semibold text-primary">
+                        Voice note untuk pertanyaan ini sudah siap dikirim.
+                      </p>
+                    ) : (
+                      <p className="text-sm leading-6 text-on-surface-variant">
+                        Tekan Rekam, jawab dengan suara, lalu gunakan tombol global di bawah untuk menyimpan dan lanjut.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <label className="mt-5 flex items-start gap-3 rounded-[12px] border border-outline-variant bg-surface-container/60 px-4 py-4 text-[14px] leading-6 text-on-surface-variant">
+              <input
+                type="checkbox"
+                checked={hasConsent}
+                onChange={(event) => setHasConsent(event.target.checked)}
+                disabled={isSubmitting || isVoiceUploading}
+                className="mt-0.5 h-5 w-5 shrink-0 rounded border-outline-variant text-primary-container focus:ring-primary-container/20"
+              />
+              <span>
+                Saya setuju jawaban screening diproses oleh sistem AI CogniScan
+                untuk membuat pra-asesmen awal.
+              </span>
+            </label>
             {isSubmitting ? (
               <div
                 className="mt-5 inline-flex items-center gap-3 rounded-full border border-primary-container/40 bg-primary-container/10 px-4 py-2 text-sm font-semibold text-primary"
@@ -543,6 +699,7 @@ export default function ScreeningQuestionPage() {
                 onClick={() => {
                   if (!isSubmitting && !isVoiceUploading && !isRecording) {
                     clearVoiceNote();
+                    setInputMode(voiceAnswers[index] ? "voice" : "text");
                     setCurrentIndex(index);
                   }
                 }}

@@ -39,6 +39,7 @@ router = APIRouter()
 )
 async def read_booking_availability(
     id_pra_asesmen: int | None = Query(default=None, gt=0),
+    id_booking_sebelumnya: int | None = Query(default=None, gt=0),
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
     current_user: Pengguna = Depends(require_role("pasien")),
@@ -49,6 +50,7 @@ async def read_booking_availability(
         db=db,
         current_user=current_user,
         id_pra_asesmen=id_pra_asesmen,
+        id_booking_sebelumnya=id_booking_sebelumnya,
         start_date=start_date,
         end_date=end_date,
     )

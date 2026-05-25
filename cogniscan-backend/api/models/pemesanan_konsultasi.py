@@ -31,6 +31,9 @@ class PemesananKonsultasi(Base):
     id_psikolog: Mapped[int | None] = mapped_column(ForeignKey("psikolog.id_psikolog"), nullable=True)
     id_jadwal_psikolog: Mapped[int | None] = mapped_column(ForeignKey("jadwal_psikolog.id_jadwal_psikolog"), nullable=True)
     id_pra_asesmen: Mapped[int | None] = mapped_column(ForeignKey("pra_asesmen.id_pra_asesmen"), nullable=True)
+    id_booking_sebelumnya: Mapped[int | None] = mapped_column(
+        ForeignKey("pemesanan_konsultasi.id_pemesanan_konsultasi"), nullable=True
+    )
     status_konsultasi: Mapped[str | None] = mapped_column(Text, default="menunggu")
     mode_konsultasi: Mapped[str | None] = mapped_column(Text, nullable=True)
     link_pertemuan: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -77,6 +77,11 @@ function statusLabel(receipt: BookingReceipt) {
   }
   if (receipt.status_konsultasi === "dibatalkan_pasien") return "Konsultasi Dibatalkan";
   if (receipt.status_konsultasi === "dibatalkan") return "Booking Dibatalkan";
+  if (receipt.status_konsultasi === "ditutup") return "Konsultasi Ditutup";
+  if (receipt.status_konsultasi === "selesai") return "Konsultasi Selesai";
+  if (receipt.status_konsultasi === "menunggu_konfirmasi_psikolog") {
+    return "Menunggu Konfirmasi Psikolog";
+  }
   if (receipt.status_pembayaran === "dibayar" || receipt.status_transaksi === "berhasil") {
     return "Pembayaran Berhasil";
   }
