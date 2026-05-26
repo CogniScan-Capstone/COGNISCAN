@@ -14,24 +14,22 @@ class PsikologAdminResponse(BaseModel):
     nama_lengkap: str
     email: Optional[str] = None
     nomor_hp: Optional[str] = None
-    spesialisasi: Optional[str] = None
-    pengalaman_tahun: Optional[int] = None
-    universitas_asal: Optional[str] = None
-    tahun_lulus: Optional[int] = None
+    nik: Optional[str] = None
     alamat_praktik: Optional[str] = None
     kota: Optional[str] = None
     provinsi: Optional[str] = None
     tarif_konsultasi: Optional[Decimal] = None
     no_str: Optional[str] = None
     no_sip: Optional[str] = None
-    tgl_kadaluarsa_str: Optional[date] = None
-    tgl_kadaluarsa_sip: Optional[date] = None
     upload_dokumen_str: Optional[str] = None
     upload_dokumen_sip: Optional[str] = None
-    bio_singkat: Optional[str] = None
     status_akun: Optional[str] = None
     apakah_sudah_ganti_password: Optional[bool] = None
     dibuat_pada: Optional[datetime] = None
+    nama_bank: Optional[str] = None
+    nomor_rekening: Optional[str] = None
+    nama_penerima_rekening: Optional[str] = None
+    apakah_rekening_terverifikasi: Optional[bool] = None
 
 
 class PsikologApproveResponse(BaseModel):

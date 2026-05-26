@@ -88,16 +88,14 @@ class PsikologAvailableResponse(BaseModel):
 
     id_psikolog: int
     nama_lengkap: str
-    spesialisasi: str | None = None
-    pengalaman_tahun: int | None = None
-    universitas_asal: str | None = None
-    tahun_lulus: int | None = None
+    nik: str | None = None
     alamat_praktik: str | None = None
     kota: str | None = None
     provinsi: str | None = None
     tarif_konsultasi: Decimal | None = None
-    bio_singkat: str | None = None
     status_akun: str | None = None
     dibuat_pada: datetime | None = None
-    tgl_kadaluarsa_str: date | None = None
-    tgl_kadaluarsa_sip: date | None = None
+    nama_bank: str | None = None
+    nomor_rekening: str | None = None
+    nama_penerima_rekening: str | None = None
+    apakah_rekening_terverifikasi: bool | None = None

@@ -186,19 +186,13 @@ export default function SignUpPsikologPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [specialization, setSpecialization] = useState("");
-  const [experienceYears, setExperienceYears] = useState("");
-  const [university, setUniversity] = useState("");
-  const [graduationYear, setGraduationYear] = useState("");
-  const [bio, setBio] = useState("");
+  const [nik, setNik] = useState("");
   const [practiceAddress, setPracticeAddress] = useState("");
   const [city, setCity] = useState("");
   const [province, setProvince] = useState("");
   const [consultationFee, setConsultationFee] = useState("");
   const [strNumber, setStrNumber] = useState("");
   const [sipNumber, setSipNumber] = useState("");
-  const [strExpiry, setStrExpiry] = useState("");
-  const [sipExpiry, setSipExpiry] = useState("");
   const [strFile, setStrFile] = useState<File | null>(null);
   const [sipFile, setSipFile] = useState<File | null>(null);
   const [strError, setStrError] = useState<string | undefined>();
@@ -213,19 +207,13 @@ export default function SignUpPsikologPage() {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedPhone = normalizeIndonesianPhone(phone);
     const trimmedName = fullName.trim();
-    const trimmedSpecialization = specialization.trim();
-    const trimmedUniversity = university.trim();
-    const trimmedBio = bio.trim();
+    const trimmedNik = nik.trim();
     const trimmedAddress = practiceAddress.trim();
     const trimmedCity = city.trim();
     const trimmedProvince = province.trim();
     const trimmedStr = strNumber.trim();
     const trimmedSip = sipNumber.trim();
-    const parsedExperience = Number(experienceYears);
-    const parsedGraduationYear = Number(graduationYear);
     const parsedFee = Number(consultationFee);
-    const today = new Date().toISOString().slice(0, 10);
-    const currentYear = new Date().getFullYear();
 
     if (trimmedName.length < 3) {
       setFormError("Nama lengkap wajib diisi minimal 3 karakter.");
@@ -242,27 +230,8 @@ export default function SignUpPsikologPage() {
       return;
     }
 
-    if (trimmedSpecialization.length < 3) {
-      setFormError("Spesialisasi wajib diisi minimal 3 karakter.");
-      return;
-    }
-
-    if (!Number.isInteger(parsedExperience) || parsedExperience < 0) {
-      setFormError("Pengalaman praktik wajib diisi dengan angka 0 atau lebih.");
-      return;
-    }
-
-    if (trimmedUniversity.length < 3) {
-      setFormError("Universitas asal wajib diisi minimal 3 karakter.");
-      return;
-    }
-
-    if (
-      !Number.isInteger(parsedGraduationYear) ||
-      parsedGraduationYear < 1950 ||
-      parsedGraduationYear > currentYear
-    ) {
-      setFormError("Tahun lulus wajib diisi dengan tahun yang valid.");
+    if (!/^\d{16}$/.test(trimmedNik)) {
+      setFormError("NIK wajib terdiri dari 16 digit angka.");
       return;
     }
 
@@ -276,16 +245,6 @@ export default function SignUpPsikologPage() {
       return;
     }
 
-    if (!strExpiry || !sipExpiry) {
-      setFormError("Tanggal kadaluarsa STR dan SIP wajib diisi.");
-      return;
-    }
-
-    if (strExpiry < today || sipExpiry < today) {
-      setFormError("Tanggal kadaluarsa STR dan SIP harus masih aktif.");
-      return;
-    }
-
     if (trimmedAddress.length < 5) {
       setFormError("Alamat praktik wajib diisi minimal 5 karakter.");
       return;
@@ -293,11 +252,6 @@ export default function SignUpPsikologPage() {
 
     if (trimmedCity.length < 2 || trimmedProvince.length < 2) {
       setFormError("Kota dan provinsi wajib diisi.");
-      return;
-    }
-
-    if (trimmedBio.length < 20) {
-      setFormError("Bio singkat wajib diisi minimal 20 karakter.");
       return;
     }
 
@@ -313,21 +267,15 @@ export default function SignUpPsikologPage() {
         email: normalizedEmail,
         nama_lengkap: trimmedName,
         nomor_hp: normalizedPhone,
-        spesialisasi: trimmedSpecialization,
-        pengalaman_tahun: parsedExperience,
-        universitas_asal: trimmedUniversity,
-        tahun_lulus: parsedGraduationYear,
+        nik: trimmedNik,
         alamat_praktik: trimmedAddress,
         kota: trimmedCity,
         provinsi: trimmedProvince,
         tarif_konsultasi: parsedFee,
         no_str: trimmedStr,
         no_sip: trimmedSip,
-        tgl_kadaluarsa_str: strExpiry,
-        tgl_kadaluarsa_sip: sipExpiry,
         upload_dokumen_str: strFile.name,
         upload_dokumen_sip: sipFile.name,
-        bio_singkat: trimmedBio,
       });
 
       router.push("/registration-success");
@@ -381,6 +329,15 @@ export default function SignUpPsikologPage() {
                 required
               />
               <Field
+                label="Nomor NIK"
+                placeholder="16 digit NIK"
+                value={nik}
+                onChange={(event) => setNik(event.target.value.replace(/\D/g, "").slice(0, 16))}
+                required
+                minLength={16}
+                maxLength={16}
+              />
+              <Field
                 label="Email"
                 placeholder="sarah.alika@email.com"
                 type="email"
@@ -397,45 +354,6 @@ export default function SignUpPsikologPage() {
                 required
               />
               <Field
-                label="Spesialisasi"
-                placeholder="Psikolog klinis, CBT, trauma, remaja..."
-                value={specialization}
-                onChange={(event) => setSpecialization(event.target.value)}
-                required
-                minLength={3}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Pengalaman Praktik"
-                  placeholder="3"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={experienceYears}
-                  onChange={(event) => setExperienceYears(event.target.value)}
-                  required
-                />
-                <Field
-                  label="Tahun Lulus"
-                  placeholder="2020"
-                  type="number"
-                  min="1950"
-                  max={new Date().getFullYear()}
-                  step="1"
-                  value={graduationYear}
-                  onChange={(event) => setGraduationYear(event.target.value)}
-                  required
-                />
-              </div>
-              <Field
-                label="Universitas Asal"
-                placeholder="Universitas Indonesia"
-                value={university}
-                onChange={(event) => setUniversity(event.target.value)}
-                required
-                minLength={3}
-              />
-              <Field
                 label="Tarif Konsultasi"
                 placeholder="150000"
                 type="number"
@@ -443,15 +361,6 @@ export default function SignUpPsikologPage() {
                 value={consultationFee}
                 onChange={(event) => setConsultationFee(event.target.value)}
                 required
-              />
-              <TextAreaField
-                label="Bio Singkat"
-                placeholder="Tuliskan pengalaman, pendekatan terapi, dan fokus layanan..."
-                rows={4}
-                value={bio}
-                onChange={(event) => setBio(event.target.value)}
-                required
-                minLength={20}
               />
             </div>
           </section>
@@ -481,26 +390,7 @@ export default function SignUpPsikologPage() {
                   minLength={3}
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Kadaluarsa STR"
-                  placeholder=""
-                  type="date"
-                  min={new Date().toISOString().slice(0, 10)}
-                  value={strExpiry}
-                  onChange={(event) => setStrExpiry(event.target.value)}
-                  required
-                />
-                <Field
-                  label="Kadaluarsa SIP"
-                  placeholder=""
-                  type="date"
-                  min={new Date().toISOString().slice(0, 10)}
-                  value={sipExpiry}
-                  onChange={(event) => setSipExpiry(event.target.value)}
-                  required
-                />
-              </div>
+
               <TextAreaField
                 label="Alamat Praktik"
                 placeholder="Nama klinik, jalan, dan detail lokasi praktik..."

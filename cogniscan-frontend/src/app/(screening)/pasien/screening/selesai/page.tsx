@@ -410,17 +410,11 @@ export default function ScreeningCompletePage() {
                           {psychologist.nama_lengkap}
                         </h3>
                         <p className="mt-1 text-[14px] text-on-surface-muted">
-                          {psychologist.spesialisasi ?? "Psikolog"}
-                          {psychologist.kota ? ` · ${psychologist.kota}` : ""}
+                          Psikolog{psychologist.kota ? ` · ${psychologist.kota}` : ""}
                         </p>
                         <p className="mt-1 text-[15px] font-medium text-on-surface-muted">
                           {formatPrice(psychologist.tarif_konsultasi)}
                         </p>
-                        {psychologist.bio_singkat ? (
-                          <p className="mt-3 text-sm leading-6 text-on-surface-variant">
-                            {psychologist.bio_singkat}
-                          </p>
-                        ) : null}
                         <button
                           type="button"
                           onClick={() =>

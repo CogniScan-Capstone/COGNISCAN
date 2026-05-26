@@ -245,12 +245,9 @@ export default function AdminRegistrationDetailPage() {
                 <section className="rounded-[10px] bg-surface-container px-6 py-4">
                   <dl className="grid grid-cols-[132px_1fr] gap-x-4 gap-y-2 text-sm">
                     <DetailRow label="Nama Lengkap:" value={registration.nama_lengkap} />
+                    <DetailRow label="NIK:" value={registration.nik} />
                     <DetailRow label="Email:" value={registration.email} />
                     <DetailRow label="No. HP:" value={registration.nomor_hp} />
-                    <DetailRow label="Spesialisasi:" value={registration.spesialisasi} />
-                    <DetailRow label="Pengalaman:" value={registration.pengalaman_tahun ? `${registration.pengalaman_tahun} tahun` : null} />
-                    <DetailRow label="Universitas:" value={registration.universitas_asal} />
-                    <DetailRow label="Tahun Lulus:" value={registration.tahun_lulus} />
                     <DetailRow label="Kota:" value={registration.kota} />
                     <DetailRow label="Provinsi:" value={registration.provinsi} />
                     <DetailRow label="Tarif:" value={registration.tarif_konsultasi ? `Rp ${Number(registration.tarif_konsultasi).toLocaleString("id-ID")}` : null} />
@@ -260,21 +257,10 @@ export default function AdminRegistrationDetailPage() {
                 <section className="mt-5 rounded-[10px] bg-surface-container px-6 py-4">
                   <dl className="grid grid-cols-[132px_1fr] gap-x-4 gap-y-2 text-sm">
                     <DetailRow label="No. STR:" value={registration.no_str} />
-                    <DetailRow label="Berlaku STR:" value={registration.tgl_kadaluarsa_str} />
                     <DetailRow label="No. SIP:" value={registration.no_sip} />
-                    <DetailRow label="Berlaku SIP:" value={registration.tgl_kadaluarsa_sip} />
                     <DetailRow label="Alamat Praktik:" value={registration.alamat_praktik} />
                   </dl>
                 </section>
-
-                {registration.bio_singkat ? (
-                  <section className="mt-5 rounded-[10px] border border-outline-variant px-5 py-4">
-                    <h2 className="mb-2 text-sm font-medium uppercase text-[#8d5367]">
-                      Bio Singkat
-                    </h2>
-                    <p className="text-sm leading-6 text-on-surface-variant">{registration.bio_singkat}</p>
-                  </section>
-                ) : null}
 
                 <section className="mt-7">
                   <h2 className="mb-4 text-sm font-medium uppercase text-[#8d5367]">

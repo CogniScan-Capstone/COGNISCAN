@@ -27,6 +27,7 @@ from api.services.auth_service import (
     change_psikolog_temporary_password,
     create_pasien_profile,
     get_pasien_profile,
+    get_psikolog_profile,
     register_psikolog_candidate,
     update_pasien_profile,
     update_psikolog_profile,
@@ -197,6 +198,20 @@ async def register_psikolog(
     ke email psikolog.
     """
     return await register_psikolog_candidate(db=db, profile_data=profile_data)
+
+
+@router.get(
+    "/profile/psikolog",
+    response_model=ProfilePsikologResponse,
+)
+async def read_profile_psikolog(
+    current_user: Pengguna = Depends(get_current_active_psikolog),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Mengambil profil psikolog milik user yang sedang login.
+    """
+    return await get_psikolog_profile(db=db, current_user=current_user)
 
 
 @router.patch(

@@ -37,7 +37,7 @@ function matchesSearch(item: AdminPsikolog, query: string) {
     item.nama_lengkap,
     item.email,
     item.nomor_hp,
-    item.spesialisasi,
+    item.nik,
     item.no_str,
     item.no_sip,
   ]
@@ -137,7 +137,7 @@ export default function AdminRegistrationPage() {
                 <DashboardTableCell as="th">No</DashboardTableCell>
                 <DashboardTableCell as="th">Pendaftar</DashboardTableCell>
                 <DashboardTableCell as="th">Email</DashboardTableCell>
-                <DashboardTableCell as="th">Spesialisasi</DashboardTableCell>
+                <DashboardTableCell as="th">NIK</DashboardTableCell>
                 <DashboardTableCell as="th">No. STR</DashboardTableCell>
                 <DashboardTableCell as="th">Status</DashboardTableCell>
                 <DashboardTableCell as="th">Aksi</DashboardTableCell>
@@ -165,7 +165,7 @@ export default function AdminRegistrationPage() {
                       </div>
                     </DashboardTableCell>
                     <DashboardTableCell className="text-on-surface-variant">{item.email ?? "-"}</DashboardTableCell>
-                    <DashboardTableCell className="text-on-surface-variant">{item.spesialisasi ?? "-"}</DashboardTableCell>
+                    <DashboardTableCell className="text-on-surface-variant">{item.nik ?? "-"}</DashboardTableCell>
                     <DashboardTableCell className="font-mono text-primary">{item.no_str ?? "-"}</DashboardTableCell>
                     <DashboardTableCell>
                       <StatusBadge tone={psikologStatusTone(item.status_akun)}>

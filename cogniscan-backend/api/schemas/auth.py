@@ -76,35 +76,15 @@ class ProfilePsikologCreate(BaseModel):
     email: EmailStr
     nama_lengkap: str = Field(..., min_length=3, max_length=150)
     nomor_hp: str = Field(..., min_length=8, max_length=20, pattern=r"^\+?[0-9]{8,20}$")
-    spesialisasi: str = Field(..., min_length=3, max_length=120)
-    pengalaman_tahun: int = Field(..., ge=0, le=80)
-    universitas_asal: str = Field(..., min_length=3, max_length=150)
-    tahun_lulus: int = Field(..., ge=1950)
+    nik: str = Field(..., min_length=16, max_length=16, pattern=r"^\d{16}$")
     alamat_praktik: str = Field(..., min_length=5, max_length=500)
     kota: str = Field(..., min_length=2, max_length=120)
     provinsi: str = Field(..., min_length=2, max_length=120)
     tarif_konsultasi: Decimal = Field(..., gt=0)
     no_str: str = Field(..., min_length=3)
     no_sip: str = Field(..., min_length=3)
-    tgl_kadaluarsa_str: date
-    tgl_kadaluarsa_sip: date
     upload_dokumen_str: str = Field(..., min_length=3, max_length=255)
     upload_dokumen_sip: str = Field(..., min_length=3, max_length=255)
-    bio_singkat: str = Field(..., min_length=20, max_length=1000)
-
-    @field_validator("tahun_lulus")
-    @classmethod
-    def validate_tahun_lulus(cls, value: int) -> int:
-        if value > date.today().year:
-            raise ValueError("Tahun lulus tidak boleh di masa depan")
-        return value
-
-    @field_validator("tgl_kadaluarsa_str", "tgl_kadaluarsa_sip")
-    @classmethod
-    def validate_dokumen_aktif(cls, value: date) -> date:
-        if value < date.today():
-            raise ValueError("Tanggal kadaluarsa dokumen harus masih aktif")
-        return value
 
 
 class ProfilePsikologUpdate(BaseModel):
@@ -117,37 +97,23 @@ class ProfilePsikologUpdate(BaseModel):
         max_length=20,
         pattern=r"^\+?[0-9]{8,20}$",
     )
-    spesialisasi: Optional[str] = Field(default=None, min_length=3, max_length=120)
-    pengalaman_tahun: Optional[int] = Field(default=None, ge=0)
-    universitas_asal: Optional[str] = Field(default=None, min_length=3, max_length=150)
-    tahun_lulus: Optional[int] = Field(default=None, ge=1950)
     alamat_praktik: Optional[str] = Field(default=None, min_length=5, max_length=500)
     kota: Optional[str] = Field(default=None, min_length=2, max_length=120)
     provinsi: Optional[str] = Field(default=None, min_length=2, max_length=120)
     tarif_konsultasi: Optional[Decimal] = Field(default=None, gt=0)
-    bio_singkat: Optional[str] = Field(default=None, min_length=20, max_length=1000)
-
-    @field_validator("tahun_lulus")
-    @classmethod
-    def validate_tahun_lulus(cls, value: int | None) -> int | None:
-        if value is not None and value > date.today().year:
-            raise ValueError("Tahun lulus tidak boleh di masa depan")
-        return value
+    nama_bank: Optional[str] = Field(default=None, min_length=2, max_length=50)
+    nomor_rekening: Optional[str] = Field(default=None, min_length=5, max_length=30)
+    nama_penerima_rekening: Optional[str] = Field(default=None, min_length=3, max_length=150)
 
     @model_validator(mode="after")
     def reject_required_nulls(self) -> "ProfilePsikologUpdate":
         for field_name in (
             "nama_lengkap",
             "nomor_hp",
-            "spesialisasi",
-            "pengalaman_tahun",
-            "universitas_asal",
-            "tahun_lulus",
             "alamat_praktik",
             "kota",
             "provinsi",
             "tarif_konsultasi",
-            "bio_singkat",
         ):
             if field_name in self.model_fields_set and getattr(self, field_name) is None:
                 raise ValueError("Field profil wajib tidak boleh dikosongkan")
@@ -162,23 +128,21 @@ class ProfilePsikologResponse(BaseModel):
     nama_lengkap: str
     email: Optional[str] = None
     nomor_hp: Optional[str] = None
-    spesialisasi: Optional[str] = None
-    pengalaman_tahun: Optional[int] = None
-    universitas_asal: Optional[str] = None
-    tahun_lulus: Optional[int] = None
+    nik: Optional[str] = None
     alamat_praktik: Optional[str] = None
     kota: Optional[str] = None
     provinsi: Optional[str] = None
     tarif_konsultasi: Optional[Decimal] = None
     no_str: Optional[str] = None
     no_sip: Optional[str] = None
-    tgl_kadaluarsa_str: Optional[date] = None
-    tgl_kadaluarsa_sip: Optional[date] = None
     upload_dokumen_str: Optional[str] = None
     upload_dokumen_sip: Optional[str] = None
-    bio_singkat: Optional[str] = None
     status_akun: Optional[str] = None
     apakah_sudah_ganti_password: Optional[bool] = None
+    nama_bank: Optional[str] = None
+    nomor_rekening: Optional[str] = None
+    nama_penerima_rekening: Optional[str] = None
+    apakah_rekening_terverifikasi: Optional[bool] = None
 
 
 class PsikologRegistrationResponse(BaseModel):

@@ -276,21 +276,15 @@ async def register_psikolog_candidate(
         nama_lengkap=profile_data.nama_lengkap,
         email=email,
         nomor_hp=profile_data.nomor_hp,
-        spesialisasi=profile_data.spesialisasi,
-        pengalaman_tahun=profile_data.pengalaman_tahun,
-        universitas_asal=profile_data.universitas_asal,
-        tahun_lulus=profile_data.tahun_lulus,
+        nik=profile_data.nik,
         alamat_praktik=profile_data.alamat_praktik,
         kota=profile_data.kota,
         provinsi=profile_data.provinsi,
         tarif_konsultasi=profile_data.tarif_konsultasi,
         no_str=profile_data.no_str,
         no_sip=profile_data.no_sip,
-        tgl_kadaluarsa_str=profile_data.tgl_kadaluarsa_str,
-        tgl_kadaluarsa_sip=profile_data.tgl_kadaluarsa_sip,
         upload_dokumen_str=profile_data.upload_dokumen_str,
         upload_dokumen_sip=profile_data.upload_dokumen_sip,
-        bio_singkat=profile_data.bio_singkat,
         status_akun="pending",
         apakah_sudah_ganti_password=False,
     )
@@ -398,3 +392,27 @@ async def update_psikolog_profile(
     await db.commit()
     await db.refresh(psikolog)
     return psikolog
+
+
+async def get_psikolog_profile(db: AsyncSession, current_user: Pengguna) -> Psikolog:
+    """
+    Mengambil profil psikolog milik user yang sedang login.
+    """
+    if current_user.peran != "psikolog":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Endpoint ini hanya untuk psikolog",
+        )
+
+    result = await db.execute(
+        select(Psikolog).where(Psikolog.id_pengguna == current_user.id)
+    )
+    psikolog = result.scalar_one_or_none()
+    if psikolog is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profil psikolog tidak ditemukan",
+        )
+
+    return psikolog
+

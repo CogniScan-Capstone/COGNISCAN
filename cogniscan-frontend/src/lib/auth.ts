@@ -27,25 +27,54 @@ export type PatientProfile = {
   no_hp_wa?: string | null;
 };
 
+export type PsikologProfilePayload = {
+  nama_lengkap?: string;
+  nomor_hp?: string | null;
+  alamat_praktik?: string | null;
+  kota?: string | null;
+  provinsi?: string | null;
+  tarif_konsultasi?: number | null;
+  nama_bank?: string | null;
+  nomor_rekening?: string | null;
+  nama_penerima_rekening?: string | null;
+};
+
+export type PsikologProfile = {
+  id_psikolog: number;
+  id_pengguna?: string | null;
+  email?: string | null;
+  nama_lengkap: string;
+  nomor_hp?: string | null;
+  nik?: string | null;
+  alamat_praktik?: string | null;
+  kota?: string | null;
+  provinsi?: string | null;
+  tarif_konsultasi?: number | null;
+  no_str?: string | null;
+  no_sip?: string | null;
+  upload_dokumen_str?: string | null;
+  upload_dokumen_sip?: string | null;
+  status_akun?: string | null;
+  apakah_sudah_ganti_password?: boolean | null;
+  nama_bank?: string | null;
+  nomor_rekening?: string | null;
+  nama_penerima_rekening?: string | null;
+  apakah_rekening_terverifikasi?: boolean | null;
+};
+
 export type PsikologRegistrationPayload = {
   email: string;
   nama_lengkap: string;
   nomor_hp: string;
-  spesialisasi: string;
-  pengalaman_tahun: number;
-  universitas_asal: string;
-  tahun_lulus: number;
+  nik: string;
   alamat_praktik: string;
   kota: string;
   provinsi: string;
   tarif_konsultasi: number;
   no_str: string;
   no_sip: string;
-  tgl_kadaluarsa_str: string;
-  tgl_kadaluarsa_sip: string;
   upload_dokumen_str: string;
   upload_dokumen_sip: string;
-  bio_singkat: string;
 };
 
 export type JournalSessionStartPayload = {
@@ -144,19 +173,13 @@ export type JournalFinalizeResult = {
 export type AvailablePsychologist = {
   id_psikolog: number;
   nama_lengkap: string;
-  spesialisasi?: string | null;
-  pengalaman_tahun?: number | null;
-  universitas_asal?: string | null;
-  tahun_lulus?: number | null;
+  nik?: string | null;
   alamat_praktik?: string | null;
   kota?: string | null;
   provinsi?: string | null;
   tarif_konsultasi?: string | number | null;
-  bio_singkat?: string | null;
   status_akun?: string | null;
   dibuat_pada?: string | null;
-  tgl_kadaluarsa_str?: string | null;
-  tgl_kadaluarsa_sip?: string | null;
 };
 
 export type ConsultationMethod = "online" | "offline";
@@ -579,6 +602,41 @@ export async function updatePatientProfile(
   }
 
   return response.json() as Promise<PatientProfile>;
+}
+
+export async function fetchPsikologProfile(accessToken: string): Promise<PsikologProfile> {
+  const response = await fetchApi(`${API_BASE_URL}/api/auth/profile/psikolog`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PsikologProfile>;
+}
+
+export async function updatePsikologProfile(
+  accessToken: string,
+  payload: PsikologProfilePayload,
+): Promise<PsikologProfile> {
+  const response = await fetchApi(`${API_BASE_URL}/api/auth/profile/psikolog`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PsikologProfile>;
 }
 
 export async function registerPsikologCandidate(
