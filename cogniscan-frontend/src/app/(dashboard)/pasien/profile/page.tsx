@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
-import { ArrowRight, CalendarDays, KeyRound, Loader2, Phone } from "lucide-react";
+import { ArrowRight, CalendarDays, KeyRound, Loader2, Pencil, Phone, X } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import { getPatientNav, patientProfileHref, patientUser } from "@/components/patient";
 import {
@@ -14,6 +14,14 @@ import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
 
 type GenderValue = "" | "laki-laki" | "perempuan";
+
+type PatientProfileFormState = {
+  nama_lengkap: string;
+  jenis_kelamin: GenderValue;
+  tanggal_lahir: string;
+  alamat_lengkap: string;
+  no_hp_wa: string;
+};
 
 function normalizeIndonesianPhone(value: string) {
   const raw = value.trim();
@@ -90,9 +98,12 @@ export default function PatientProfilePage() {
   const [address, setAddress] = useState("");
   const [gender, setGender] = useState<GenderValue>("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [savedProfile, setSavedProfile] =
+    useState<PatientProfileFormState | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -121,12 +132,20 @@ export default function PatientProfilePage() {
         setPhone(profile.no_hp_wa ?? "");
         setDateOfBirth(profile.tanggal_lahir ?? "");
         setAddress(profile.alamat_lengkap ?? "");
-        setGender(
+        const profileGender =
           profile.jenis_kelamin === "laki-laki" ||
             profile.jenis_kelamin === "perempuan"
             ? profile.jenis_kelamin
-            : "",
-        );
+            : "";
+        setGender(profileGender);
+        setSavedProfile({
+          nama_lengkap: profile.nama_lengkap ?? "",
+          jenis_kelamin: profileGender,
+          tanggal_lahir: profile.tanggal_lahir ?? "",
+          alamat_lengkap: profile.alamat_lengkap ?? "",
+          no_hp_wa: profile.no_hp_wa ?? "",
+        });
+        setIsEditing(false);
       } catch (error) {
         if (!mounted) return;
         setErrorMessage(
@@ -149,6 +168,8 @@ export default function PatientProfilePage() {
     event.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
+
+    if (!isEditing) return;
 
     if (!accessToken) {
       setErrorMessage("Session tidak ditemukan. Silakan login ulang.");
@@ -211,6 +232,8 @@ export default function PatientProfilePage() {
           ? updated.jenis_kelamin
           : "",
       );
+      setSavedProfile(payload);
+      setIsEditing(false);
       setSuccessMessage("Profil berhasil disimpan.");
     } catch (error) {
       setErrorMessage(
@@ -219,6 +242,25 @@ export default function PatientProfilePage() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function handleEditProfile() {
+    setErrorMessage("");
+    setSuccessMessage("");
+    setIsEditing(true);
+  }
+
+  function handleCancelEdit() {
+    if (savedProfile) {
+      setFullName(savedProfile.nama_lengkap);
+      setPhone(savedProfile.no_hp_wa);
+      setDateOfBirth(savedProfile.tanggal_lahir);
+      setAddress(savedProfile.alamat_lengkap);
+      setGender(savedProfile.jenis_kelamin);
+    }
+    setErrorMessage("");
+    setSuccessMessage("");
+    setIsEditing(false);
   }
 
   const displayUser = {
@@ -247,9 +289,21 @@ export default function PatientProfilePage() {
         </header>
 
         <DashboardCard className="border border-outline-variant/70 px-10 py-10">
-          <h2 className="mb-10 text-sm font-extrabold uppercase tracking-[0.16em] text-[#6f5794]">
-            Informasi Pribadi
-          </h2>
+          <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-sm font-extrabold uppercase tracking-[0.16em] text-[#6f5794]">
+              Informasi Pribadi
+            </h2>
+            {!isLoading && !isEditing ? (
+              <button
+                type="button"
+                onClick={handleEditProfile}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-primary px-5 text-[14px] font-semibold text-primary transition hover:bg-primary-container/10"
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+                Edit Profil
+              </button>
+            ) : null}
+          </div>
 
           {isLoading ? (
             <div
@@ -270,6 +324,7 @@ export default function PatientProfilePage() {
                     label="Nama Lengkap"
                     value={fullName}
                     onChange={setFullName}
+                    readOnly={!isEditing || isSaving}
                     required
                     minLength={3}
                   />
@@ -284,6 +339,7 @@ export default function PatientProfilePage() {
                     value={phone}
                     icon={<Phone />}
                     onChange={setPhone}
+                    readOnly={!isEditing || isSaving}
                     required
                   />
                   <ProfileInput
@@ -292,6 +348,7 @@ export default function PatientProfilePage() {
                     type="date"
                     icon={<CalendarDays />}
                     onChange={setDateOfBirth}
+                    readOnly={!isEditing || isSaving}
                     required
                     max={new Date().toISOString().slice(0, 10)}
                   />
@@ -305,10 +362,13 @@ export default function PatientProfilePage() {
                     <textarea
                       value={address}
                       onChange={(event) => setAddress(event.target.value)}
+                      readOnly={!isEditing || isSaving}
                       rows={4}
                       required
                       minLength={5}
-                      className="w-full resize-none rounded-[10px] border border-outline-variant bg-white px-4 py-3 text-[15px] text-on-surface outline-none transition focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
+                      className={`w-full resize-none rounded-[10px] border border-outline-variant bg-white px-4 py-3 text-[15px] text-on-surface outline-none transition focus:border-primary-container focus:ring-4 focus:ring-primary-container/15 ${
+                        !isEditing || isSaving ? "bg-surface-container text-on-surface-variant" : ""
+                      }`}
                     />
                   </label>
 
@@ -323,6 +383,7 @@ export default function PatientProfilePage() {
                           name="gender"
                           checked={gender === "laki-laki"}
                           onChange={() => setGender("laki-laki")}
+                          disabled={!isEditing || isSaving}
                           required
                           className="h-5 w-5 appearance-none rounded-full border border-outline-variant bg-white checked:border-[6px] checked:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-container/20"
                         />
@@ -334,6 +395,7 @@ export default function PatientProfilePage() {
                           name="gender"
                           checked={gender === "perempuan"}
                           onChange={() => setGender("perempuan")}
+                          disabled={!isEditing || isSaving}
                           required
                           className="h-5 w-5 appearance-none rounded-full border border-outline-variant bg-white checked:border-[6px] checked:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-container/20"
                         />
@@ -378,14 +440,27 @@ export default function PatientProfilePage() {
                 </p>
               ) : null}
 
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="mt-14 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-primary px-8 text-[16px] font-medium text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition hover:-translate-y-0.5 hover:bg-[#365f39] disabled:pointer-events-none disabled:opacity-65"
-              >
-                {isSaving ? "Menyimpan..." : "Simpan Perubahan"}
-                <ArrowRight className="h-5 w-5" aria-hidden="true" />
-              </button>
+              {isEditing ? (
+                <div className="mt-14 grid gap-3 sm:grid-cols-[1fr_1.4fr]">
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    disabled={isSaving}
+                    className="inline-flex h-14 items-center justify-center gap-3 rounded-full border border-outline-variant px-8 text-[16px] font-medium text-on-surface-variant transition hover:bg-surface-container disabled:pointer-events-none disabled:opacity-65"
+                  >
+                    <X className="h-5 w-5" aria-hidden="true" />
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="inline-flex h-14 items-center justify-center gap-3 rounded-full bg-primary px-8 text-[16px] font-medium text-white shadow-[0_18px_28px_-20px_rgba(65,87,62,0.75)] transition hover:-translate-y-0.5 hover:bg-[#365f39] disabled:pointer-events-none disabled:opacity-65"
+                  >
+                    {isSaving ? "Menyimpan..." : "Simpan Perubahan"}
+                    <ArrowRight className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : null}
             </form>
           )}
         </DashboardCard>

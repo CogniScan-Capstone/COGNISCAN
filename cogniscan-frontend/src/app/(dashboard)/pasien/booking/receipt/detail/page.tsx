@@ -102,18 +102,25 @@ function statusLabel(receipt: BookingReceipt) {
   return "Booking Dibuat";
 }
 
+function isRescheduleReceipt(receipt: BookingReceipt, context: ReceiptContext) {
+  return (
+    context === "reschedule" ||
+    receipt.reschedule_request?.status === "selesai"
+  );
+}
+
 function displayTitle(receipt: BookingReceipt, context: ReceiptContext) {
   if (
-    context === "reschedule" &&
+    isRescheduleReceipt(receipt, context) &&
     (receipt.status_pembayaran === "dibayar" || receipt.status_transaksi === "berhasil")
   ) {
-    return "Reschedule Berhasil";
+    return "Jadwal Berhasil Diperbarui";
   }
   return statusLabel(receipt);
 }
 
-function displayDescription(context: ReceiptContext) {
-  if (context === "reschedule") {
+function displayDescription(receipt: BookingReceipt, context: ReceiptContext) {
+  if (isRescheduleReceipt(receipt, context)) {
     return "Jadwal konsultasimu sudah diperbarui di sistem.";
   }
   return "Booking konsultasimu sudah dicatat di sistem.";
@@ -269,6 +276,7 @@ export default function BookingReceiptDetailPage() {
   }
 
   const method = receipt.metode_konsultasi || receipt.mode_konsultasi || "-";
+  const isReschedule = isRescheduleReceipt(receipt, receiptContext);
   const title = displayTitle(receipt, receiptContext);
 
   return (
@@ -279,7 +287,7 @@ export default function BookingReceiptDetailPage() {
             {title}
           </h1>
           <p className="mt-2 text-[16px] text-on-surface-variant">
-            {displayDescription(receiptContext)}
+            {displayDescription(receipt, receiptContext)}
           </p>
         </header>
 
@@ -295,7 +303,9 @@ export default function BookingReceiptDetailPage() {
           </div>
 
           <div className="grid grid-cols-[1fr_auto] items-center gap-5 bg-surface-container-low px-1 py-3">
-            <dt className="text-on-surface-variant">Status Transaksi</dt>
+            <dt className="text-on-surface-variant">
+              {isReschedule ? "Status Jadwal" : "Status Transaksi"}
+            </dt>
             <dd className="inline-flex h-8 items-center gap-2 rounded-full bg-primary-container px-4 text-xs font-medium text-primary">
               {displayTitle(receipt, receiptContext)}
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
