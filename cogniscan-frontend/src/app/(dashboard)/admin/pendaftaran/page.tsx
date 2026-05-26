@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import {
   DashboardLayout,
@@ -21,7 +21,7 @@ import {
   type AdminPsikologFilter,
 } from "@/lib/admin";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/lib/supabase/client";
+import { useCachedApi } from "@/lib/useCachedApi";
 
 const filters: Array<{ label: string; value: AdminPsikologFilter }> = [
   { label: "Semua", value: "semua" },
@@ -49,44 +49,18 @@ function matchesSearch(item: AdminPsikolog, query: string) {
 }
 
 export default function AdminRegistrationPage() {
-  const [registrants, setRegistrants] = useState<AdminPsikolog[]>([]);
   const [activeFilter, setActiveFilter] = useState<AdminPsikologFilter>("semua");
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadRegistrants() {
-      setIsLoading(true);
-      setError("");
-
-      try {
-        const { data } = await supabase.auth.getSession();
-        const accessToken = data.session?.access_token;
-
-        if (!accessToken) {
-          throw new Error("Sesi admin tidak ditemukan. Silakan login ulang.");
-        }
-
-        const result = await fetchAdminPsikolog(accessToken, "semua");
-        if (isMounted) setRegistrants(result);
-      } catch (loadError) {
-        if (isMounted) {
-          setError(loadError instanceof Error ? loadError.message : "Gagal memuat pendaftaran psikolog.");
-        }
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    }
-
-    loadRegistrants();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const {
+    data: fetchedRegistrants,
+    loading: isLoading,
+    error,
+  } = useCachedApi<AdminPsikolog[]>(
+    "admin-psikolog-list",
+    (accessToken) => fetchAdminPsikolog(accessToken, "semua"),
+    { ttlMs: 30_000 },
+  );
+  const registrants = useMemo(() => fetchedRegistrants ?? [], [fetchedRegistrants]);
 
   const counts = useMemo(() => {
     return {

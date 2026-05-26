@@ -34,6 +34,7 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
 import { cn } from "@/lib/utils";
+import { getCached, isFresh, setCached } from "@/lib/apiCache";
 
 type SlotStatus = "penuh" | "tersedia" | "kosong";
 
@@ -49,6 +50,11 @@ type DayInfo = {
 type SlotCount = {
   total: number;
   filled: number;
+};
+
+type PsikologJadwalContext = {
+  availability: PsikologAvailabilitySlot[];
+  rescheduleRequests: RescheduleRequest[];
 };
 
 const monthNames = [
@@ -231,6 +237,10 @@ export default function PsikologJadwalPage() {
       ]);
       setAvailability(dataAvailability);
       setRescheduleRequests(dataRequests);
+      setCached(`psikolog-jadwal:${range.startDate}:${range.endDate}`, {
+        availability: dataAvailability,
+        rescheduleRequests: dataRequests,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal memuat slot jadwal.");
       setAvailability([]);
@@ -244,8 +254,20 @@ export default function PsikologJadwalPage() {
     let mounted = true;
 
     async function loadCurrentMonth() {
-      setLoading(true);
+      const range = monthRange(viewYear, viewMonth);
+      const cacheKey = `psikolog-jadwal:${range.startDate}:${range.endDate}`;
+      const cached = getCached<PsikologJadwalContext>(cacheKey);
+
+      if (cached) {
+        setAvailability(cached.availability);
+        setRescheduleRequests(cached.rescheduleRequests);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       setError("");
+
+      if (cached && isFresh(cacheKey, 20_000)) return;
 
       try {
         const { data } = await supabase.auth.getSession();
@@ -254,7 +276,6 @@ export default function PsikologJadwalPage() {
           throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
         }
 
-        const range = monthRange(viewYear, viewMonth);
         const [dataAvailability, dataRequests] = await Promise.all([
           fetchPsikologAvailability(accessToken, range),
           fetchPsikologRescheduleRequests(accessToken, { status: "pending" }),
@@ -262,6 +283,10 @@ export default function PsikologJadwalPage() {
         if (mounted) {
           setAvailability(dataAvailability);
           setRescheduleRequests(dataRequests);
+          setCached(cacheKey, {
+            availability: dataAvailability,
+            rescheduleRequests: dataRequests,
+          });
         }
       } catch (err) {
         if (mounted) {

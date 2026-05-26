@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { ArrowRight, CalendarCheck, ClipboardClock, ShieldCheck, Users } from "lucide-react";
 import {
   DashboardCard,
@@ -18,8 +17,8 @@ import {
   psikologStatusTone,
   type AdminDashboardSummary,
 } from "@/lib/admin";
-import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
+import { useCachedApi } from "@/lib/useCachedApi";
 
 function formatDate(value?: string | null) {
   if (!value) return "Belum tercatat";
@@ -36,42 +35,15 @@ function formatDate(value?: string | null) {
 
 export default function AdminDashboardPage() {
   const backendUser = useBackendUser();
-  const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadSummary() {
-      setIsLoading(true);
-      setError("");
-
-      try {
-        const { data } = await supabase.auth.getSession();
-        const accessToken = data.session?.access_token;
-
-        if (!accessToken) {
-          throw new Error("Sesi admin tidak ditemukan. Silakan login ulang.");
-        }
-
-        const result = await fetchAdminDashboardSummary(accessToken);
-        if (isMounted) setSummary(result);
-      } catch (loadError) {
-        if (isMounted) {
-          setError(loadError instanceof Error ? loadError.message : "Gagal memuat data dashboard admin.");
-        }
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    }
-
-    loadSummary();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const {
+    data: summary,
+    loading: isLoading,
+    error,
+  } = useCachedApi<AdminDashboardSummary>(
+    "admin-dashboard-summary",
+    fetchAdminDashboardSummary,
+    { ttlMs: 30_000 },
+  );
 
   const adminName = backendUser?.nama_lengkap?.trim() || "Admin";
   const latestRegistrations = summary?.recent_psikolog ?? [];

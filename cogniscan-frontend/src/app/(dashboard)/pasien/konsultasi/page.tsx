@@ -33,6 +33,8 @@ import {
 } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
+import { setCached } from "@/lib/apiCache";
+import { useCachedApi } from "@/lib/useCachedApi";
 
 type ConsultationTab = "menunggu" | "selesai";
 type ConsultationStatus =
@@ -174,43 +176,24 @@ export default function PatientConsultationPage() {
   };
 
   const [activeTab, setActiveTab] = useState<ConsultationTab>("menunggu");
-  const [bookings, setBookings] = useState<BookingReceipt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const {
+    data: fetchedBookings,
+    loading,
+    error,
+  } = useCachedApi<BookingReceipt[]>(
+    "pasien-konsultasi-bookings",
+    async (accessToken) => {
+      const dataBookings = await fetchPatientBookings(accessToken);
+      return dataBookings.filter(isPaid).sort(sortBySchedule);
+    },
+    { ttlMs: 20_000 },
+  );
+  const [bookingOverride, setBookingOverride] = useState<BookingReceipt[] | null>(null);
+  const bookings = useMemo(
+    () => bookingOverride ?? fetchedBookings ?? [],
+    [bookingOverride, fetchedBookings],
+  );
   const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadConsultations() {
-      setLoading(true);
-      setError("");
-
-      try {
-        const { data } = await supabase.auth.getSession();
-        const accessToken = data.session?.access_token;
-        if (!accessToken) {
-          throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
-        }
-
-        const dataBookings = await fetchPatientBookings(accessToken);
-        if (mounted) setBookings(dataBookings.filter(isPaid).sort(sortBySchedule));
-      } catch (err) {
-        if (mounted) {
-          setError(err instanceof Error ? err.message : "Gagal memuat data konsultasi.");
-          setBookings([]);
-        }
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-
-    loadConsultations();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60 * 1000);
@@ -218,16 +201,16 @@ export default function PatientConsultationPage() {
   }, []);
 
   function replaceBooking(updatedBooking: BookingReceipt) {
-    setBookings((current) =>
-      current
-        .map((booking) =>
-          booking.id_pemesanan_konsultasi === updatedBooking.id_pemesanan_konsultasi
-            ? updatedBooking
-            : booking,
-        )
-        .filter(isPaid)
-        .sort(sortBySchedule),
-    );
+    const nextBookings = bookings
+      .map((booking) =>
+        booking.id_pemesanan_konsultasi === updatedBooking.id_pemesanan_konsultasi
+          ? updatedBooking
+          : booking,
+      )
+      .filter(isPaid)
+      .sort(sortBySchedule);
+    setBookingOverride(nextBookings);
+    setCached("pasien-konsultasi-bookings", nextBookings);
   }
 
   async function getAccessToken() {

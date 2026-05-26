@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowRight,
   Ban,
@@ -30,6 +30,13 @@ import { getScreeningTopicLabel } from "@/config/screening-questions";
 import { formatCurrency } from "@/lib/booking";
 import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
+import { setCached } from "@/lib/apiCache";
+import { useCachedApi } from "@/lib/useCachedApi";
+
+type PatientBookingContext = {
+  reports: PreAssessment[];
+  bookings: BookingReceipt[];
+};
 
 function hasFinalFeedback(report: PreAssessment) {
   return Boolean(
@@ -122,49 +129,28 @@ export default function PatientBookingPage() {
   };
 
   const [activeTab, setActiveTab] = useState("buat");
-  const [reports, setReports] = useState<PreAssessment[]>([]);
-  const [bookings, setBookings] = useState<BookingReceipt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadBookingContext() {
-      setLoading(true);
-      setError("");
-
-      try {
-        const { data } = await supabase.auth.getSession();
-        const accessToken = data.session?.access_token;
-        if (!accessToken) {
-          throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
-        }
-
-        const [dataReports, dataBookings] = await Promise.all([
-          fetchPatientPreAssessments(accessToken),
-          fetchPatientBookings(accessToken),
-        ]);
-
-        if (!mounted) return;
-        setReports(dataReports);
-        setBookings(dataBookings);
-      } catch (err) {
-        if (mounted) {
-          setError(err instanceof Error ? err.message : "Gagal memuat data booking.");
-        }
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-
-    loadBookingContext();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const {
+    data: bookingContext,
+    loading,
+    error,
+  } = useCachedApi<PatientBookingContext>(
+    "pasien-booking-context",
+    async (accessToken) => {
+      const [dataReports, dataBookings] = await Promise.all([
+        fetchPatientPreAssessments(accessToken),
+        fetchPatientBookings(accessToken),
+      ]);
+      return { reports: dataReports, bookings: dataBookings };
+    },
+    { ttlMs: 20_000 },
+  );
+  const [bookingOverride, setBookingOverride] = useState<BookingReceipt[] | null>(null);
+  const reports = useMemo(() => bookingContext?.reports ?? [], [bookingContext?.reports]);
+  const bookings = useMemo(
+    () => bookingOverride ?? bookingContext?.bookings ?? [],
+    [bookingContext?.bookings, bookingOverride],
+  );
 
   const sortedReports = useMemo(
     () =>
@@ -192,13 +178,13 @@ export default function PatientBookingPage() {
     const updatedBooking = await cancelPatientBooking(accessToken, idPemesananKonsultasi, {
       konfirmasi_no_refund: false,
     });
-    setBookings((current) =>
-      current.map((booking) =>
-        booking.id_pemesanan_konsultasi === updatedBooking.id_pemesanan_konsultasi
-          ? updatedBooking
-          : booking,
-      ),
+    const nextBookings = bookings.map((booking) =>
+      booking.id_pemesanan_konsultasi === updatedBooking.id_pemesanan_konsultasi
+        ? updatedBooking
+        : booking,
     );
+    setBookingOverride(nextBookings);
+    setCached("pasien-booking-context", { reports, bookings: nextBookings });
   }
 
   return (

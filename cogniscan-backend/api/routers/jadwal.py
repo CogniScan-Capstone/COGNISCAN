@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies.auth import require_role
+from api.dependencies.auth import get_current_active_psikolog
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
 from api.schemas.booking import (
@@ -44,7 +44,7 @@ router = APIRouter()
 async def read_psikolog_availability(
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil slot availability milik psikolog login."""
@@ -63,7 +63,7 @@ async def read_psikolog_availability(
 )
 async def create_psikolog_availability_slot(
     payload: PsikologAvailabilityCreate,
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Buat satu slot availability psikolog."""
@@ -81,7 +81,7 @@ async def create_psikolog_availability_slot(
 )
 async def create_psikolog_availability_slots_bulk(
     payload: PsikologAvailabilityBulkCreate,
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Buat banyak slot availability dalam rentang tanggal tertentu."""
@@ -99,7 +99,7 @@ async def create_psikolog_availability_slots_bulk(
 async def update_psikolog_availability_slot(
     id_jadwal_psikolog: int,
     payload: PsikologAvailabilityUpdate,
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Ubah slot availability psikolog jika belum memiliki booking aktif."""
@@ -117,7 +117,7 @@ async def update_psikolog_availability_slot(
 )
 async def delete_psikolog_availability_slot(
     id_jadwal_psikolog: int,
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Hapus slot availability yang belum memiliki booking aktif."""
@@ -134,7 +134,7 @@ async def delete_psikolog_availability_slot(
 )
 async def read_psikolog_reschedule_requests(
     request_status: str | None = Query(default="pending", alias="status"),
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil pengajuan reschedule pasien untuk psikolog login."""
@@ -152,7 +152,7 @@ async def read_psikolog_reschedule_requests(
 async def approve_reschedule_request(
     id_permintaan_reschedule: int,
     payload: BookingRescheduleDecisionRequest,
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Setujui pengajuan reschedule agar pasien bisa memilih slot baru."""
@@ -171,7 +171,7 @@ async def approve_reschedule_request(
 async def reject_reschedule_request(
     id_permintaan_reschedule: int,
     payload: BookingRescheduleRejectRequest,
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Tolak pengajuan reschedule dengan catatan untuk pasien."""
@@ -190,7 +190,7 @@ async def reject_reschedule_request(
 async def read_psikolog_schedule_bookings(
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil jadwal konsultasi berbayar/terkonfirmasi milik psikolog login."""

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies.auth import require_role
+from api.dependencies.auth import get_current_active_psikolog, require_role
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
 from api.schemas.dashboard import (
@@ -35,7 +35,7 @@ async def read_patient_dashboard_summary(
     response_model=PsikologDashboardSummaryResponse,
 )
 async def read_psikolog_dashboard_summary(
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Ringkasan angka dashboard psikolog login."""

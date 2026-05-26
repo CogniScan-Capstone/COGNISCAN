@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { CalendarDays, CheckCircle2, Loader2, ReceiptText } from "lucide-react";
 import { DashboardCard, DashboardLayout } from "@/components/dashboard";
 import { getPatientNav, patientProfileHref, patientUser } from "@/components/patient";
 import { fetchPatientBookings, type BookingReceipt } from "@/lib/auth";
 import { formatCurrency } from "@/lib/booking";
-import { supabase } from "@/lib/supabase/client";
+import { useCachedApi } from "@/lib/useCachedApi";
 
 function toAmount(value: BookingReceipt["jumlah_bayar"]) {
   const amount = Number(value ?? 0);
@@ -55,38 +54,16 @@ function statusLabel(booking: BookingReceipt) {
 }
 
 export default function BookingReceiptPage() {
-  const [bookings, setBookings] = useState<BookingReceipt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadBookings() {
-      try {
-        const { data } = await supabase.auth.getSession();
-        const accessToken = data.session?.access_token;
-        if (!accessToken) {
-          throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
-        }
-
-        const dataBookings = await fetchPatientBookings(accessToken);
-        if (mounted) setBookings(dataBookings);
-      } catch (err) {
-        if (mounted) {
-          setError(err instanceof Error ? err.message : "Gagal memuat riwayat booking.");
-        }
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-
-    loadBookings();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const {
+    data: fetchedBookings,
+    loading,
+    error,
+  } = useCachedApi<BookingReceipt[]>(
+    "pasien-booking-receipts",
+    fetchPatientBookings,
+    { ttlMs: 20_000 },
+  );
+  const bookings = fetchedBookings ?? [];
 
   return (
     <DashboardLayout

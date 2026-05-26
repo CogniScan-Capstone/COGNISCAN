@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies.auth import require_role
+from api.dependencies.auth import get_current_active_psikolog
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
 from api.schemas.konsultasi import (
@@ -22,7 +22,7 @@ router = APIRouter()
 async def create_consultation_result(
     id_pemesanan_konsultasi: int,
     payload: ConsultationResultCreate,
-    current_user: Pengguna = Depends(require_role("psikolog")),
+    current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Simpan hasil konsultasi dan tutup status sesi oleh psikolog."""
