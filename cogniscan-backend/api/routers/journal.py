@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies.auth import require_role
+from api.dependencies.auth import get_current_active_pasien
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
 from api.schemas.journal import (
@@ -33,7 +33,7 @@ router = APIRouter()
 )
 async def start_session(
     payload: JournalSessionStart,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -57,7 +57,7 @@ async def start_session(
 async def submit_answer(
     id_sesi_jurnal: int,
     payload: JournalAnswerSubmit,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Simpan atau update jawaban pasien untuk satu pertanyaan."""
@@ -79,7 +79,7 @@ async def submit_voice_answer(
     request: Request,
     urutan_pertanyaan: int = Query(..., ge=1),
     teks_pertanyaan: str = Query(..., min_length=3, max_length=500),
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -121,7 +121,7 @@ async def submit_voice_answer(
 )
 async def read_session(
     id_sesi_jurnal: int,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil progress sesi journal milik pasien login."""
@@ -138,7 +138,7 @@ async def read_session(
 )
 async def finalize_session(
     id_sesi_jurnal: int,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """

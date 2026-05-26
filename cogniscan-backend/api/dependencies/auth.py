@@ -10,6 +10,7 @@ import uuid
 
 from api.core.security import decode_token
 from api.dependencies.database import get_db
+from api.models.pasien import Pasien
 from api.models.pengguna import Pengguna
 from api.models.psikolog import Psikolog
 
@@ -107,6 +108,51 @@ async def get_current_active_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The user doesn't have enough privileges"
         )
+    return current_user
+
+
+def has_complete_patient_profile(pasien: Pasien | None) -> bool:
+    """Cek field wajib pasien tanpa mengubah constraint DB historis."""
+    if pasien is None:
+        return False
+
+    required_text = (
+        pasien.nama_lengkap,
+        pasien.jenis_kelamin,
+        pasien.alamat_lengkap,
+        pasien.no_hp_wa,
+    )
+    return (
+        all(isinstance(value, str) and value.strip() for value in required_text)
+        and pasien.jenis_kelamin in {"laki-laki", "perempuan"}
+        and pasien.tanggal_lahir is not None
+    )
+
+
+async def get_current_active_pasien(
+    current_user: Pengguna = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Pengguna:
+    """Dependency untuk fitur pasien yang hanya boleh dipakai profil lengkap."""
+    if current_user.peran != "pasien":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The user doesn't have enough privileges",
+        )
+
+    result = await db.execute(
+        select(Pasien).where(Pasien.id_pengguna == current_user.id)
+    )
+    pasien = result.scalar_one_or_none()
+    if not has_complete_patient_profile(pasien):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Profil pasien belum lengkap. Lengkapi nama, tanggal lahir, "
+                "jenis kelamin, alamat, dan nomor WhatsApp terlebih dahulu."
+            ),
+        )
+
     return current_user
 
 

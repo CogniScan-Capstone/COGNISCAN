@@ -15,9 +15,20 @@ import { useBackendUser } from "@/lib/useBackendUser";
 
 type GenderValue = "" | "laki-laki" | "perempuan";
 
-function optionalText(value: string) {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+function normalizeIndonesianPhone(value: string) {
+  const raw = value.trim();
+  if (!raw) return undefined;
+
+  const compact = raw.replace(/[\s().-]/g, "");
+  if (!compact) return undefined;
+
+  const digits = compact.startsWith("+") ? compact.slice(1) : compact;
+  if (!/^\d{8,15}$/.test(digits)) return undefined;
+
+  if (compact.startsWith("+")) return `+${digits}`;
+  if (digits.startsWith("0")) return `+62${digits.slice(1)}`;
+  if (digits.startsWith("62")) return `+${digits}`;
+  return `+62${digits}`;
 }
 
 function ProfileInput({
@@ -26,6 +37,9 @@ function ProfileInput({
   icon,
   type = "text",
   readOnly,
+  required,
+  minLength,
+  max,
   onChange,
 }: {
   label: string;
@@ -33,6 +47,9 @@ function ProfileInput({
   icon?: ReactNode;
   type?: string;
   readOnly?: boolean;
+  required?: boolean;
+  minLength?: number;
+  max?: string;
   onChange?: (value: string) => void;
 }) {
   return (
@@ -50,6 +67,9 @@ function ProfileInput({
           type={type}
           value={value}
           readOnly={readOnly}
+          required={required}
+          minLength={minLength}
+          max={max}
           onChange={(event) => onChange?.(event.target.value)}
           className={`h-12 w-full rounded-[10px] border border-outline-variant bg-white px-4 text-[15px] text-on-surface outline-none transition focus:border-primary-container focus:ring-4 focus:ring-primary-container/15 ${
             icon ? "pl-11" : ""
@@ -135,12 +155,47 @@ export default function PatientProfilePage() {
       return;
     }
 
+    const trimmedName = fullName.trim();
+    const trimmedAddress = address.trim();
+    const normalizedPhone = normalizeIndonesianPhone(phone);
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (trimmedName.length < 3) {
+      setErrorMessage("Nama lengkap wajib diisi minimal 3 karakter.");
+      return;
+    }
+
+    if (!gender) {
+      setErrorMessage("Jenis kelamin wajib dipilih.");
+      return;
+    }
+
+    if (!dateOfBirth) {
+      setErrorMessage("Tanggal lahir wajib diisi.");
+      return;
+    }
+
+    if (dateOfBirth > today) {
+      setErrorMessage("Tanggal lahir tidak boleh di masa depan.");
+      return;
+    }
+
+    if (!normalizedPhone) {
+      setErrorMessage("Nomor WhatsApp wajib diisi dengan format angka yang valid.");
+      return;
+    }
+
+    if (trimmedAddress.length < 5) {
+      setErrorMessage("Alamat lengkap wajib diisi minimal 5 karakter.");
+      return;
+    }
+
     const payload: PatientProfilePayload = {
-      nama_lengkap: fullName.trim(),
-      jenis_kelamin: gender || undefined,
-      tanggal_lahir: optionalText(dateOfBirth),
-      alamat_lengkap: optionalText(address),
-      no_hp_wa: optionalText(phone),
+      nama_lengkap: trimmedName,
+      jenis_kelamin: gender,
+      tanggal_lahir: dateOfBirth,
+      alamat_lengkap: trimmedAddress,
+      no_hp_wa: normalizedPhone,
     };
 
     setIsSaving(true);
@@ -215,6 +270,8 @@ export default function PatientProfilePage() {
                     label="Nama Lengkap"
                     value={fullName}
                     onChange={setFullName}
+                    required
+                    minLength={3}
                   />
                   <ProfileInput
                     label="Email"
@@ -227,6 +284,7 @@ export default function PatientProfilePage() {
                     value={phone}
                     icon={<Phone />}
                     onChange={setPhone}
+                    required
                   />
                   <ProfileInput
                     label="Tanggal Lahir"
@@ -234,6 +292,8 @@ export default function PatientProfilePage() {
                     type="date"
                     icon={<CalendarDays />}
                     onChange={setDateOfBirth}
+                    required
+                    max={new Date().toISOString().slice(0, 10)}
                   />
                 </div>
 
@@ -246,6 +306,8 @@ export default function PatientProfilePage() {
                       value={address}
                       onChange={(event) => setAddress(event.target.value)}
                       rows={4}
+                      required
+                      minLength={5}
                       className="w-full resize-none rounded-[10px] border border-outline-variant bg-white px-4 py-3 text-[15px] text-on-surface outline-none transition focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
                     />
                   </label>
@@ -261,6 +323,7 @@ export default function PatientProfilePage() {
                           name="gender"
                           checked={gender === "laki-laki"}
                           onChange={() => setGender("laki-laki")}
+                          required
                           className="h-5 w-5 appearance-none rounded-full border border-outline-variant bg-white checked:border-[6px] checked:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-container/20"
                         />
                         Laki-laki
@@ -271,6 +334,7 @@ export default function PatientProfilePage() {
                           name="gender"
                           checked={gender === "perempuan"}
                           onChange={() => setGender("perempuan")}
+                          required
                           className="h-5 w-5 appearance-none rounded-full border border-outline-variant bg-white checked:border-[6px] checked:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-container/20"
                         />
                         Perempuan

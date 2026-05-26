@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies.auth import require_role
+from api.dependencies.auth import get_current_active_pasien
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
 from api.schemas.pembayaran import (
@@ -26,7 +26,7 @@ router = APIRouter()
 )
 async def create_midtrans_payment(
     payload: MidtransPaymentCreateRequest,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Buat transaksi Snap Midtrans untuk booking milik pasien login."""
@@ -69,7 +69,7 @@ async def receive_midtrans_notification(
 )
 async def read_payment_receipt(
     order_id: str,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil receipt pembayaran berdasarkan Midtrans order_id."""

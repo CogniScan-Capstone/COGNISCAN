@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies.auth import get_current_active_psikolog, require_role
+from api.dependencies.auth import get_current_active_pasien, get_current_active_psikolog
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
 from api.schemas.pre_assessment import (
@@ -31,7 +31,7 @@ router = APIRouter()
     response_model=list[PsikologAvailableResponse],
 )
 async def read_available_psikolog(
-    _current_user: Pengguna = Depends(require_role("pasien")),
+    _current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """List psikolog terverifikasi yang siap menerima tindak lanjut pasien."""
@@ -43,7 +43,7 @@ async def read_available_psikolog(
     response_model=list[PraAsesmenPasienResponse],
 )
 async def read_patient_pre_assessments(
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil semua hasil pra-asesmen milik pasien login."""
@@ -56,7 +56,7 @@ async def read_patient_pre_assessments(
 )
 async def read_patient_pre_assessment(
     id_pra_asesmen: int,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil hasil pra-asesmen milik pasien login."""
@@ -74,7 +74,7 @@ async def read_patient_pre_assessment(
 async def assign_patient_pre_assessment_psikolog(
     id_pra_asesmen: int,
     payload: PraAsesmenAssignPsikologRequest,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Simpan psikolog pilihan pasien untuk review hasil pra-asesmen."""

@@ -7,6 +7,7 @@ from api.dependencies.auth import (
     SupabaseClaims,
     get_current_active_psikolog,
     get_current_user,
+    has_complete_patient_profile,
     require_role,
     verify_supabase_token,
 )
@@ -89,6 +90,14 @@ async def build_user_response(
         if psikolog_state is not None:
             response["status_akun"] = psikolog_state[0]
             response["apakah_sudah_ganti_password"] = bool(psikolog_state[1])
+
+    if current_user.peran == "pasien":
+        result = await db.execute(
+            select(Pasien).where(Pasien.id_pengguna == current_user.id)
+        )
+        response["profile_lengkap"] = has_complete_patient_profile(
+            result.scalar_one_or_none()
+        )
 
     return response
 

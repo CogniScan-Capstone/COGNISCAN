@@ -9,11 +9,17 @@ type BackendUser = {
   nama_lengkap?: string | null;
   status_akun?: string | null;
   apakah_sudah_ganti_password?: boolean | null;
+  profile_lengkap?: boolean | null;
 };
 
 type CachedBackendUser = Pick<
   BackendUser,
-  "id" | "peran" | "apakah_aktif" | "status_akun" | "apakah_sudah_ganti_password"
+  | "id"
+  | "peran"
+  | "apakah_aktif"
+  | "status_akun"
+  | "apakah_sudah_ganti_password"
+  | "profile_lengkap"
 > & {
   cached_at: number;
 };
@@ -47,9 +53,15 @@ function dashboardPathForRole(role: BackendUser["peran"]) {
   return "/pasien/dashboard";
 }
 
-function entryPathForUser(user: Pick<BackendUser, "peran" | "apakah_sudah_ganti_password">) {
+function entryPathForUser(
+  user: Pick<BackendUser, "peran" | "apakah_sudah_ganti_password" | "profile_lengkap">,
+) {
   if (user.peran === "psikolog" && !user.apakah_sudah_ganti_password) {
     return "/reset-password";
+  }
+
+  if (user.peran === "pasien" && user.profile_lengkap === false) {
+    return "/pasien/profile";
   }
 
   return dashboardPathForRole(user.peran);
@@ -74,6 +86,9 @@ function readCachedBackendUser(request: NextRequest, userId?: string) {
     if (cached.peran === "psikolog" && !cached.apakah_sudah_ganti_password) {
       return null;
     }
+    if (cached.peran === "pasien" && cached.profile_lengkap === false) {
+      return null;
+    }
     return cached;
   } catch {
     return null;
@@ -82,6 +97,7 @@ function readCachedBackendUser(request: NextRequest, userId?: string) {
 
 function writeBackendUserCache(response: NextResponse, user: BackendUser) {
   if (user.peran === "psikolog" && !user.apakah_sudah_ganti_password) return;
+  if (user.peran === "pasien" && user.profile_lengkap === false) return;
 
   const cachePayload: CachedBackendUser = {
     id: user.id,
@@ -89,6 +105,7 @@ function writeBackendUserCache(response: NextResponse, user: BackendUser) {
     apakah_aktif: user.apakah_aktif,
     status_akun: user.status_akun,
     apakah_sudah_ganti_password: user.apakah_sudah_ganti_password,
+    profile_lengkap: user.profile_lengkap,
     cached_at: Date.now(),
   };
 
@@ -200,6 +217,14 @@ export async function proxy(request: NextRequest) {
 
   if (backendUser.peran === "psikolog" && !backendUser.apakah_sudah_ganti_password) {
     return redirectTo(request, "/reset-password");
+  }
+
+  if (
+    backendUser.peran === "pasien" &&
+    backendUser.profile_lengkap === false &&
+    pathname !== "/pasien/profile"
+  ) {
+    return redirectTo(request, "/pasien/profile");
   }
 
   return response;

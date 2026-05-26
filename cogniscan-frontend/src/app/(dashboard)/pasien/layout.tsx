@@ -1,12 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { dashboardPathForRole, fetchCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 
 export default function PasienDashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [isAllowed, setIsAllowed] = useState(false);
   const verifiedRef = useRef(false);
 
@@ -34,6 +35,11 @@ export default function PasienDashboardLayout({ children }: { children: ReactNod
           return;
         }
 
+        if (user.profile_lengkap === false && pathname !== "/pasien/profile") {
+          router.replace("/pasien/profile");
+          return;
+        }
+
         verifiedRef.current = true;
         if (isMounted) setIsAllowed(true);
       } catch {
@@ -47,7 +53,7 @@ export default function PasienDashboardLayout({ children }: { children: ReactNod
     return () => {
       isMounted = false;
     };
-  }, [router]);
+  }, [pathname, router]);
 
   if (!isAllowed) return null;
 

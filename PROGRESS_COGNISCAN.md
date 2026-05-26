@@ -1,14 +1,25 @@
 # Progress CogniScan
 
-Tanggal update: 2026-05-25
+Tanggal update: 2026-05-26
 
-Dokumen ini menyimpan konteks kerja terbaru untuk sesi berikutnya. Fokus utama saat ini adalah stabilisasi alur end-to-end setelah feedback psikolog: screening teks/voice, assignment psikolog, booking jadwal, pembayaran Midtrans, link konsultasi Jitsi, reschedule paid booking tanpa pembayaran ulang, hasil konsultasi psikolog, follow-up booking tanpa screening ulang, reminder WhatsApp WAHA, dan tab konsultasi dinamis.
+Dokumen ini menyimpan konteks kerja terbaru untuk sesi berikutnya. Fokus utama saat ini adalah stabilisasi alur end-to-end setelah feedback psikolog: screening teks/voice, assignment psikolog, booking jadwal, pembayaran Midtrans, link konsultasi Jitsi, reschedule paid booking tanpa pembayaran ulang, hasil konsultasi psikolog, follow-up booking tanpa screening ulang, reminder WhatsApp WAHA, tab konsultasi dinamis, security guard lintas role, dan performa navigasi antar tab.
 
 ## Ringkasan Status
 
-Status terkini (2026-05-25):
-- Aplikasi sudah melewati Phase 6B dan Phase 7 MVP utama sudah tersambung: feedback psikolog, pesan pasien, booking, pembayaran, link meeting, availability jadwal psikolog, tab konsultasi pasien, flow request/approval reschedule, reschedule paid booking tanpa pembayaran ulang, cancel/no-show/expiry booking, hasil konsultasi psikolog, follow-up booking tanpa screening ulang, UI screening teks/voice yang lebih jelas, dan reminder WAHA.
-- Sisa utama sekarang adalah hardening, validasi E2E manual, apply migration terbaru ke database aktif, scheduler production untuk WAHA, rekam medis lanjutan, testing otomatis, privacy/audit hardening, dan dokumentasi operasional terbaru.
+Status terkini (2026-05-26):
+- Aplikasi sudah melewati Phase 6B dan Phase 7 MVP utama sudah tersambung: feedback psikolog, pesan pasien, booking, pembayaran, link meeting, availability jadwal psikolog, tab konsultasi pasien, flow request/approval reschedule, reschedule paid booking tanpa pembayaran ulang, cancel/no-show/expiry booking, hasil konsultasi psikolog, follow-up booking tanpa screening ulang, UI screening teks/voice yang lebih jelas, reminder WAHA, dashboard admin dinamis, global route guard frontend, validasi wajib profil registrasi, dan cache navigasi antar tab.
+- Sisa utama sekarang adalah validasi E2E manual penuh, apply/validasi migration terbaru di database aktif, validasi scheduler WAHA otomatis di environment target, rekam medis lanjutan, testing otomatis, audit/rate limit/privacy hardening, dan dokumentasi operasional terbaru.
+
+Fitur yang baru diselesaikan (2026-05-26):
+- **Dashboard admin dinamis**: `GET /api/dashboard/admin/summary` ditambahkan; dashboard admin membaca total pasien, psikolog pending/terverifikasi/ditolak, total screening, screening menunggu review, konsultasi dibayar, dan pendaftaran psikolog terbaru dari database.
+- **Cleanup data psikolog test**: 5 record `Psikolog Test ...` di tabel `psikolog` dan 3 user lokal psikolog test di tabel `pengguna` dihapus; tabel `psikolog` aktif sekarang hanya berisi `dr tanwirul`.
+- **Security guard frontend global**: Next.js `src/proxy.ts` ditambahkan untuk melindungi `/admin/*`, `/psikolog/*`, `/pasien/*`, dan auth pages memakai Supabase session + validasi backend `/api/auth/me`.
+- **Guard pasien frontend**: layout guard client-side ditambahkan untuk route dashboard pasien dan screening pasien sebagai fallback setelah proxy.
+- **Validasi registrasi pasien/psikolog diperketat**: field wajib pasien (nama, email/password, tanggal lahir, jenis kelamin, WA, alamat) dan field wajib psikolog (profil, kontak, praktik, tarif, STR/SIP aktif, dokumen, bio) divalidasi di frontend dan backend.
+- **Guard pasien aktif backend**: fitur pasien seperti dashboard, screening/journal, pra-asesmen, booking, dan pembayaran kini memakai `get_current_active_pasien`; profil yang belum lengkap diarahkan ke `/pasien/profile` oleh proxy/layout.
+- **Backend active psikolog guard**: endpoint psikolog sensitif di dashboard, pre-assessment/feedback, jadwal, reschedule approval, dan hasil konsultasi kini memakai `get_current_active_psikolog`, sehingga psikolog wajib terverifikasi dan sudah mengganti temporary password.
+- **Optimasi rendering antar tab**: cache role backend singkat di proxy, `createBrowserClient` Supabase SSR-aware, dan stale-while-revalidate diperluas ke admin dashboard, admin pendaftaran, pasien booking, pasien konsultasi, pasien receipt, dan kalender jadwal psikolog.
+- **WAHA manual test flow diklarifikasi**: endpoint admin `POST /api/booking/reminders/send-due` bisa dites dari Postman memakai token admin; window reminder saat ini `h_minus_24` toleransi 20 menit dan `h_minus_2` toleransi 15 menit.
 
 Fitur yang baru diselesaikan (2026-05-25):
 - **Hasil konsultasi psikolog**: psikolog bisa menutup sesi dari detail jadwal, menandai pasien hadir/tidak hadir, menulis ringkasan untuk pasien, rekomendasi, dan catatan internal.
@@ -93,8 +104,10 @@ Yang sudah ada:
   - `POST /api/auth/profile/pasien`
   - `GET /api/auth/profile/pasien`
   - `PATCH /api/auth/profile/pasien`
+- Profil pasien wajib lengkap untuk memakai fitur pasien: `nama_lengkap`, `jenis_kelamin`, `tanggal_lahir`, `alamat_lengkap`, dan `no_hp_wa`.
 - Registrasi calon psikolog:
   - `POST /api/auth/register/psikolog`
+- Registrasi calon psikolog sekarang mewajibkan data profesional dan legalitas dasar: kontak, spesialisasi, pengalaman, universitas/tahun lulus, alamat praktik, kota/provinsi, tarif, STR/SIP aktif, dokumen STR/SIP, dan bio.
 - Update profil psikolog:
   - `PATCH /api/auth/profile/psikolog`
 - Ganti temporary password psikolog:
@@ -107,10 +120,16 @@ Perubahan terbaru:
 - Endpoint backend tetap `POST /api/auth/change-temporary-password` untuk membuka akses psikolog setelah password baru tersimpan.
 - Form registrasi psikolog frontend tidak lagi meminta/mengirim spesialisasi, pengalaman, bio singkat, universitas, tahun lulus, kadaluarsa STR, dan kadaluarsa SIP.
 - Label nomor pasien diseragamkan menjadi `Nomor WhatsApp`.
+- Frontend memiliki global route guard di `cogniscan-frontend/src/proxy.ts` untuk `/admin/*`, `/psikolog/*`, `/pasien/*`, dan auth pages.
+- Guard frontend memvalidasi Supabase session lalu cek role aktual ke backend `/api/auth/me`; hasil role aktif dicache singkat 60 detik dalam cookie `httpOnly` untuk mempercepat navigasi.
+- Pasien dashboard dan pasien screening memiliki layout guard client-side tambahan sebagai fallback.
+- Pasien dengan `profile_lengkap=false` diarahkan ke `/pasien/profile`; fitur pasien lain tetap ditolak backend sampai profil wajib lengkap.
+- Endpoint psikolog sensitif memakai `get_current_active_psikolog`, bukan hanya `require_role("psikolog")`.
 
 Belum ideal:
 - Test otomatis auth/admin belum lengkap.
-- Guard frontend masih client-side di beberapa area; backend tetap sumber keamanan final.
+- Middleware/proxy route guard sudah ada, tetapi perlu test manual lintas role dan automated security regression test.
+- Backend tetap sumber keamanan final; audit ownership dan audit log formal masih perlu dilanjutkan.
 
 ### Phase 4B: Admin Verifikasi Psikolog
 
@@ -123,10 +142,14 @@ Yang sudah ada:
 - `POST /api/admin/psikolog/{id_psikolog}/reject`
 - `POST /api/admin/psikolog/{id_psikolog}/reset-temporary-password`
 - Approval membuat/menyambungkan Supabase Auth user dan mengirim temporary password via email.
+- `GET /api/dashboard/admin/summary` menyediakan angka dashboard admin dari database aktif.
+- Frontend `/admin/dashboard` tidak lagi memakai placeholder; data mengambil summary backend.
+- Data psikolog test lama sudah dibersihkan dari tabel aplikasi sehingga daftar psikolog aktif hanya menampilkan `dr tanwirul`.
 
 Belum ideal:
 - Supabase Storage untuk dokumen STR/SIP masih placeholder nama file.
 - Audit log formal belum lengkap.
+- Jika akun test psikolog pernah dibuat di Supabase Auth, cleanup Auth user masih opsional dilakukan lewat dashboard Supabase.
 
 ### Phase 5: Analyzer Integration
 
@@ -290,9 +313,11 @@ Yang sudah ada:
 - Receipt dan list konsultasi pasien membawa ringkasan/rekomendasi hasil konsultasi yang memang boleh dilihat pasien.
 - Reminder WhatsApp memakai WAHA `POST /api/sendText`, konfigurasi env `WAHA_ENABLED`, `WAHA_BASE_URL`, `WAHA_API_KEY`, `WAHA_SESSION`, dan `WAHA_SEND_TIMEOUT_SECONDS`.
 - Tabel `reminder_konsultasi` menjadi log idempotency agar pasien tidak menerima reminder dobel untuk booking dan tipe reminder yang sama.
+- Scheduler internal reminder tersedia di `api/services/booking_reminder_scheduler.py` dan start lewat FastAPI lifespan di `api/main.py` jika `BOOKING_REMINDER_SCHEDULER_ENABLED=true`.
+- Env scheduler: `BOOKING_REMINDER_INTERVAL_SECONDS` dan `BOOKING_REMINDER_RUN_ON_STARTUP`.
 
 Belum ideal:
-- Scheduler production untuk memanggil endpoint reminder WAHA belum dibuat.
+- Scheduler internal sudah ada, tetapi perlu validasi di environment target/deployment agar proses FastAPI tetap hidup dan tidak membuat multiple dispatcher jika nanti scale multi-worker.
 - Migration `a6b7c8d9e0f1_add_consultation_result_followup.py` sudah dibuat tetapi belum di-apply ke database aktif pada sesi terakhir.
 - Hasil konsultasi sudah ada untuk MVP, tetapi rekam medis lanjutan, audit akses, dan format klinis final masih perlu dilanjutkan.
 - E2E manual untuk hasil konsultasi + follow-up booking masih perlu dijalankan di database lokal/staging setelah migration terbaru di-apply.
@@ -312,6 +337,21 @@ Yang sudah ada:
 Perubahan terbaru:
 - Delay loading buatan 3 detik di flow auth sudah dihapus.
 - Loading auth sekarang mengikuti durasi proses asli Supabase/backend.
+- Supabase browser client memakai `createBrowserClient` dari `@supabase/ssr` agar session tersedia untuk Next.js proxy/middleware.
+- Next.js `src/proxy.ts` melindungi route role dan auth pages, lalu redirect user sesuai role dari backend.
+- Karena session sekarang dibaca lewat cookie SSR, user session lama mungkin perlu logout/login ulang sekali setelah perubahan ini.
+
+### Admin Dashboard Frontend
+
+Status: data dinamis dari database.
+
+Yang sudah ada:
+- `/admin/dashboard` membaca `GET /api/dashboard/admin/summary`.
+- Metrik utama menampilkan total pasien, psikolog aktif, psikolog menunggu verifikasi, dan konsultasi dibayar.
+- Metrik tambahan menampilkan total psikolog, total screening, dan screening menunggu review.
+- Tabel pendaftaran terbaru menampilkan nama, email, dokumen STR/SIP, tanggal daftar, status, dan tombol detail.
+- Kolom `Spesialisasi` di dashboard admin dihapus karena field tersebut tidak lagi dipakai di flow registrasi psikolog terbaru.
+- Data test psikolog sudah dibersihkan dari database aplikasi.
 
 ### Dashboard Pasien
 
@@ -326,11 +366,12 @@ Catatan:
 
 ### Profile Pasien
 
-Status: sudah memakai data backend dan loading dinamis.
+Status: sudah memakai data backend, loading dinamis, dan validasi field wajib.
 
 Yang sudah ada:
 - Fetch profile dari `GET /api/auth/profile/pasien`.
 - Update profile dari `PATCH /api/auth/profile/pasien`.
+- Nama, tanggal lahir, jenis kelamin, nomor WhatsApp, dan alamat tidak boleh dikosongkan saat update.
 - Teks `Memuat profil...` sudah diganti icon spinner.
 - Loading berhenti setelah request selesai di `finally`.
 
@@ -455,38 +496,49 @@ Belum ideal:
 
 ### Reminder WhatsApp WAHA
 
-Status: service backend dan endpoint cron/admin sudah tersedia.
+Status: service backend, endpoint admin/cron, dan scheduler internal sudah tersedia.
 
 Yang sudah ada:
 - Service `api/services/whatsapp_service.py` mengirim pesan ke WAHA `POST /api/sendText`.
-- Service `api/services/booking_reminder_service.py` mencari booking paid/terkonfirmasi yang jatuh tempo H-1 dan H-2 jam.
+- Service `api/services/booking_reminder_service.py` mencari booking paid/terkonfirmasi yang jatuh tempo H-24 dan H-2 jam.
 - Model dan tabel `reminder_konsultasi` mencatat status reminder agar tidak terkirim dobel.
 - Endpoint `POST /api/booking/reminders/send-due` memproses reminder jatuh tempo dan butuh role admin.
 - Env WAHA ditambahkan di backend: `WAHA_ENABLED`, `WAHA_BASE_URL`, `WAHA_API_KEY`, `WAHA_SESSION`, `WAHA_SEND_TIMEOUT_SECONDS`.
+- Scheduler internal `booking_reminder_scheduler` aktif jika `BOOKING_REMINDER_SCHEDULER_ENABLED=true`, berjalan tiap `BOOKING_REMINDER_INTERVAL_SECONDS`, dan bisa dispatch saat startup jika `BOOKING_REMINDER_RUN_ON_STARTUP=true`.
+- Manual test Postman disiapkan lewat endpoint `POST /api/booking/reminders/send-due` dengan token admin.
 
 Belum ideal:
-- Scheduler production belum dibuat. Endpoint reminder masih perlu dipanggil oleh cron eksternal, worker, atau scheduler deployment.
+- Perlu validasi scheduler otomatis di environment target. Jika production memakai multi-worker, perlu strategi agar dispatcher tidak berjalan ganda.
 - Perlu test dengan WAHA session yang benar-benar connected.
+- WAHA dashboard/API perlu diamankan dengan credential dashboard, `WAHA_API_KEY`, bind lokal/private network, atau reverse proxy internal jika dipakai bersama.
 
 ### Caching Frontend (Stale-While-Revalidate)
 
-Status: aktif di 4 halaman utama.
+Status: aktif di banyak halaman utama untuk mempercepat navigasi antar tab.
 
 File:
+- `cogniscan-frontend/src/proxy.ts` - route guard + cache role backend singkat 60 detik di cookie `httpOnly`.
 - `cogniscan-frontend/src/lib/apiCache.ts` — in-memory cache store.
 - `cogniscan-frontend/src/lib/useCachedApi.ts` — hook stale-while-revalidate.
 
 Halaman yang pakai cache:
 - `/psikolog/dashboard` (key: `psikolog-dashboard-summary`)
 - `/psikolog/feedback` (key: `psikolog-feedback-list`)
+- `/psikolog/jadwal` (key per rentang bulan `psikolog-jadwal:{start}:{end}`)
 - `/pasien/dashboard` (key: `pasien-dashboard-summary`)
 - `/pasien/pesan` (key: `pasien-messages-list`)
+- `/pasien/booking` (key: `pasien-booking-context`)
+- `/pasien/konsultasi` (key: `pasien-konsultasi-bookings`)
+- `/pasien/booking/receipt` (key: `pasien-booking-receipts`)
+- `/admin/dashboard` (key: `admin-dashboard-summary`)
+- `/admin/pendaftaran` (key: `admin-psikolog-list`)
 
 Perilaku:
 - Kunjungan pertama: loading spinner → fetch → simpan cache.
 - Kunjungan ulang: tampilkan cache instan (0ms) → refresh di background.
 - Cache valid 30 detik (configurable).
 - Jika halaman mengirim `ttlMs: 0`, cache dilewati saat mount. Ini dipakai untuk `/pasien/pesan` agar screening baru tidak salah masuk tab `Selesai Review` karena data lama.
+- Cache hanya untuk UX frontend; backend tetap memvalidasi token, role, ownership, dan status data pada setiap API request.
 
 ### Loading Frontend
 
@@ -545,10 +597,11 @@ Yang perlu dilakukan:
 Tujuan:
 - Mengaktifkan reminder WhatsApp pasien secara periodik.
 
-Yang perlu dibuat:
-- Scheduler production yang memanggil `POST /api/booking/reminders/send-due` setiap 5-10 menit.
+Yang perlu divalidasi:
+- Scheduler internal backend berjalan di environment target dengan `BOOKING_REMINDER_SCHEDULER_ENABLED=true`.
+- Jika deployment memakai multi-worker, pastikan hanya satu dispatcher reminder yang aktif atau pindahkan ke worker/cron tunggal.
 - Konfigurasi WAHA session yang sudah login/connected.
-- Manual test pesan H-1 dan H-2 jam dengan nomor pasien valid.
+- Manual test pesan H-24 dan H-2 jam dengan nomor pasien valid.
 
 ### Prioritas 4: Hasil Konsultasi dan Rekam Medis
 
@@ -565,6 +618,10 @@ Yang perlu dilanjutkan:
 ### Prioritas 5: Testing dan Privacy Hardening
 
 Test yang paling perlu:
+- Route guard frontend: pasien/admin/psikolog tidak bisa membuka route role lain dan user sudah login tidak diarahkan ke auth page.
+- Validasi registrasi pasien/psikolog: payload kosong/blank dari frontend dan Postman harus ditolak sebelum user bisa memakai fitur role.
+- Backend active pasien guard: pasien dengan profil tidak lengkap hanya boleh melengkapi profil, bukan memulai screening/booking/pembayaran.
+- Backend active psikolog guard: psikolog belum terverifikasi/belum ganti temporary password tidak bisa akses dashboard, feedback, jadwal, dan hasil konsultasi.
 - Booking checkout + duplicate prevention.
 - Follow-up booking tanpa `pra_asesmen` baru.
 - Submit hasil konsultasi psikolog dan akses pasien ke ringkasan yang boleh dibagikan.
@@ -573,6 +630,14 @@ Test yang paling perlu:
 - Predicate feedback final di dashboard, pesan, booking, dan selesai screening.
 - Past-date booking backend/frontend.
 - Akses data sensitif dan audit log.
+
+### Prioritas 6: Operasional dan Security Deployment
+
+Yang perlu dilakukan:
+- Amankan WAHA dashboard/API dengan dashboard password, `WAHA_API_KEY`, dan network binding privat atau reverse proxy internal.
+- Cleanup user test lama di Supabase Auth jika masih ada, karena tabel aplikasi sudah dibersihkan tetapi Auth user bisa tersisa.
+- Tambahkan audit log formal untuk admin action, psikolog membuka laporan pasien, psikolog submit hasil konsultasi, pasien membuka hasil konsultasi, payment sync, dan reminder WAHA.
+- Tambahkan rate limit untuk auth, screening finalize/voice, payment create/status, admin action, dan reminder manual endpoint.
 
 ## Fase Berikutnya Historis (2026-05-20)
 
@@ -682,8 +747,39 @@ Yang perlu dijaga:
 - Sebelum test manual follow-up booking dan hasil konsultasi, jalankan Alembic `upgrade head` agar kolom dan unique index terbaru tersedia di database aktif.
 - Jangan kirim reminder WA tanpa log idempotency. Gunakan `reminder_konsultasi` agar pasien tidak menerima reminder dobel.
 - WAHA dianggap siap hanya jika env aktif dan session WAHA sudah login/connected; env terisi saja belum cukup.
+- WAHA dashboard tidak ikut login CogniScan; jangan expose ke internet tanpa dashboard credential, API key, HTTPS/reverse proxy, dan pembatasan akses jaringan.
+- Cache role frontend di proxy hanya optimasi UX singkat; jangan jadikan cache frontend sebagai sumber otorisasi. Backend tetap wajib validasi token, role, ownership, dan status akun.
+- Setelah perubahan Supabase SSR client/proxy, user dengan session lama mungkin perlu logout/login ulang agar cookie session tersedia untuk middleware.
+- Setelah validasi profil wajib, akun pasien lama yang belum lengkap akan diarahkan ke `/pasien/profile` dan belum bisa memakai screening/booking sampai data wajib dilengkapi.
 
 ## Verifikasi Terakhir
+
+Yang sudah dijalankan pada update 2026-05-26 validasi registrasi/profile guard:
+- Backend:
+  - `python -m compileall cogniscan-backend/api` berhasil.
+  - `conda run -n cogniscan-backend python -c "from api.main import app; schema=app.openapi(); print('openapi ok', len(schema.get('paths', {})))"` berhasil dengan `openapi ok 48`.
+  - Catatan: OpenAPI masih memberi warning duplicate operation ID dari router auth lama.
+- Frontend:
+  - `npm run lint` berhasil.
+  - `npx tsc --noEmit` berhasil.
+  - `npm run build` berhasil dan Next.js mendeteksi `Proxy (Middleware)`.
+
+Yang sudah dijalankan pada update 2026-05-26 security + admin dashboard + cache navigasi:
+- Database:
+  - Query read-only memastikan data psikolog test memang ada di tabel `psikolog`.
+  - 5 record `Psikolog Test ...` dihapus dari tabel `psikolog`.
+  - 3 user lokal psikolog test terkait dihapus dari tabel `pengguna`.
+  - Verifikasi akhir tabel `psikolog` hanya menampilkan `(6, 'dr tanwirul', 'terverifikasi')`.
+- Backend:
+  - `conda run -n cogniscan-backend python -m py_compile api\routers\dashboard.py api\routers\pre_assessment.py api\routers\jadwal.py api\routers\konsultasi.py` berhasil.
+  - `conda run -n cogniscan-backend python -c "from api.main import app; app.openapi(); print('openapi ok', len(app.routes))"` berhasil dengan `openapi ok 57`.
+  - Catatan: OpenAPI masih memberi warning duplicate operation ID dari router auth lama; tidak terkait perubahan security/cache/admin dashboard.
+- Frontend:
+  - `npm.cmd run lint` berhasil.
+  - `npx.cmd tsc --noEmit` berhasil.
+  - `npm.cmd run build` berhasil dan Next.js mendeteksi `Proxy (Middleware)`.
+- Catatan operasional:
+  - Setelah perubahan `createBrowserClient` + `src/proxy.ts`, session lama bisa perlu logout/login ulang sekali agar cookie Supabase tersedia untuk proxy.
 
 Yang sudah dijalankan pada update 2026-05-25 Session hasil konsultasi + screening UI:
 - Backend:

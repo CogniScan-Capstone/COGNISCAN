@@ -34,6 +34,11 @@ export default function PasienScreeningLayout({ children }: { children: ReactNod
           return;
         }
 
+        if (user.profile_lengkap === false) {
+          router.replace("/pasien/profile");
+          return;
+        }
+
         verifiedRef.current = true;
         if (isMounted) setIsAllowed(true);
       } catch {

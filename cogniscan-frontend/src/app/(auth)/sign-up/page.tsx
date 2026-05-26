@@ -17,20 +17,20 @@ import { supabase } from "@/lib/supabase/client";
 
 type GenderValue = "" | "laki-laki" | "perempuan";
 
-function optionalText(value: string) {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
 function normalizeIndonesianPhone(value: string) {
   const raw = value.trim();
   if (!raw) return undefined;
 
   const compact = raw.replace(/[\s().-]/g, "");
-  if (compact.startsWith("+")) return compact;
-  if (compact.startsWith("0")) return `+62${compact.slice(1)}`;
-  if (compact.startsWith("62")) return `+${compact}`;
-  return `+62${compact}`;
+  if (!compact) return undefined;
+
+  const digits = compact.startsWith("+") ? compact.slice(1) : compact;
+  if (!/^\d{8,15}$/.test(digits)) return undefined;
+
+  if (compact.startsWith("+")) return `+${digits}`;
+  if (digits.startsWith("0")) return `+62${digits.slice(1)}`;
+  if (digits.startsWith("62")) return `+${digits}`;
+  return `+62${digits}`;
 }
 
 function getSignupErrorMessage(error: unknown) {
@@ -65,6 +65,22 @@ export default function SignUpPage() {
     setErrorMessage("");
     setSuccessMessage("");
 
+    const normalizedEmail = normalizeAuthEmail(email);
+    const normalizedPhone = normalizeIndonesianPhone(phone);
+    const trimmedName = fullName.trim();
+    const trimmedAddress = address.trim();
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (trimmedName.length < 3) {
+      setErrorMessage("Nama lengkap wajib diisi minimal 3 karakter.");
+      return;
+    }
+
+    if (!normalizedEmail) {
+      setErrorMessage("Email wajib diisi.");
+      return;
+    }
+
     if (password.length < 8) {
       setErrorMessage("Password minimal 8 karakter.");
       return;
@@ -75,16 +91,40 @@ export default function SignUpPage() {
       return;
     }
 
+    if (!dateOfBirth) {
+      setErrorMessage("Tanggal lahir wajib diisi.");
+      return;
+    }
+
+    if (dateOfBirth > today) {
+      setErrorMessage("Tanggal lahir tidak boleh di masa depan.");
+      return;
+    }
+
+    if (!gender) {
+      setErrorMessage("Jenis kelamin wajib dipilih.");
+      return;
+    }
+
+    if (!normalizedPhone) {
+      setErrorMessage("Nomor WhatsApp wajib diisi dengan format angka yang valid.");
+      return;
+    }
+
+    if (trimmedAddress.length < 5) {
+      setErrorMessage("Alamat lengkap wajib diisi minimal 5 karakter.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const normalizedEmail = normalizeAuthEmail(email);
       const patientProfile = {
-        nama_lengkap: fullName.trim(),
-        jenis_kelamin: gender || undefined,
-        tanggal_lahir: optionalText(dateOfBirth),
-        alamat_lengkap: optionalText(address),
-        no_hp_wa: normalizeIndonesianPhone(phone),
+        nama_lengkap: trimmedName,
+        jenis_kelamin: gender,
+        tanggal_lahir: dateOfBirth,
+        alamat_lengkap: trimmedAddress,
+        no_hp_wa: normalizedPhone,
       };
 
       savePendingPatientProfile(normalizedEmail, patientProfile);
@@ -159,6 +199,7 @@ export default function SignUpPage() {
                 className="h-12 w-full rounded-[10px] border border-[#c9cec4] bg-[#fdfcf9] px-4 text-[15px] text-on-surface outline-none transition placeholder:text-[#737c8f] focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
                 onChange={(event) => setFullName(event.target.value)}
                 placeholder="Nama lengkap kamu"
+                minLength={3}
                 required
                 type="text"
                 value={fullName}
@@ -248,6 +289,8 @@ export default function SignUpPage() {
                 className="h-12 w-full rounded-[10px] border border-[#c9cec4] bg-[#fdfcf9] px-4 pr-3 text-[15px] text-on-surface outline-none transition placeholder:text-[#737c8f] focus:border-primary-container focus:ring-4 focus:ring-primary-container/15"
                 type="date"
                 value={dateOfBirth}
+                required
+                max={new Date().toISOString().slice(0, 10)}
                 onChange={(event) => setDateOfBirth(event.target.value)}
               />
             </label>
@@ -263,6 +306,7 @@ export default function SignUpPage() {
                     name="gender"
                     checked={gender === "laki-laki"}
                     onChange={() => setGender("laki-laki")}
+                    required
                     className="h-5 w-5 appearance-none rounded-full border border-[#c9cec4] bg-white checked:border-[6px] checked:border-primary-container focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-container/20"
                   />
                   Laki-laki
@@ -273,6 +317,7 @@ export default function SignUpPage() {
                     name="gender"
                     checked={gender === "perempuan"}
                     onChange={() => setGender("perempuan")}
+                    required
                     className="h-5 w-5 appearance-none rounded-full border border-[#c9cec4] bg-white checked:border-[6px] checked:border-primary-container focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-container/20"
                   />
                   Perempuan
@@ -284,12 +329,15 @@ export default function SignUpPage() {
               label="Nomor WhatsApp"
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
+              required
             />
             <TextAreaField
               label="Alamat Lengkap"
               placeholder="Nama jalan, kota, dan alamat singkat..."
               value={address}
               onChange={(event) => setAddress(event.target.value)}
+              minLength={5}
+              required
             />
           </div>
         </div>

@@ -21,6 +21,40 @@ import {
 } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 
+function buildPatientProfileFromMetadata(
+  metadata: Record<string, unknown>,
+): PatientProfilePayload | null {
+  const nama_lengkap =
+    typeof metadata.nama_lengkap === "string" ? metadata.nama_lengkap.trim() : "";
+  const jenis_kelamin =
+    metadata.jenis_kelamin === "laki-laki" || metadata.jenis_kelamin === "perempuan"
+      ? metadata.jenis_kelamin
+      : null;
+  const tanggal_lahir =
+    typeof metadata.tanggal_lahir === "string" ? metadata.tanggal_lahir.trim() : "";
+  const alamat_lengkap =
+    typeof metadata.alamat_lengkap === "string" ? metadata.alamat_lengkap.trim() : "";
+  const no_hp_wa = typeof metadata.no_hp_wa === "string" ? metadata.no_hp_wa.trim() : "";
+
+  if (
+    nama_lengkap.length < 3 ||
+    !jenis_kelamin ||
+    !tanggal_lahir ||
+    alamat_lengkap.length < 5 ||
+    !no_hp_wa
+  ) {
+    return null;
+  }
+
+  return {
+    nama_lengkap,
+    jenis_kelamin,
+    tanggal_lahir,
+    alamat_lengkap,
+    no_hp_wa,
+  };
+}
+
 export default function SignInPage() {
   const router = useRouter();
   const [email, setEmail] = useState(() => {
@@ -137,27 +171,7 @@ export default function SignInPage() {
       try {
         const metadata = data.user?.user_metadata ?? {};
         const pendingProfile = loadPendingPatientProfile(normalizedEmail);
-        const metadataName =
-          typeof metadata.nama_lengkap === "string" ? metadata.nama_lengkap.trim() : "";
-        const metadataGender =
-          metadata.jenis_kelamin === "laki-laki" || metadata.jenis_kelamin === "perempuan"
-            ? metadata.jenis_kelamin
-            : undefined;
-        const metadataProfile = metadataName
-          ? {
-              nama_lengkap: metadataName,
-              jenis_kelamin: metadataGender,
-              tanggal_lahir:
-                typeof metadata.tanggal_lahir === "string"
-                  ? metadata.tanggal_lahir
-                  : undefined,
-              alamat_lengkap:
-                typeof metadata.alamat_lengkap === "string"
-                  ? metadata.alamat_lengkap
-                  : undefined,
-              no_hp_wa: typeof metadata.no_hp_wa === "string" ? metadata.no_hp_wa : undefined,
-            }
-          : null;
+        const metadataProfile = buildPatientProfileFromMetadata(metadata);
         const profileFallback = pendingProfile ?? metadataProfile;
 
         const currentUser = await fetchCurrentUser(accessToken);
@@ -173,32 +187,23 @@ export default function SignInPage() {
         const metadata = data.user?.user_metadata ?? {};
         const pendingProfile = loadPendingPatientProfile(normalizedEmail);
         const metadataRole = typeof metadata.peran === "string" ? metadata.peran : "";
-        const metadataName =
-          typeof metadata.nama_lengkap === "string" ? metadata.nama_lengkap.trim() : "";
-        const metadataGender =
-          metadata.jenis_kelamin === "laki-laki" || metadata.jenis_kelamin === "perempuan"
-            ? metadata.jenis_kelamin
-            : undefined;
-        const metadataProfile = {
-          nama_lengkap: metadataName,
-          jenis_kelamin: metadataGender,
-          tanggal_lahir:
-            typeof metadata.tanggal_lahir === "string" ? metadata.tanggal_lahir : undefined,
-          alamat_lengkap:
-            typeof metadata.alamat_lengkap === "string" ? metadata.alamat_lengkap : undefined,
-          no_hp_wa: typeof metadata.no_hp_wa === "string" ? metadata.no_hp_wa : undefined,
-        };
+        const metadataProfile = buildPatientProfileFromMetadata(metadata);
 
         const canCreatePatientProfile =
-          pendingProfile !== null || (metadataRole === "pasien" && metadataName.length >= 3);
+          pendingProfile !== null || (metadataRole === "pasien" && metadataProfile !== null);
 
         if (!canCreatePatientProfile) {
           throw backendError;
         }
 
+        const profileFallback = pendingProfile ?? metadataProfile;
+        if (!profileFallback) {
+          throw backendError;
+        }
+
         const user = await createPatientProfile(
           accessToken,
-          pendingProfile ?? metadataProfile,
+          profileFallback,
         );
         clearPendingPatientProfile(normalizedEmail);
         router.replace(entryPathForUser(user));

@@ -6,14 +6,15 @@ export type BackendUser = {
   nama_lengkap?: string | null;
   status_akun?: string | null;
   apakah_sudah_ganti_password?: boolean | null;
+  profile_lengkap?: boolean | null;
 };
 
 export type PatientProfilePayload = {
   nama_lengkap: string;
-  jenis_kelamin?: "laki-laki" | "perempuan";
-  tanggal_lahir?: string;
-  alamat_lengkap?: string;
-  no_hp_wa?: string;
+  jenis_kelamin: "laki-laki" | "perempuan";
+  tanggal_lahir: string;
+  alamat_lengkap: string;
+  no_hp_wa: string;
 };
 
 export type PatientProfile = {
@@ -29,15 +30,22 @@ export type PatientProfile = {
 export type PsikologRegistrationPayload = {
   email: string;
   nama_lengkap: string;
-  nomor_hp?: string;
-  alamat_praktik?: string;
-  kota?: string;
-  provinsi?: string;
-  tarif_konsultasi?: number;
+  nomor_hp: string;
+  spesialisasi: string;
+  pengalaman_tahun: number;
+  universitas_asal: string;
+  tahun_lulus: number;
+  alamat_praktik: string;
+  kota: string;
+  provinsi: string;
+  tarif_konsultasi: number;
   no_str: string;
   no_sip: string;
-  upload_dokumen_str?: string;
-  upload_dokumen_sip?: string;
+  tgl_kadaluarsa_str: string;
+  tgl_kadaluarsa_sip: string;
+  upload_dokumen_str: string;
+  upload_dokumen_sip: string;
+  bio_singkat: string;
 };
 
 export type JournalSessionStartPayload = {
@@ -404,16 +412,35 @@ export function loadPendingPatientProfile(email: string): PatientProfilePayload 
 
   try {
     const parsed = JSON.parse(stored) as Partial<PatientProfilePayload>;
-    if (typeof parsed.nama_lengkap !== "string" || parsed.nama_lengkap.trim().length < 3) {
+    const profile = {
+      nama_lengkap: typeof parsed.nama_lengkap === "string" ? parsed.nama_lengkap.trim() : "",
+      jenis_kelamin:
+        parsed.jenis_kelamin === "laki-laki" || parsed.jenis_kelamin === "perempuan"
+          ? parsed.jenis_kelamin
+          : undefined,
+      tanggal_lahir:
+        typeof parsed.tanggal_lahir === "string" ? parsed.tanggal_lahir.trim() : "",
+      alamat_lengkap:
+        typeof parsed.alamat_lengkap === "string" ? parsed.alamat_lengkap.trim() : "",
+      no_hp_wa: typeof parsed.no_hp_wa === "string" ? parsed.no_hp_wa.trim() : "",
+    };
+
+    if (
+      profile.nama_lengkap.length < 3 ||
+      !profile.jenis_kelamin ||
+      !profile.tanggal_lahir ||
+      profile.alamat_lengkap.length < 5 ||
+      !profile.no_hp_wa
+    ) {
       return null;
     }
 
     return {
-      nama_lengkap: parsed.nama_lengkap,
-      jenis_kelamin: parsed.jenis_kelamin,
-      tanggal_lahir: parsed.tanggal_lahir,
-      alamat_lengkap: parsed.alamat_lengkap,
-      no_hp_wa: parsed.no_hp_wa,
+      nama_lengkap: profile.nama_lengkap,
+      jenis_kelamin: profile.jenis_kelamin,
+      tanggal_lahir: profile.tanggal_lahir,
+      alamat_lengkap: profile.alamat_lengkap,
+      no_hp_wa: profile.no_hp_wa,
     };
   } catch {
     return null;
@@ -1242,6 +1269,10 @@ export function dashboardPathForRole(role: BackendUser["peran"]) {
 export function entryPathForUser(user: BackendUser) {
   if (user.peran === "psikolog" && !user.apakah_sudah_ganti_password) {
     return "/reset-password";
+  }
+
+  if (user.peran === "pasien" && user.profile_lengkap === false) {
+    return "/pasien/profile";
   }
 
   return dashboardPathForRole(user.peran);

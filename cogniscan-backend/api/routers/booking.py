@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies.auth import require_role
+from api.dependencies.auth import get_current_active_pasien, require_role
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
 from api.schemas.booking import (
@@ -42,7 +42,7 @@ async def read_booking_availability(
     id_booking_sebelumnya: int | None = Query(default=None, gt=0),
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil slot tersedia psikolog untuk feedback final milik pasien."""
@@ -64,7 +64,7 @@ async def read_reschedule_availability(
     id_pemesanan_konsultasi: int,
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil slot tersedia untuk reschedule booking pasien yang sudah dibayar."""
@@ -84,7 +84,7 @@ async def read_reschedule_availability(
 )
 async def checkout_booking(
     payload: BookingCheckoutRequest,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Buat booking konsultasi dan transaksi Snap Midtrans dalam satu alur."""
@@ -100,7 +100,7 @@ async def checkout_booking(
     response_model=list[BookingReceiptResponse],
 )
 async def read_my_bookings(
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil riwayat booking pasien login."""
@@ -114,7 +114,7 @@ async def read_my_bookings(
 async def reschedule_booking(
     id_pemesanan_konsultasi: int,
     payload: BookingRescheduleRequest,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Ubah jadwal booking yang sudah dibayar tanpa membuat transaksi baru."""
@@ -133,7 +133,7 @@ async def reschedule_booking(
 async def cancel_booking(
     id_pemesanan_konsultasi: int,
     payload: BookingCancelRequest,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Batalkan booking pasien. Paid booking tidak membuat refund otomatis."""
@@ -152,7 +152,7 @@ async def cancel_booking(
 async def create_reschedule_request(
     id_pemesanan_konsultasi: int,
     payload: BookingRescheduleRequestCreate,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Ajukan reschedule booking ke psikolog. Pasien belum bisa pilih slot baru sebelum disetujui."""
@@ -170,7 +170,7 @@ async def create_reschedule_request(
 )
 async def close_missed_consultation(
     id_pemesanan_konsultasi: int,
-    current_user: Pengguna = Depends(require_role("pasien")),
+    current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Tutup booking yang sudah terlewat sebagai no-show tanpa refund otomatis."""
