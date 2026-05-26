@@ -5,10 +5,12 @@ from api.dependencies.auth import require_role
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
 from api.schemas.dashboard import (
+    AdminDashboardSummaryResponse,
     PatientDashboardSummaryResponse,
     PsikologDashboardSummaryResponse,
 )
 from api.services.dashboard_service import (
+    get_admin_dashboard_summary,
     get_patient_dashboard_summary,
     get_psikolog_dashboard_summary,
 )
@@ -38,3 +40,15 @@ async def read_psikolog_dashboard_summary(
 ):
     """Ringkasan angka dashboard psikolog login."""
     return await get_psikolog_dashboard_summary(db=db, current_user=current_user)
+
+
+@router.get(
+    "/admin/summary",
+    response_model=AdminDashboardSummaryResponse,
+)
+async def read_admin_dashboard_summary(
+    current_user: Pengguna = Depends(require_role("admin")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ringkasan angka dashboard admin dari database aktif."""
+    return await get_admin_dashboard_summary(db=db, current_user=current_user)

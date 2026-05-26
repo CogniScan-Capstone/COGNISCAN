@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, ClipboardClock, ShieldCheck, UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, CalendarCheck, ClipboardClock, ShieldCheck, Users } from "lucide-react";
 import {
   DashboardCard,
   DashboardLayout,
@@ -13,22 +13,37 @@ import {
 } from "@/components/dashboard";
 import { adminUser, getAdminNav } from "@/components/admin";
 import {
-  fetchAdminPsikolog,
+  fetchAdminDashboardSummary,
   psikologStatusLabel,
   psikologStatusTone,
-  type AdminPsikolog,
+  type AdminDashboardSummary,
 } from "@/lib/admin";
 import { supabase } from "@/lib/supabase/client";
+import { useBackendUser } from "@/lib/useBackendUser";
+
+function formatDate(value?: string | null) {
+  if (!value) return "Belum tercatat";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Belum tercatat";
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
 
 export default function AdminDashboardPage() {
-  const [registrations, setRegistrations] = useState<AdminPsikolog[]>([]);
+  const backendUser = useBackendUser();
+  const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadRegistrations() {
+    async function loadSummary() {
       setIsLoading(true);
       setError("");
 
@@ -40,51 +55,41 @@ export default function AdminDashboardPage() {
           throw new Error("Sesi admin tidak ditemukan. Silakan login ulang.");
         }
 
-        const result = await fetchAdminPsikolog(accessToken, "semua");
-        if (isMounted) setRegistrations(result);
+        const result = await fetchAdminDashboardSummary(accessToken);
+        if (isMounted) setSummary(result);
       } catch (loadError) {
         if (isMounted) {
-          setError(loadError instanceof Error ? loadError.message : "Gagal memuat data pendaftaran.");
+          setError(loadError instanceof Error ? loadError.message : "Gagal memuat data dashboard admin.");
         }
       } finally {
         if (isMounted) setIsLoading(false);
       }
     }
 
-    loadRegistrations();
+    loadSummary();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  const summary = useMemo(() => {
-    const pending = registrations.filter((item) => item.status_akun === "pending").length;
-    const approved = registrations.filter((item) => item.status_akun === "terverifikasi").length;
-
-    return {
-      total: registrations.length,
-      pending,
-      approved,
-    };
-  }, [registrations]);
-
-  const latestRegistrations = registrations.slice(0, 5);
+  const adminName = backendUser?.nama_lengkap?.trim() || "Admin";
+  const latestRegistrations = summary?.recent_psikolog ?? [];
 
   return (
     <DashboardLayout
       navItems={getAdminNav("dashboard")}
-      user={adminUser}
+      user={{ ...adminUser, name: adminName }}
       contentClassName="px-6 md:px-10 lg:px-10 xl:px-10"
     >
       <div className="w-full max-w-none">
         <header className="mb-8">
           <div>
             <h1 className="text-[26px] font-extrabold tracking-[-0.02em] text-on-surface">
-              Selamat Datang, Admin
+              Selamat Datang, {adminName}
             </h1>
             <p className="mt-1 text-[16px] text-on-surface-variant">
-              Berikut ringkasan pendaftaran psikolog masuk.
+              Ringkasan operasional CogniScan berdasarkan data database aktif.
             </p>
           </div>
         </header>
@@ -95,32 +100,18 @@ export default function AdminDashboardPage() {
           </div>
         ) : null}
 
-        <section className="mb-8 grid gap-6 lg:grid-cols-3">
+        <section className="mb-8 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           <DashboardCard className="flex min-h-[114px] items-center justify-between px-6 py-6">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary-container text-[#6f5794]">
-                <UserPlus className="h-6 w-6" aria-hidden="true" />
+                <Users className="h-6 w-6" aria-hidden="true" />
               </div>
-              <p className="max-w-[120px] text-[16px] font-extrabold uppercase leading-6 text-on-surface-variant">
-                Total Pendaftaran
+              <p className="max-w-[120px] text-[15px] font-extrabold uppercase leading-6 text-on-surface-variant">
+                Total Pasien
               </p>
             </div>
             <p className="text-[42px] font-extrabold leading-none text-[#6f5794]">
-              {isLoading ? "-" : summary.total}
-            </p>
-          </DashboardCard>
-
-          <DashboardCard className="flex min-h-[114px] items-center justify-between px-6 py-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-tertiary-container text-[#d37300]">
-                <ClipboardClock className="h-6 w-6" aria-hidden="true" />
-              </div>
-              <p className="max-w-[140px] text-[16px] font-extrabold uppercase leading-6 text-on-surface-variant">
-                Belum Disetujui
-              </p>
-            </div>
-            <p className="text-[42px] font-extrabold leading-none text-[#d37300]">
-              {isLoading ? "-" : summary.pending}
+              {isLoading ? "-" : (summary?.total_pasien ?? 0)}
             </p>
           </DashboardCard>
 
@@ -129,12 +120,61 @@ export default function AdminDashboardPage() {
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#dfeadf] text-primary">
                 <ShieldCheck className="h-6 w-6" aria-hidden="true" />
               </div>
-              <p className="max-w-[150px] text-[16px] font-extrabold uppercase leading-6 text-on-surface-variant">
-                Sudah Diverifikasi
+              <p className="max-w-[150px] text-[15px] font-extrabold uppercase leading-6 text-on-surface-variant">
+                Psikolog Aktif
               </p>
             </div>
             <p className="text-[42px] font-extrabold leading-none text-primary">
-              {isLoading ? "-" : summary.approved}
+              {isLoading ? "-" : (summary?.psikolog_terverifikasi ?? 0)}
+            </p>
+          </DashboardCard>
+
+          <DashboardCard className="flex min-h-[114px] items-center justify-between px-6 py-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-tertiary-container text-[#d37300]">
+                <ClipboardClock className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <p className="max-w-[150px] text-[15px] font-extrabold uppercase leading-6 text-on-surface-variant">
+                Menunggu Verifikasi
+              </p>
+            </div>
+            <p className="text-[42px] font-extrabold leading-none text-[#d37300]">
+              {isLoading ? "-" : (summary?.psikolog_pending ?? 0)}
+            </p>
+          </DashboardCard>
+
+          <DashboardCard className="flex min-h-[114px] items-center justify-between px-6 py-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e8e2ee] text-[#8d5367]">
+                <CalendarCheck className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <p className="max-w-[140px] text-[15px] font-extrabold uppercase leading-6 text-on-surface-variant">
+                Konsultasi Dibayar
+              </p>
+            </div>
+            <p className="text-[42px] font-extrabold leading-none text-[#8d5367]">
+              {isLoading ? "-" : (summary?.konsultasi_dibayar ?? 0)}
+            </p>
+          </DashboardCard>
+        </section>
+
+        <section className="mb-8 grid gap-4 md:grid-cols-3">
+          <DashboardCard className="px-5 py-4">
+            <p className="text-sm font-bold uppercase text-on-surface-variant">Total Psikolog</p>
+            <p className="mt-2 text-2xl font-extrabold text-on-surface">
+              {isLoading ? "-" : (summary?.total_psikolog ?? 0)}
+            </p>
+          </DashboardCard>
+          <DashboardCard className="px-5 py-4">
+            <p className="text-sm font-bold uppercase text-on-surface-variant">Total Screening</p>
+            <p className="mt-2 text-2xl font-extrabold text-on-surface">
+              {isLoading ? "-" : (summary?.total_screening ?? 0)}
+            </p>
+          </DashboardCard>
+          <DashboardCard className="px-5 py-4">
+            <p className="text-sm font-bold uppercase text-on-surface-variant">Menunggu Review</p>
+            <p className="mt-2 text-2xl font-extrabold text-on-surface">
+              {isLoading ? "-" : (summary?.screening_menunggu_review ?? 0)}
             </p>
           </DashboardCard>
         </section>
@@ -142,11 +182,9 @@ export default function AdminDashboardPage() {
         <section>
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-[18px] font-extrabold text-[#6f5794]">
-                Pendaftaran Masuk Terbaru
-              </h2>
+              <h2 className="text-[18px] font-extrabold text-[#6f5794]">Pendaftaran Terbaru</h2>
               <p className="mt-1 text-[15px] text-on-surface-variant">
-                Psikolog yang baru mendaftar dan menunggu verifikasi.
+                Data psikolog terbaru dari tabel pendaftaran.
               </p>
             </div>
             <Link
@@ -159,19 +197,21 @@ export default function AdminDashboardPage() {
           </div>
 
           <DashboardTable>
-            <table className="w-full min-w-[760px] border-collapse">
+            <table className="w-full min-w-[920px] border-collapse">
               <DashboardTableHeader>
                 <tr>
                   <DashboardTableCell as="th">Pendaftar</DashboardTableCell>
-                  <DashboardTableCell as="th">Spesialisasi</DashboardTableCell>
+                  <DashboardTableCell as="th">Dokumen</DashboardTableCell>
+                  <DashboardTableCell as="th">Tanggal Daftar</DashboardTableCell>
                   <DashboardTableCell as="th">Status</DashboardTableCell>
+                  <DashboardTableCell as="th">Aksi</DashboardTableCell>
                 </tr>
               </DashboardTableHeader>
               <tbody>
                 {isLoading ? (
                   <tr className="bg-white">
-                    <DashboardTableCell className="text-on-surface-variant" colSpan={3}>
-                      Memuat data pendaftaran...
+                    <DashboardTableCell className="text-on-surface-variant" colSpan={5}>
+                      Memuat data dashboard...
                     </DashboardTableCell>
                   </tr>
                 ) : latestRegistrations.length > 0 ? (
@@ -184,18 +224,32 @@ export default function AdminDashboardPage() {
                         </div>
                       </DashboardTableCell>
                       <DashboardTableCell className="text-on-surface-variant">
-                        {item.spesialisasi ?? "-"}
+                        <div className="space-y-1">
+                          <p className="font-mono text-sm text-primary">STR: {item.no_str ?? "Belum terisi"}</p>
+                          <p className="font-mono text-sm">SIP: {item.no_sip ?? "Belum terisi"}</p>
+                        </div>
+                      </DashboardTableCell>
+                      <DashboardTableCell className="text-on-surface-variant">
+                        {formatDate(item.dibuat_pada)}
                       </DashboardTableCell>
                       <DashboardTableCell>
                         <StatusBadge tone={psikologStatusTone(item.status_akun)}>
                           {psikologStatusLabel(item.status_akun)}
                         </StatusBadge>
                       </DashboardTableCell>
+                      <DashboardTableCell>
+                        <Link
+                          href={`/admin/pendaftaran/detail?id=${item.id_psikolog}`}
+                          className="inline-flex h-9 items-center justify-center rounded-full border border-primary px-5 text-sm font-extrabold text-primary transition hover:bg-primary-container/10"
+                        >
+                          Detail
+                        </Link>
+                      </DashboardTableCell>
                     </tr>
                   ))
                 ) : (
                   <tr className="bg-white">
-                    <DashboardTableCell className="text-on-surface-variant" colSpan={3}>
+                    <DashboardTableCell className="text-on-surface-variant" colSpan={5}>
                       Belum ada pendaftaran psikolog.
                     </DashboardTableCell>
                   </tr>

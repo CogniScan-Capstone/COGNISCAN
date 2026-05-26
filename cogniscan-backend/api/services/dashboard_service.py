@@ -11,6 +11,8 @@ from api.models.pengguna import Pengguna
 from api.models.pra_asesmen import PraAsesmen
 from api.models.sesi_jurnal import SesiJurnal
 from api.schemas.dashboard import (
+    AdminDashboardSummaryResponse,
+    AdminRecentPsikologRegistration,
     PatientDashboardSummaryResponse,
     PatientLatestScreeningStatus,
     PsikologDashboardSummaryResponse,
@@ -224,4 +226,84 @@ async def get_psikolog_dashboard_summary(
         feedback_sudah_direspon=feedback_sudah,
         total_laporan=total_laporan,
         laporan_terbaru=laporan_terbaru,
+    )
+
+
+async def get_admin_dashboard_summary(
+    db: AsyncSession,
+    current_user: Pengguna,
+) -> AdminDashboardSummaryResponse:
+    """Ringkasan dashboard admin dari data database aktif."""
+    if current_user.peran != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Endpoint ini hanya untuk admin",
+        )
+
+    total_pasien_result = await db.execute(select(func.count(Pasien.id_pasien)))
+    total_psikolog_result = await db.execute(select(func.count(Psikolog.id_psikolog)))
+    psikolog_pending_result = await db.execute(
+        select(func.count(Psikolog.id_psikolog)).where(
+            (Psikolog.status_akun == "pending") | Psikolog.status_akun.is_(None)
+        )
+    )
+    psikolog_terverifikasi_result = await db.execute(
+        select(func.count(Psikolog.id_psikolog)).where(
+            Psikolog.status_akun == "terverifikasi"
+        )
+    )
+    psikolog_ditolak_result = await db.execute(
+        select(func.count(Psikolog.id_psikolog)).where(Psikolog.status_akun == "ditolak")
+    )
+    total_screening_result = await db.execute(select(func.count(PraAsesmen.id_pra_asesmen)))
+    screening_menunggu_review_result = await db.execute(
+        select(func.count(PraAsesmen.id_pra_asesmen)).where(
+            PraAsesmen.id_psikolog.is_not(None),
+            ~(
+                (PraAsesmen.status_validasi == "selesai")
+                & PraAsesmen.divalidasi_pada.is_not(None)
+                & PraAsesmen.feedback_psikolog.is_not(None)
+                & (func.length(func.trim(PraAsesmen.feedback_psikolog)) > 0)
+            ),
+        )
+    )
+    total_konsultasi_result = await db.execute(
+        select(func.count(PemesananKonsultasi.id_pemesanan_konsultasi))
+    )
+    konsultasi_dibayar_result = await db.execute(
+        select(func.count(PemesananKonsultasi.id_pemesanan_konsultasi)).where(
+            PemesananKonsultasi.status_pembayaran == "dibayar"
+        )
+    )
+    recent_psikolog_result = await db.execute(
+        select(Psikolog)
+        .order_by(Psikolog.dibuat_pada.desc(), Psikolog.id_psikolog.desc())
+        .limit(5)
+    )
+
+    recent_psikolog = [
+        AdminRecentPsikologRegistration(
+            id_psikolog=row.id_psikolog,
+            nama_lengkap=row.nama_lengkap,
+            email=row.email,
+            nomor_hp=row.nomor_hp,
+            no_str=row.no_str,
+            no_sip=row.no_sip,
+            status_akun=row.status_akun,
+            dibuat_pada=row.dibuat_pada,
+        )
+        for row in recent_psikolog_result.scalars().all()
+    ]
+
+    return AdminDashboardSummaryResponse(
+        total_pasien=int(total_pasien_result.scalar_one() or 0),
+        total_psikolog=int(total_psikolog_result.scalar_one() or 0),
+        psikolog_pending=int(psikolog_pending_result.scalar_one() or 0),
+        psikolog_terverifikasi=int(psikolog_terverifikasi_result.scalar_one() or 0),
+        psikolog_ditolak=int(psikolog_ditolak_result.scalar_one() or 0),
+        total_screening=int(total_screening_result.scalar_one() or 0),
+        screening_menunggu_review=int(screening_menunggu_review_result.scalar_one() or 0),
+        total_konsultasi=int(total_konsultasi_result.scalar_one() or 0),
+        konsultasi_dibayar=int(konsultasi_dibayar_result.scalar_one() or 0),
+        recent_psikolog=recent_psikolog,
     )

@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     WAHA_SESSION: str = "default"
     WAHA_SEND_TIMEOUT_SECONDS: float = 15.0
 
+    # Scheduler internal untuk memanggil dispatcher reminder konsultasi.
+    BOOKING_REMINDER_SCHEDULER_ENABLED: bool = True
+    BOOKING_REMINDER_INTERVAL_SECONDS: int = 300
+    BOOKING_REMINDER_RUN_ON_STARTUP: bool = True
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS string menjadi list."""

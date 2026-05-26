@@ -39,3 +39,27 @@ class PsikologDashboardSummaryResponse(BaseModel):
     feedback_sudah_direspon: int
     total_laporan: int
     laporan_terbaru: list[PsikologRecentReport] = []
+
+
+class AdminRecentPsikologRegistration(BaseModel):
+    id_psikolog: int
+    nama_lengkap: str
+    email: str | None = None
+    nomor_hp: str | None = None
+    no_str: str | None = None
+    no_sip: str | None = None
+    status_akun: str | None = None
+    dibuat_pada: datetime | None = None
+
+
+class AdminDashboardSummaryResponse(BaseModel):
+    total_pasien: int
+    total_psikolog: int
+    psikolog_pending: int
+    psikolog_terverifikasi: int
+    psikolog_ditolak: int
+    total_screening: int
+    screening_menunggu_review: int
+    total_konsultasi: int
+    konsultasi_dibayar: int
+    recent_psikolog: list[AdminRecentPsikologRegistration] = []

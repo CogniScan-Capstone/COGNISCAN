@@ -38,6 +38,30 @@ export type AdminPsikologActionResponse = {
   message: string;
 };
 
+export type AdminRecentPsikologRegistration = {
+  id_psikolog: number;
+  nama_lengkap: string;
+  email?: string | null;
+  nomor_hp?: string | null;
+  no_str?: string | null;
+  no_sip?: string | null;
+  status_akun?: AdminPsikologStatus | null;
+  dibuat_pada?: string | null;
+};
+
+export type AdminDashboardSummary = {
+  total_pasien: number;
+  total_psikolog: number;
+  psikolog_pending: number;
+  psikolog_terverifikasi: number;
+  psikolog_ditolak: number;
+  total_screening: number;
+  screening_menunggu_review: number;
+  total_konsultasi: number;
+  konsultasi_dibayar: number;
+  recent_psikolog: AdminRecentPsikologRegistration[];
+};
+
 function adminHeaders(accessToken: string) {
   return {
     Authorization: `Bearer ${accessToken}`,
@@ -77,6 +101,20 @@ export async function fetchAdminPsikolog(
   }
 
   return response.json() as Promise<AdminPsikolog[]>;
+}
+
+export async function fetchAdminDashboardSummary(
+  accessToken: string,
+): Promise<AdminDashboardSummary> {
+  const response = await fetchAdminApi(`${API_BASE_URL}/api/dashboard/admin/summary`, {
+    headers: adminHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<AdminDashboardSummary>;
 }
 
 export async function fetchAdminPsikologDetail(

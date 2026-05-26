@@ -1,19 +1,33 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.core.config import settings
 from api.core.logging_config import setup_logging
 from api.routers import admin, auth, booking, dashboard, jadwal, journal, konsultasi, pembayaran, pre_assessment
+from api.services.booking_reminder_scheduler import booking_reminder_scheduler
 
 # from api.routers import journal, pre_assessment, booking, konsultasi, pembayaran, admin
 
 setup_logging()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await booking_reminder_scheduler.start()
+    try:
+        yield
+    finally:
+        await booking_reminder_scheduler.stop()
+
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="CogniScan Backend API - Mental Health AI Companion",
     version=settings.APP_VERSION,
     debug=settings.DEBUG,
+    lifespan=lifespan,
 )
 
 app.add_middleware(
