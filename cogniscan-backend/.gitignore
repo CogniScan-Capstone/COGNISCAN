@@ -28,6 +28,7 @@ ENV/
 *.log
 scratch/
 riwayat_percakapan.txt
+storage/
 
 # Opencode Agent
 .opencode/

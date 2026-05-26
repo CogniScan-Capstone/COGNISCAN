@@ -274,8 +274,8 @@ export default function SignUpPsikologPage() {
         tarif_konsultasi: parsedFee,
         no_str: trimmedStr,
         no_sip: trimmedSip,
-        upload_dokumen_str: strFile.name,
-        upload_dokumen_sip: sipFile.name,
+        upload_dokumen_str: strFile,
+        upload_dokumen_sip: sipFile,
       });
 
       router.push("/registration-success");

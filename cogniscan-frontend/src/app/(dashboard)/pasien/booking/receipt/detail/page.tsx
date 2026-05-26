@@ -29,6 +29,14 @@ declare global {
   }
 }
 
+type ReceiptContext = "booking" | "reschedule";
+
+function getReceiptContext(): ReceiptContext {
+  if (typeof window === "undefined") return "booking";
+  const context = new URLSearchParams(window.location.search).get("context");
+  return context === "reschedule" ? "reschedule" : "booking";
+}
+
 function loadMidtransSnap(scriptUrl: string, clientKey: string) {
   return new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(
@@ -94,6 +102,23 @@ function statusLabel(receipt: BookingReceipt) {
   return "Booking Dibuat";
 }
 
+function displayTitle(receipt: BookingReceipt, context: ReceiptContext) {
+  if (
+    context === "reschedule" &&
+    (receipt.status_pembayaran === "dibayar" || receipt.status_transaksi === "berhasil")
+  ) {
+    return "Reschedule Berhasil";
+  }
+  return statusLabel(receipt);
+}
+
+function displayDescription(context: ReceiptContext) {
+  if (context === "reschedule") {
+    return "Jadwal konsultasimu sudah diperbarui di sistem.";
+  }
+  return "Booking konsultasimu sudah dicatat di sistem.";
+}
+
 function formatConsultationDateTime(receipt: BookingReceipt) {
   if (!receipt.tanggal_konsultasi) return "-";
 
@@ -122,6 +147,7 @@ function formatTransactionTime(value?: string | null) {
 }
 
 export default function BookingReceiptDetailPage() {
+  const [receiptContext] = useState<ReceiptContext>(() => getReceiptContext());
   const [receipt, setReceipt] = useState<BookingReceipt | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -243,7 +269,7 @@ export default function BookingReceiptDetailPage() {
   }
 
   const method = receipt.metode_konsultasi || receipt.mode_konsultasi || "-";
-  const title = statusLabel(receipt);
+  const title = displayTitle(receipt, receiptContext);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-surface px-5 py-10 text-on-surface">
@@ -253,7 +279,7 @@ export default function BookingReceiptDetailPage() {
             {title}
           </h1>
           <p className="mt-2 text-[16px] text-on-surface-variant">
-            Booking konsultasimu sudah dicatat di sistem.
+            {displayDescription(receiptContext)}
           </p>
         </header>
 
@@ -271,7 +297,7 @@ export default function BookingReceiptDetailPage() {
           <div className="grid grid-cols-[1fr_auto] items-center gap-5 bg-surface-container-low px-1 py-3">
             <dt className="text-on-surface-variant">Status Transaksi</dt>
             <dd className="inline-flex h-8 items-center gap-2 rounded-full bg-primary-container px-4 text-xs font-medium text-primary">
-              {statusLabel(receipt)}
+              {displayTitle(receipt, receiptContext)}
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
             </dd>
           </div>

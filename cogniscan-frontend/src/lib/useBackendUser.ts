@@ -15,28 +15,46 @@ function getMetadataName(metadata: Record<string, unknown> | undefined) {
 // Avoids redundant /api/auth/me calls when multiple components or pages
 // mount the hook during the same browser session.
 let cachedUser: BackendUser | null = null;
+let cachedSessionUserId: string | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL_MS = 60_000; // 1 minute
 
+export function clearBackendUserCache() {
+  cachedUser = null;
+  cachedSessionUserId = null;
+  cacheTimestamp = 0;
+}
+
 export function useBackendUser() {
-  const [user, setUser] = useState<BackendUser | null>(cachedUser);
+  const [user, setUser] = useState<BackendUser | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     async function loadUser() {
-      // Serve from cache if fresh
-      if (cachedUser && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      const sessionUser = data.session?.user;
+      if (!accessToken || !sessionUser) {
+        clearBackendUserCache();
+        if (mounted) setUser(null);
+        return;
+      }
+
+      if (
+        cachedUser &&
+        cachedSessionUserId === sessionUser.id &&
+        Date.now() - cacheTimestamp < CACHE_TTL_MS
+      ) {
         if (mounted) setUser(cachedUser);
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data.session?.access_token;
-      if (!accessToken) return;
+      if (cachedSessionUserId && cachedSessionUserId !== sessionUser.id) {
+        clearBackendUserCache();
+      }
 
-      // Show Supabase metadata immediately for fast first-paint
-      const sessionUser = data.session?.user;
+      // Show Supabase metadata immediately for fast first-paint.
       const metadataName = getMetadataName(sessionUser?.user_metadata);
       if (mounted && sessionUser) {
         const quickUser: BackendUser = {
@@ -58,6 +76,7 @@ export function useBackendUser() {
           nama_lengkap: currentUser.nama_lengkap?.trim() || metadataName,
         };
         cachedUser = fullUser;
+        cachedSessionUserId = sessionUser.id;
         cacheTimestamp = Date.now();
         if (mounted) setUser(fullUser);
       } catch {
@@ -67,8 +86,19 @@ export function useBackendUser() {
 
     loadUser();
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user || session.user.id !== cachedSessionUserId) {
+        clearBackendUserCache();
+        if (mounted) setUser(null);
+      }
+      void loadUser();
+    });
+
     return () => {
       mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 

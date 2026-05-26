@@ -6,8 +6,9 @@ import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useBackendUser } from "@/lib/useBackendUser";
+import { clearBackendUserCache, useBackendUser } from "@/lib/useBackendUser";
 import { supabase } from "@/lib/supabase/client";
+import { clearCache } from "@/lib/apiCache";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,6 +54,8 @@ export function DashboardSidebar({
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
+      clearBackendUserCache();
+      clearCache();
       await supabase.auth.signOut();
       router.push(logoutHref);
     } catch (error) {

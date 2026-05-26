@@ -29,7 +29,6 @@ import {
   fetchPsikologProfile,
   updatePsikologProfile,
   type PsikologProfilePayload,
-  type PsikologProfile,
 } from "@/lib/auth";
 import { useBackendUser } from "@/lib/useBackendUser";
 

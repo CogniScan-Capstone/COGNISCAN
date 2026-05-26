@@ -58,6 +58,13 @@ function isRebookableBooking(booking: BookingReceipt) {
   );
 }
 
+function isRescheduleApprovedBooking(booking: BookingReceipt) {
+  return (
+    booking.status_konsultasi === "reschedule_disetujui" &&
+    (booking.status_pembayaran === "dibayar" || booking.status_transaksi === "berhasil")
+  );
+}
+
 function PatientMessageDetailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -181,6 +188,8 @@ function PatientMessageDetailContent() {
         booking.id_pra_asesmen === report.id_pra_asesmen &&
         !isRebookableBooking(booking),
     ) ?? null;
+  const rescheduleBooking =
+    relatedBooking && isRescheduleApprovedBooking(relatedBooking) ? relatedBooking : null;
   const paidBooking = relatedBooking && isPaidBooking(relatedBooking) ? relatedBooking : null;
   const pendingBooking =
     relatedBooking && !paidBooking && isPendingBooking(relatedBooking)
@@ -280,7 +289,33 @@ function PatientMessageDetailContent() {
 
             {hasFeedback ? (
               <section className="mt-8 rounded-[14px] border border-outline-variant bg-surface-container/40 px-6 py-6">
-                {paidBooking ? (
+                {rescheduleBooking ? (
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex gap-4">
+                      <CalendarDays className="mt-1 h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+                      <div>
+                        <h4 className="text-[18px] font-extrabold text-on-surface">
+                          Reschedule untuk feedback ini sudah disetujui
+                        </h4>
+                        <p className="mt-2 text-[15px] leading-7 text-on-surface-variant">
+                          Pilih slot baru dari halaman booking. Pembayaran lama tetap dipakai dan booking baru tidak perlu dibuat.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          `/pasien/booking/jadwal?reschedule_booking_id=${rescheduleBooking.id_pemesanan_konsultasi}`,
+                        )
+                      }
+                      className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-extrabold text-white transition hover:bg-[#365f39]"
+                    >
+                      Pilih Jadwal Baru
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : paidBooking ? (
                   <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex gap-4">
                       <CheckCircle2 className="mt-1 h-6 w-6 shrink-0 text-primary" aria-hidden="true" />

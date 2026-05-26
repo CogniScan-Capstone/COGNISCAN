@@ -27,6 +27,7 @@ export type AdminPsikolog = {
 };
 
 export type AdminPsikologFilter = "semua" | "pending" | "terverifikasi" | "ditolak";
+export type AdminPsikologDocumentType = "str" | "sip";
 
 export type AdminPsikologActionResponse = {
   id_psikolog: number;
@@ -128,6 +129,25 @@ export async function fetchAdminPsikologDetail(
   }
 
   return response.json() as Promise<AdminPsikolog>;
+}
+
+export async function fetchAdminPsikologDocument(
+  accessToken: string,
+  idPsikolog: number,
+  documentType: AdminPsikologDocumentType,
+): Promise<Blob> {
+  const response = await fetchAdminApi(
+    `${API_BASE_URL}/api/admin/psikolog/${idPsikolog}/documents/${documentType}`,
+    {
+      headers: adminHeaders(accessToken),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.blob();
 }
 
 export async function approveAdminPsikolog(

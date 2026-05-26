@@ -33,7 +33,7 @@ import {
 } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
-import { setCached } from "@/lib/apiCache";
+import { clearCache, setCached } from "@/lib/apiCache";
 import { useCachedApi } from "@/lib/useCachedApi";
 
 type ConsultationTab = "menunggu" | "selesai";
@@ -230,6 +230,7 @@ export default function PatientConsultationPage() {
       reason,
     );
     replaceBooking(updatedBooking);
+    clearCache("psikolog-jadwal");
   }
 
   async function handleCloseMissedBooking(bookingId: number) {
@@ -389,6 +390,7 @@ function ConsultationCard({
 
   const canRequestReschedule =
     status === "terjadwal" ||
+    status === "menunggu_konfirmasi_psikolog" ||
     status === "terlewat" ||
     status === "reschedule_ditolak";
   const canCloseMissed = status === "terlewat";

@@ -73,8 +73,8 @@ export type PsikologRegistrationPayload = {
   tarif_konsultasi: number;
   no_str: string;
   no_sip: string;
-  upload_dokumen_str: string;
-  upload_dokumen_sip: string;
+  upload_dokumen_str: File;
+  upload_dokumen_sip: File;
 };
 
 export type JournalSessionStartPayload = {
@@ -642,12 +642,23 @@ export async function updatePsikologProfile(
 export async function registerPsikologCandidate(
   payload: PsikologRegistrationPayload,
 ) {
+  const formData = new FormData();
+  formData.append("email", payload.email);
+  formData.append("nama_lengkap", payload.nama_lengkap);
+  formData.append("nomor_hp", payload.nomor_hp);
+  formData.append("nik", payload.nik);
+  formData.append("alamat_praktik", payload.alamat_praktik);
+  formData.append("kota", payload.kota);
+  formData.append("provinsi", payload.provinsi);
+  formData.append("tarif_konsultasi", String(payload.tarif_konsultasi));
+  formData.append("no_str", payload.no_str);
+  formData.append("no_sip", payload.no_sip);
+  formData.append("upload_dokumen_str", payload.upload_dokumen_str);
+  formData.append("upload_dokumen_sip", payload.upload_dokumen_sip);
+
   const response = await fetchApi(`${API_BASE_URL}/api/auth/register/psikolog`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+    body: formData,
   });
 
   if (!response.ok) {

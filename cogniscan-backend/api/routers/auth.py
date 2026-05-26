@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, status
+from decimal import Decimal
+
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from pydantic import EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +34,10 @@ from api.services.auth_service import (
     register_psikolog_candidate,
     update_pasien_profile,
     update_psikolog_profile,
+)
+from api.services.psikolog_document_service import (
+    delete_psikolog_documents,
+    save_psikolog_document,
 )
 from api.models.admin import Admin
 from api.models.pasien import Pasien
@@ -187,7 +194,18 @@ async def update_profile_pasien(
     status_code=status.HTTP_201_CREATED,
 )
 async def register_psikolog(
-    profile_data: ProfilePsikologCreate,
+    email: EmailStr = Form(...),
+    nama_lengkap: str = Form(..., min_length=3, max_length=150),
+    nomor_hp: str = Form(..., min_length=8, max_length=20, pattern=r"^\+?[0-9]{8,20}$"),
+    nik: str = Form(..., min_length=16, max_length=16, pattern=r"^\d{16}$"),
+    alamat_praktik: str = Form(..., min_length=5, max_length=500),
+    kota: str = Form(..., min_length=2, max_length=120),
+    provinsi: str = Form(..., min_length=2, max_length=120),
+    tarif_konsultasi: Decimal = Form(..., gt=0),
+    no_str: str = Form(..., min_length=3),
+    no_sip: str = Form(..., min_length=3),
+    dokumen_str: UploadFile = File(..., alias="upload_dokumen_str"),
+    dokumen_sip: UploadFile = File(..., alias="upload_dokumen_sip"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -197,7 +215,28 @@ async def register_psikolog(
     backend membuat akun Supabase Auth dengan temporary password dan mengirimnya
     ke email psikolog.
     """
-    return await register_psikolog_candidate(db=db, profile_data=profile_data)
+    str_path = await save_psikolog_document(dokumen_str, "str")
+    sip_path = await save_psikolog_document(dokumen_sip, "sip")
+
+    try:
+        profile_data = ProfilePsikologCreate(
+            email=email,
+            nama_lengkap=nama_lengkap,
+            nomor_hp=nomor_hp,
+            nik=nik,
+            alamat_praktik=alamat_praktik,
+            kota=kota,
+            provinsi=provinsi,
+            tarif_konsultasi=tarif_konsultasi,
+            no_str=no_str,
+            no_sip=no_sip,
+            upload_dokumen_str=str_path,
+            upload_dokumen_sip=sip_path,
+        )
+        return await register_psikolog_candidate(db=db, profile_data=profile_data)
+    except Exception:
+        delete_psikolog_documents([str_path, sip_path])
+        raise
 
 
 @router.get(

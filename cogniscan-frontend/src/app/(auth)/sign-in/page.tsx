@@ -19,7 +19,9 @@ import {
   type BackendUser,
   type PatientProfilePayload,
 } from "@/lib/auth";
+import { clearCache } from "@/lib/apiCache";
 import { supabase } from "@/lib/supabase/client";
+import { clearBackendUserCache } from "@/lib/useBackendUser";
 
 function buildPatientProfileFromMetadata(
   metadata: Record<string, unknown>,
@@ -154,6 +156,8 @@ export default function SignInPage() {
     try {
       const normalizedEmail = normalizeAuthEmail(email);
       window.sessionStorage.removeItem("cogniscan:pending-confirmation-email");
+      clearBackendUserCache();
+      clearCache();
       const { data, error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password: password.trim(),

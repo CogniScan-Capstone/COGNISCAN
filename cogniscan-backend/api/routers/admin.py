@@ -1,6 +1,7 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies.auth import get_current_active_admin
@@ -19,6 +20,7 @@ from api.services.admin_service import (
     reject_psikolog,
     reset_psikolog_temporary_password,
 )
+from api.services.psikolog_document_service import resolve_psikolog_document
 
 router = APIRouter()
 
@@ -47,6 +49,40 @@ async def get_psikolog_verification_detail(
 ):
     """Detail data psikolog untuk review admin."""
     return await get_psikolog_by_id(db=db, id_psikolog=id_psikolog)
+
+
+@router.get("/psikolog/{id_psikolog}/documents/{document_type}")
+async def get_psikolog_verification_document(
+    id_psikolog: int,
+    document_type: str,
+    _admin: Pengguna = Depends(get_current_active_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Preview dokumen STR/SIP psikolog untuk admin terautentikasi."""
+    if document_type not in {"str", "sip"}:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Jenis dokumen tidak ditemukan",
+        )
+
+    psikolog = await get_psikolog_by_id(db=db, id_psikolog=id_psikolog)
+    relative_path = (
+        psikolog.upload_dokumen_str
+        if document_type == "str"
+        else psikolog.upload_dokumen_sip
+    )
+    document_path = resolve_psikolog_document(relative_path)
+    if document_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File dokumen belum tersedia di server",
+        )
+
+    response = FileResponse(document_path, media_type="application/pdf")
+    response.headers["Content-Disposition"] = (
+        f'inline; filename="{document_path.name}"'
+    )
+    return response
 
 
 @router.post(

@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     # ── Application ────────────────────────────────────────
     APP_NAME: str = "CogniScan API"
     APP_VERSION: str = "1.0.0"
+    FILE_STORAGE_DIR: str = "storage"
+    PSIKOLOG_DOCUMENT_MAX_BYTES: int = 10 * 1024 * 1024
     APP_ENV: str = "development"
     DEBUG: bool = True
 

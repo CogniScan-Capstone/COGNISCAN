@@ -34,7 +34,7 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { useBackendUser } from "@/lib/useBackendUser";
 import { cn } from "@/lib/utils";
-import { getCached, isFresh, setCached } from "@/lib/apiCache";
+import { getCached, setCached } from "@/lib/apiCache";
 
 type SlotStatus = "penuh" | "tersedia" | "kosong";
 
@@ -56,6 +56,13 @@ type PsikologJadwalContext = {
   availability: PsikologAvailabilitySlot[];
   rescheduleRequests: RescheduleRequest[];
 };
+
+function psikologJadwalCacheKey(
+  sessionUserId: string,
+  range: { startDate: string; endDate: string },
+) {
+  return `psikolog-jadwal:${sessionUserId}:${range.startDate}:${range.endDate}`;
+}
 
 const monthNames = [
   "Januari",
@@ -229,6 +236,10 @@ export default function PsikologJadwalPage() {
       if (!accessToken) {
         throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
       }
+      const sessionUserId = data.session?.user.id;
+      if (!sessionUserId) {
+        throw new Error("Sesi psikolog tidak ditemukan. Silakan login ulang.");
+      }
 
       const range = monthRange(viewYear, viewMonth);
       const [dataAvailability, dataRequests] = await Promise.all([
@@ -237,7 +248,7 @@ export default function PsikologJadwalPage() {
       ]);
       setAvailability(dataAvailability);
       setRescheduleRequests(dataRequests);
-      setCached(`psikolog-jadwal:${range.startDate}:${range.endDate}`, {
+      setCached(psikologJadwalCacheKey(sessionUserId, range), {
         availability: dataAvailability,
         rescheduleRequests: dataRequests,
       });
@@ -255,25 +266,28 @@ export default function PsikologJadwalPage() {
 
     async function loadCurrentMonth() {
       const range = monthRange(viewYear, viewMonth);
-      const cacheKey = `psikolog-jadwal:${range.startDate}:${range.endDate}`;
-      const cached = getCached<PsikologJadwalContext>(cacheKey);
-
-      if (cached) {
-        setAvailability(cached.availability);
-        setRescheduleRequests(cached.rescheduleRequests);
-        setLoading(false);
-      } else {
-        setLoading(true);
-      }
       setError("");
-
-      if (cached && isFresh(cacheKey, 20_000)) return;
 
       try {
         const { data } = await supabase.auth.getSession();
         const accessToken = data.session?.access_token;
         if (!accessToken) {
           throw new Error("Sesi tidak ditemukan. Silakan login ulang.");
+        }
+        const sessionUserId = data.session?.user.id;
+        if (!sessionUserId) {
+          throw new Error("Sesi psikolog tidak ditemukan. Silakan login ulang.");
+        }
+
+        const cacheKey = psikologJadwalCacheKey(sessionUserId, range);
+        const cached = getCached<PsikologJadwalContext>(cacheKey);
+
+        if (mounted && cached) {
+          setAvailability(cached.availability);
+          setRescheduleRequests(cached.rescheduleRequests);
+          setLoading(false);
+        } else if (mounted) {
+          setLoading(true);
         }
 
         const [dataAvailability, dataRequests] = await Promise.all([

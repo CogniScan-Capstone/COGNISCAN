@@ -69,6 +69,13 @@ function isPendingBooking(booking: BookingReceipt) {
   );
 }
 
+function isRescheduleApprovedBooking(booking: BookingReceipt) {
+  return (
+    booking.status_konsultasi === "reschedule_disetujui" &&
+    (booking.status_pembayaran === "dibayar" || booking.status_transaksi === "berhasil")
+  );
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
   return new Date(`${value}T00:00:00`).toLocaleDateString("id-ID", {
@@ -164,6 +171,7 @@ export default function PatientBookingPage() {
 
   const eligibleReport = sortedReports.find(hasFinalFeedback) ?? null;
   const latestReport = sortedReports[0] ?? null;
+  const rescheduleBooking = bookings.find(isRescheduleApprovedBooking) ?? null;
   const paidBooking = bookings.find(isPaidBooking) ?? null;
   const pendingBooking = bookings.find(isPendingBooking) ?? null;
 
@@ -251,6 +259,7 @@ export default function PatientBookingPage() {
             <BookingGate
               eligibleReport={eligibleReport}
               latestReport={latestReport}
+              rescheduleBooking={rescheduleBooking}
               paidBooking={paidBooking}
               pendingBooking={pendingBooking}
               onCancelBooking={async (id) => {
@@ -276,16 +285,46 @@ export default function PatientBookingPage() {
 function BookingGate({
   eligibleReport,
   latestReport,
+  rescheduleBooking,
   paidBooking,
   pendingBooking,
   onCancelBooking,
 }: {
   eligibleReport: PreAssessment | null;
   latestReport: PreAssessment | null;
+  rescheduleBooking: BookingReceipt | null;
   paidBooking: BookingReceipt | null;
   pendingBooking: BookingReceipt | null;
   onCancelBooking: (idPemesananKonsultasi: number) => Promise<void>;
 }) {
+  if (rescheduleBooking) {
+    return (
+      <DashboardCard className="px-8 py-10 md:px-14">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#dfeedf] text-primary">
+              <CalendarDays className="h-7 w-7" aria-hidden="true" />
+            </div>
+            <h2 className="text-[30px] font-extrabold tracking-[-0.02em] text-primary">
+              Reschedule disetujui
+            </h2>
+            <p className="mt-4 max-w-170 text-[16px] leading-7 text-on-surface-variant">
+              Pilih jadwal baru untuk konsultasi yang sudah dibayar. Pembayaran lama tetap dipakai dan sistem tidak akan membuat booking baru.
+            </p>
+            <Link
+              href={`/pasien/booking/jadwal?reschedule_booking_id=${rescheduleBooking.id_pemesanan_konsultasi}`}
+              className="mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-[15px] font-semibold text-white transition hover:bg-[#365f39]"
+            >
+              Pilih Jadwal Baru
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
+          <BookingSummaryCard booking={rescheduleBooking} />
+        </div>
+      </DashboardCard>
+    );
+  }
+
   if (paidBooking) {
     return (
       <DashboardCard className="px-8 py-10 md:px-14">

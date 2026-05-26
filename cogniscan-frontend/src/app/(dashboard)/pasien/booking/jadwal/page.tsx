@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   CalendarDays,
@@ -233,26 +233,15 @@ function isPastTimeSlot(date: Date, time: string, now: Date) {
   return `${formatDatePayload(date)}T${time}` <= bookingDateTimeKey(now);
 }
 
-function getPositiveIntSearchParam(name: string) {
-  if (typeof window === "undefined") return null;
-
-  const value = new URLSearchParams(window.location.search).get(name);
+function getPositiveIntSearchParam(
+  searchParams: { get: (name: string) => string | null },
+  name: string,
+) {
+  const value = searchParams.get(name);
   if (!value) return null;
 
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function getIdPraAsesmenParam() {
-  return getPositiveIntSearchParam("id_pra_asesmen");
-}
-
-function getRescheduleBookingIdParam() {
-  return getPositiveIntSearchParam("reschedule_booking_id");
-}
-
-function getFollowupBookingIdParam() {
-  return getPositiveIntSearchParam("followup_booking_id");
 }
 
 function loadMidtransSnap(scriptUrl: string, clientKey: string) {
@@ -282,11 +271,39 @@ function loadMidtransSnap(scriptUrl: string, clientKey: string) {
   });
 }
 
+function BookingScheduleFallback() {
+  return (
+    <DashboardLayout
+      title="Booking"
+      navItems={getPatientNav("booking")}
+      user={patientUser}
+      profileHref={patientProfileHref}
+      contentClassName="lg:px-10 xl:px-10"
+    >
+      <DashboardCard className="px-8 py-12 text-center">
+        <Loader2 className="mx-auto h-9 w-9 animate-spin text-primary" aria-hidden="true" />
+        <p className="mt-4 text-[15px] font-medium text-on-surface-variant">
+          Memuat halaman booking...
+        </p>
+      </DashboardCard>
+    </DashboardLayout>
+  );
+}
+
 export default function PatientBookingSchedulePage() {
+  return (
+    <Suspense fallback={<BookingScheduleFallback />}>
+      <PatientBookingScheduleContent />
+    </Suspense>
+  );
+}
+
+function PatientBookingScheduleContent() {
   const router = useRouter();
-  const [rescheduleBookingId] = useState(() => getRescheduleBookingIdParam());
-  const [followupBookingId] = useState(() => getFollowupBookingIdParam());
-  const [idPraAsesmen] = useState(() => getIdPraAsesmenParam());
+  const searchParams = useSearchParams();
+  const rescheduleBookingId = getPositiveIntSearchParam(searchParams, "reschedule_booking_id");
+  const followupBookingId = getPositiveIntSearchParam(searchParams, "followup_booking_id");
+  const idPraAsesmen = getPositiveIntSearchParam(searchParams, "id_pra_asesmen");
   const [viewDate, setViewDate] = useState(() => {
     const current = bookingDate(new Date());
     return new Date(current.getFullYear(), current.getMonth(), 1);
@@ -463,7 +480,7 @@ export default function PatientBookingSchedulePage() {
 
         if (updatedBooking.order_id) {
           router.push(
-            `/pasien/booking/receipt/detail?order_id=${encodeURIComponent(updatedBooking.order_id)}`,
+            `/pasien/booking/receipt/detail?order_id=${encodeURIComponent(updatedBooking.order_id)}&context=reschedule`,
           );
         } else {
           router.push("/pasien/booking");

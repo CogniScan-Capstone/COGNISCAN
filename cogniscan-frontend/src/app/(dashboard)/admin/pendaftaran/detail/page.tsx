@@ -7,11 +7,13 @@ import { DashboardLayout } from "@/components/dashboard";
 import { adminUser, getAdminNav } from "@/components/admin";
 import {
   approveAdminPsikolog,
+  fetchAdminPsikologDocument,
   fetchAdminPsikologDetail,
   psikologStatusLabel,
   rejectAdminPsikolog,
   resetAdminPsikologTemporaryPassword,
   type AdminPsikolog,
+  type AdminPsikologDocumentType,
 } from "@/lib/admin";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
@@ -21,9 +23,13 @@ function formatValue(value?: string | number | null) {
   return String(value);
 }
 
-function isViewableDocument(value?: string | null) {
-  if (!value) return false;
-  return value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/");
+function displayDocumentName(value?: string | null, fallback = "Belum ada dokumen") {
+  if (!value) return fallback;
+  return value.split("/").pop() || value;
+}
+
+function isStoredDocument(value?: string | null) {
+  return Boolean(value?.startsWith("psikolog-documents/"));
 }
 
 function DetailRow({ label, value }: { label: string; value?: string | number | null }) {
@@ -43,6 +49,8 @@ export default function AdminRegistrationDetailPage() {
   const [notice, setNotice] = useState("");
   const [actionError, setActionError] = useState("");
   const [actionType, setActionType] = useState<"approve" | "reject" | "reset" | null>(null);
+  const [documentAction, setDocumentAction] =
+    useState<AdminPsikologDocumentType | null>(null);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
@@ -95,13 +103,15 @@ export default function AdminRegistrationDetailPage() {
     return [
       {
         label: "Dokumen STR",
-        name: registration.upload_dokumen_str || "Belum ada dokumen STR",
-        href: registration.upload_dokumen_str,
+        type: "str" as const,
+        name: displayDocumentName(registration.upload_dokumen_str, "Belum ada dokumen STR"),
+        hasFile: isStoredDocument(registration.upload_dokumen_str),
       },
       {
         label: "Dokumen SIP",
-        name: registration.upload_dokumen_sip || "Belum ada dokumen SIP",
-        href: registration.upload_dokumen_sip,
+        type: "sip" as const,
+        name: displayDocumentName(registration.upload_dokumen_sip, "Belum ada dokumen SIP"),
+        hasFile: isStoredDocument(registration.upload_dokumen_sip),
       },
     ];
   }, [registration]);
@@ -190,6 +200,40 @@ export default function AdminRegistrationDetailPage() {
     }
   }
 
+  async function handleOpenDocument(documentType: AdminPsikologDocumentType) {
+    if (!registration || !accessToken) return;
+
+    const previewWindow = window.open("about:blank", "_blank");
+    setDocumentAction(documentType);
+    setActionError("");
+
+    try {
+      const blob = await fetchAdminPsikologDocument(
+        accessToken,
+        registration.id_psikolog,
+        documentType,
+      );
+      const objectUrl = URL.createObjectURL(blob);
+
+      if (previewWindow) {
+        previewWindow.location.href = objectUrl;
+      } else {
+        window.open(objectUrl, "_blank", "noopener,noreferrer");
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (documentError) {
+      previewWindow?.close();
+      setActionError(
+        documentError instanceof Error
+          ? documentError.message
+          : "Gagal membuka dokumen.",
+      );
+    } finally {
+      setDocumentAction(null);
+    }
+  }
+
   return (
     <DashboardLayout
       navItems={getAdminNav("pendaftaran")}
@@ -268,8 +312,6 @@ export default function AdminRegistrationDetailPage() {
                   </h2>
                   <div className="space-y-3">
                     {documents.map((doc) => {
-                      const canView = isViewableDocument(doc.href);
-
                       return (
                         <article
                           key={doc.label}
@@ -284,17 +326,19 @@ export default function AdminRegistrationDetailPage() {
                               <p className="mt-1 truncate text-xs text-on-surface-muted">{doc.name}</p>
                             </div>
                           </div>
-                          {canView ? (
-                            <a
-                              href={doc.href ?? "#"}
-                              target="_blank"
-                              rel="noreferrer"
+                          {doc.hasFile ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDocument(doc.type)}
+                              disabled={documentAction !== null}
                               className="text-sm font-extrabold text-primary hover:text-primary-container"
                             >
-                              Lihat
-                            </a>
+                              {documentAction === doc.type ? "Membuka..." : "Lihat"}
+                            </button>
                           ) : (
-                            <span className="text-sm font-semibold text-on-surface-muted">Tersimpan</span>
+                            <span className="text-sm font-semibold text-on-surface-muted">
+                              Belum tersedia
+                            </span>
                           )}
                         </article>
                       );
