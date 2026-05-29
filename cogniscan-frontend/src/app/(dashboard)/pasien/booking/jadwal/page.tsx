@@ -550,7 +550,7 @@ function PatientBookingScheduleContent() {
       profileHref={patientProfileHref}
       contentClassName="lg:px-10 xl:px-10"
     >
-      <div className="max-w-235">
+      <div className="w-full">
         <div className="mb-12 border-b border-outline-variant">
           <div className="flex flex-wrap gap-6">
             <button
@@ -586,15 +586,17 @@ function PatientBookingScheduleContent() {
 
         <div
           className={cn(
-            "grid gap-8 transition-all duration-300",
-            selectedDate ? "xl:grid-cols-[320px_1fr]" : "grid-cols-1",
+            "grid w-full gap-8 transition-all duration-300",
+            selectedDate
+              ? "xl:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.35fr)]"
+              : "grid-cols-1",
           )}
         >
           {/* CALENDAR */}
           <DashboardCard
             className={cn(
               "relative p-6 transition-all duration-300",
-              selectedDate ? "w-full max-w-[320px]" : "w-full",
+              "w-full",
             )}
           >
             <div className="mb-6 flex items-center justify-between">
@@ -802,7 +804,7 @@ function PatientBookingScheduleContent() {
 
           {/* DETAIL CARD */}
           {selectedDate && (
-            <DashboardCard className="p-8">
+            <DashboardCard className="w-full p-8">
               <h3 className="mb-7 text-[20px] font-semibold text-[#a98ad6]">
                 {formatSelectedDate(selectedDate)}
               </h3>

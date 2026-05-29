@@ -52,7 +52,15 @@ FINAL_CONSULTATION_STATUSES = {
     "ditutup",
     "payment_kedaluwarsa",
 }
-MISSABLE_CONSULTATION_STATUSES = {"terkonfirmasi", "reschedule_ditolak"}
+MISSABLE_CONSULTATION_STATUSES = {
+    "terkonfirmasi",
+    "menunggu_pembayaran",
+    "reschedule_ditolak",
+}
+MISSED_CANCELABLE_CONSULTATION_STATUSES = {
+    "menunggu_konfirmasi_psikolog",
+    "terlewat",
+}
 ACTIVE_RESCHEDULE_REQUEST_STATUSES = {"pending", "disetujui"}
 FOLLOWUP_SOURCE_STATUSES = {"selesai", "ditutup"}
 
@@ -969,11 +977,20 @@ async def cancel_patient_booking(
         await db.commit()
         return _receipt_response(booking)
 
-    if booking.status_konsultasi == "terlewat":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Booking yang sudah terlewat dapat ditutup atau diajukan penjadwalan ulang",
-        )
+    if booking.status_konsultasi in MISSED_CANCELABLE_CONSULTATION_STATUSES:
+        if not payload.konfirmasi_no_refund:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Konfirmasi kebijakan no-refund wajib dicentang untuk membatalkan konsultasi terlewat",
+            )
+
+        booking.status_pembayaran = "dibayar"
+        booking.status_konsultasi = "dibatalkan_pasien"
+        booking.alasan_pembatalan_pasien = cancellation_reason
+        booking.dibatalkan_pada = datetime.now(timezone.utc)
+        _cancel_active_reschedule_requests(booking)
+        await db.commit()
+        return _receipt_response(booking)
 
     start_at = _booking_start_datetime(booking)
     if start_at is None or start_at <= datetime.now(BOOKING_TIMEZONE):

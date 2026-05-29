@@ -39,6 +39,7 @@ import { useCachedApi } from "@/lib/useCachedApi";
 type ConsultationTab = "menunggu" | "selesai";
 type ConsultationStatus =
   | "terjadwal"
+  | "sudah_terlewat"
   | "menunggu_konfirmasi_psikolog"
   | "terlewat"
   | "menunggu_reschedule"
@@ -89,6 +90,7 @@ const statusCopy: Record<
   }
 > = {
   terjadwal: { label: "Terjadwal", tone: "success", icon: Clock3 },
+  sudah_terlewat: { label: "Sudah Terlewat", tone: "warning", icon: AlertTriangle },
   menunggu_konfirmasi_psikolog: { label: "Menunggu Konfirmasi Psikolog", tone: "warning", icon: Clock3 },
   terlewat: { label: "Terlewat", tone: "warning", icon: AlertTriangle },
   menunggu_reschedule: { label: "Menunggu Reschedule", tone: "warning", icon: RotateCcw },
@@ -163,9 +165,26 @@ function isMeetingWindowActive(booking: BookingReceipt, now: Date) {
   return Boolean(start && endWithGrace && start <= now && now <= endWithGrace);
 }
 
+function isSchedulePastGrace(booking: BookingReceipt, now: Date) {
+  const endWithGrace = scheduledEndWithGrace(booking);
+  return Boolean(endWithGrace && endWithGrace < now);
+}
+
 function isScheduleFuture(booking: BookingReceipt, now: Date) {
   const start = scheduledStart(booking);
   return Boolean(start && start > now);
+}
+
+function displayConsultationStatus(
+  booking: BookingReceipt,
+  now: Date,
+): ConsultationStatus {
+  const status = normalizeConsultationStatus(booking);
+  if (status === "menunggu_konfirmasi_psikolog") return "sudah_terlewat";
+  if (status === "terjadwal" && isPaid(booking) && isSchedulePastGrace(booking, now)) {
+    return "sudah_terlewat";
+  }
+  return status;
 }
 
 export default function PatientConsultationPage() {
@@ -377,7 +396,8 @@ function ConsultationCard({
   const isOnline = (booking.mode_konsultasi || booking.metode_konsultasi) === "online";
   const meetingHref = normalizedMeetingHref(booking.link_pertemuan);
   const status = normalizeConsultationStatus(booking);
-  const statusInfo = statusCopy[status];
+  const displayStatus = displayConsultationStatus(booking, now);
+  const statusInfo = statusCopy[displayStatus];
   const StatusIcon = statusInfo.icon;
   const [requestOpen, setRequestOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -397,12 +417,23 @@ function ConsultationCard({
   const canChooseNewSchedule = status === "reschedule_disetujui";
   const canBookFollowup = status === "selesai" || status === "ditutup";
   const scheduleFuture = isScheduleFuture(booking, now);
+  const scheduleStartAt = scheduledStart(booking);
+  const scheduleStarted = Boolean(scheduleStartAt && scheduleStartAt <= now);
+  const canCancelMissed =
+    displayStatus === "sudah_terlewat" ||
+    status === "menunggu_konfirmasi_psikolog" ||
+    status === "terlewat";
   const canCancelPaid =
-    scheduleFuture &&
-    (status === "terjadwal" ||
-      status === "menunggu_reschedule" ||
-      status === "reschedule_disetujui" ||
-      status === "reschedule_ditolak");
+    canCancelMissed ||
+    (scheduleFuture &&
+      (status === "terjadwal" ||
+        status === "menunggu_reschedule" ||
+        status === "reschedule_disetujui" ||
+        status === "reschedule_ditolak"));
+  const showCancelUnavailable =
+    scheduleStarted &&
+    !canCancelMissed &&
+    (status === "terjadwal" || status === "reschedule_ditolak");
   const meetingWindowActive = isMeetingWindowActive(booking, now);
   const showMeetingLink =
     isOnline &&
@@ -464,7 +495,11 @@ function ConsultationCard({
     setActionMessage("");
     try {
       await onCancelPaidBooking(booking.id_pemesanan_konsultasi, cancelReason);
-      setActionMessage("Konsultasi berhasil dibatalkan. Slot jadwal sudah dilepas.");
+      setActionMessage(
+        scheduleFuture
+          ? "Konsultasi berhasil dibatalkan. Slot jadwal sudah dilepas."
+          : "Konsultasi terlewat berhasil dibatalkan tanpa refund otomatis.",
+      );
       setCancelOpen(false);
       setCancelReason("");
       setNoRefundAccepted(false);
@@ -535,6 +570,12 @@ function ConsultationCard({
                   Masuk Ruang Konsultasi
                   <ExternalLink className="h-4 w-4" aria-hidden="true" />
                 </a>
+              ) : displayStatus === "sudah_terlewat" ? (
+                <p className="mt-2 text-[14px] leading-6 text-on-surface-variant">
+                  Jadwal konsultasi sudah terlewat. Sistem menunggu psikolog
+                  menyimpan hasil sesi, atau kamu bisa mengajukan penjadwalan
+                  ulang bila masih membutuhkan sesi.
+                </p>
               ) : status === "menunggu_konfirmasi_psikolog" ? (
                 <p className="mt-2 text-[14px] leading-6 text-on-surface-variant">
                   Jadwal konsultasi sudah lewat dan sedang menunggu psikolog menyimpan hasil sesi.
@@ -676,6 +717,13 @@ function ConsultationCard({
               </button>
             ) : null}
 
+            {showCancelUnavailable ? (
+              <span className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-outline-variant bg-surface-container px-5 text-[14px] font-semibold text-on-surface-muted">
+                <Ban className="h-4 w-4" aria-hidden="true" />
+                Batalkan Konsultasi
+              </span>
+            ) : null}
+
             {canCloseMissed ? (
               <button
                 type="button"
@@ -692,6 +740,14 @@ function ConsultationCard({
               </button>
             ) : null}
           </div>
+
+          {showCancelUnavailable ? (
+            <p className="mt-3 text-sm leading-6 text-on-surface-variant">
+              Pembatalan hanya tersedia sebelum jadwal konsultasi dimulai.
+              Setelah jadwal lewat, konsultasi masuk alur terlewat/no-show dan
+              dapat diajukan penjadwalan ulang.
+            </p>
+          ) : null}
 
           {requestOpen ? (
             <div className="mt-4 rounded-[12px] border border-[#f0d36d] bg-[#fff9df] p-4">
@@ -739,8 +795,9 @@ function ConsultationCard({
                 Pembatalan konsultasi berbayar
               </p>
               <p className="mt-1 text-sm leading-6 text-red-700">
-                Dana konsultasi tidak dikembalikan otomatis. Slot jadwal akan dilepas
-                agar psikolog bisa menerima pasien lain.
+                {scheduleFuture
+                  ? "Dana konsultasi tidak dikembalikan otomatis. Slot jadwal akan dilepas agar psikolog bisa menerima pasien lain."
+                  : "Dana konsultasi tidak dikembalikan otomatis. Status konsultasi terlewat akan ditutup sebagai dibatalkan oleh pasien."}
               </p>
               <label className="mt-3 block text-sm font-semibold text-on-surface">
                 Alasan pembatalan

@@ -174,6 +174,17 @@ function addMonths(year: number, month: number, count: number) {
   return value;
 }
 
+function firstEditableDateInMonth(
+  year: number,
+  month: number,
+  today: { y: number; m: number; d: number },
+) {
+  if (year === today.y && month === today.m) {
+    return formatDateKey(year, month, today.d);
+  }
+  return formatDateKey(year, month, 1);
+}
+
 function formatRequestDate(value?: string | null) {
   if (!value) return "-";
   return new Date(`${value}T00:00:00`).toLocaleDateString("id-ID", {
@@ -214,6 +225,7 @@ export default function PsikologJadwalPage() {
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
   const yearRef = useRef<HTMLDivElement>(null);
+  const todayKey = formatDateKey(today.y, today.m, today.d);
 
   useEffect(() => {
     if (!yearOpen) return;
@@ -347,30 +359,36 @@ export default function PsikologJadwalPage() {
     return { penuh, tersedia, totalSlot, filledSlot };
   }, [cells]);
 
+  function syncSlotFormsToVisibleMonth(year: number, month: number) {
+    const start = firstEditableDateInMonth(year, month, today);
+    const end = formatDateKey(year, month, new Date(year, month + 1, 0).getDate());
+    setSlotDate(start);
+    setBulkStartDate(start);
+    setBulkEndDate(end);
+  }
+
+  function setVisibleMonth(year: number, month: number) {
+    const normalized = new Date(year, month, 1);
+    const nextYear = normalized.getFullYear();
+    const nextMonth = normalized.getMonth();
+    setViewYear(nextYear);
+    setViewMonth(nextMonth);
+    syncSlotFormsToVisibleMonth(nextYear, nextMonth);
+  }
+
   const goPrev = () => {
-    if (viewMonth === 0) {
-      setViewMonth(11);
-      setViewYear((y) => y - 1);
-    } else {
-      setViewMonth((m) => m - 1);
-    }
+    setVisibleMonth(viewYear, viewMonth - 1);
   };
 
   const goNext = () => {
-    if (viewMonth === 11) {
-      setViewMonth(0);
-      setViewYear((y) => y + 1);
-    } else {
-      setViewMonth((m) => m + 1);
-    }
+    setVisibleMonth(viewYear, viewMonth + 1);
   };
 
   const goToday = () => {
-    setViewYear(today.y);
-    setViewMonth(today.m);
+    setVisibleMonth(today.y, today.m);
   };
 
-  const years = Array.from({ length: 7 }, (_, i) => today.y - 2 + i);
+  const years = Array.from({ length: 10 }, (_, i) => today.y + i);
 
   const toggleBulkWeekday = (weekday: number) => {
     setBulkWeekdays((current) =>
@@ -519,6 +537,18 @@ export default function PsikologJadwalPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={viewMonth}
+                onChange={(event) => setVisibleMonth(viewYear, Number(event.target.value))}
+                aria-label="Pilih bulan"
+                className="h-10 rounded-full border border-outline-variant bg-white px-4 text-[14px] font-semibold text-on-surface transition hover:border-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                {monthNames.map((month, index) => (
+                  <option key={month} value={index}>
+                    {month}
+                  </option>
+                ))}
+              </select>
               <div ref={yearRef} className="relative">
                 <button
                   type="button"
@@ -544,7 +574,7 @@ export default function PsikologJadwalPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            setViewYear(y);
+                            setVisibleMonth(y, viewMonth);
                             setYearOpen(false);
                           }}
                           className={cn(
@@ -746,6 +776,7 @@ export default function PsikologJadwalPage() {
                 <input
                   type="date"
                   value={slotDate}
+                  min={todayKey}
                   onChange={(event) => setSlotDate(event.target.value)}
                   className="h-11 rounded-[10px] border border-outline-variant bg-white px-3 text-sm font-medium text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
@@ -780,12 +811,14 @@ export default function PsikologJadwalPage() {
                 <input
                   type="date"
                   value={bulkStartDate}
+                  min={todayKey}
                   onChange={(event) => setBulkStartDate(event.target.value)}
                   className="h-11 rounded-[10px] border border-outline-variant bg-white px-3 text-sm font-medium text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <input
                   type="date"
                   value={bulkEndDate}
+                  min={bulkStartDate || todayKey}
                   onChange={(event) => setBulkEndDate(event.target.value)}
                   className="h-11 rounded-[10px] border border-outline-variant bg-white px-3 text-sm font-medium text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
