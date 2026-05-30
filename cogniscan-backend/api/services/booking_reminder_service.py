@@ -20,6 +20,7 @@ from api.services.whatsapp_service import (
 
 REMINDER_TIMEZONE = ZoneInfo("Asia/Jakarta")
 WHATSAPP_CHANNEL = "whatsapp"
+BOOKING_PAID_REMINDER_TYPE = "booking_paid"
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,31 @@ def _booking_message(
     )
 
 
+def _booking_paid_message(
+    booking: PemesananKonsultasi,
+    start_at: datetime,
+) -> str:
+    patient_name = booking.pasien.nama_lengkap if booking.pasien else "Pasien CogniScan"
+    psikolog_name = booking.psikolog.nama_lengkap if booking.psikolog else "Psikolog CogniScan"
+    method = "online" if booking.mode_konsultasi == "online" else "offline"
+
+    location_line = ""
+    if method == "online" and booking.link_pertemuan:
+        location_line = f"\nLink konsultasi: {booking.link_pertemuan}"
+    elif method == "offline" and booking.psikolog and booking.psikolog.alamat_praktik:
+        location_line = f"\nLokasi: {booking.psikolog.alamat_praktik}"
+
+    return (
+        f"Halo {patient_name}, pembayaran konsultasi CogniScan kamu sudah berhasil.\n\n"
+        f"Psikolog: {psikolog_name}\n"
+        f"Jadwal: {_format_consultation_date(start_at)}\n"
+        f"Metode: {method.capitalize()}"
+        f"{location_line}\n\n"
+        "Kamu akan menerima reminder lagi mendekati jadwal konsultasi. "
+        "Catatan: dana konsultasi tidak dikembalikan jika pasien tidak hadir."
+    )
+
+
 async def _get_reminder_log(
     db: AsyncSession,
     booking: PemesananKonsultasi,
@@ -127,6 +153,36 @@ async def _already_sent(
 ) -> bool:
     reminder = await _get_reminder_log(db, booking, reminder_type)
     return reminder is not None and reminder.status == "sent"
+
+
+async def dispatch_booking_paid_confirmation(
+    db: AsyncSession,
+    booking: PemesananKonsultasi,
+) -> bool:
+    """Kirim konfirmasi WhatsApp sekali saat booking sudah berhasil dibayar."""
+    if not is_waha_configured():
+        return False
+
+    start_at = _consultation_start(booking)
+    if start_at is None:
+        return False
+
+    if await _already_sent(db, booking, BOOKING_PAID_REMINDER_TYPE):
+        return False
+
+    try:
+        await send_whatsapp_text(
+            phone_number=booking.pasien.no_hp_wa if booking.pasien else None,
+            text=_booking_paid_message(booking, start_at),
+        )
+        await _mark_reminder(db, booking, BOOKING_PAID_REMINDER_TYPE, "sent")
+    except WahaServiceError as exc:
+        await _mark_reminder(db, booking, BOOKING_PAID_REMINDER_TYPE, "failed", str(exc))
+        await db.commit()
+        return False
+
+    await db.commit()
+    return True
 
 
 async def dispatch_due_booking_reminders(

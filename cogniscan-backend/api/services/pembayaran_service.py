@@ -18,6 +18,7 @@ from api.schemas.pembayaran import (
     MidtransPaymentCreateResponse,
     PaymentReceiptResponse,
 )
+from api.services.booking_reminder_service import dispatch_booking_paid_confirmation
 from api.services.midtrans_service import (
     MidtransServiceError,
     create_snap_transaction,
@@ -64,6 +65,43 @@ def _confirm_paid_booking(
     ensure_online_meeting_room(booking)
     if booking.jadwal is not None:
         booking.jadwal.apakah_tersedia = False
+
+
+async def _load_booking_for_paid_confirmation(
+    db: AsyncSession,
+    id_pemesanan_konsultasi: int | None,
+) -> PemesananKonsultasi | None:
+    if id_pemesanan_konsultasi is None:
+        return None
+
+    result = await db.execute(
+        select(PemesananKonsultasi)
+        .where(
+            PemesananKonsultasi.id_pemesanan_konsultasi
+            == id_pemesanan_konsultasi
+        )
+        .options(
+            selectinload(PemesananKonsultasi.pasien),
+            selectinload(PemesananKonsultasi.psikolog),
+            selectinload(PemesananKonsultasi.jadwal),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _send_paid_confirmation_if_possible(
+    db: AsyncSession,
+    id_pemesanan_konsultasi: int | None,
+) -> None:
+    booking = await _load_booking_for_paid_confirmation(db, id_pemesanan_konsultasi)
+    if booking is None:
+        return
+
+    try:
+        await dispatch_booking_paid_confirmation(db, booking)
+    except Exception:
+        # Pengiriman WA tidak boleh membuat payment webhook/status sync gagal.
+        pass
 
 
 def _as_utc_datetime(value) -> datetime | None:
@@ -290,9 +328,11 @@ async def process_midtrans_notification(
     transaction.payload_notifikasi = payload
 
     booking = transaction.pemesanan
+    paid_booking_id: int | None = None
     if booking is not None:
         if internal_status == "berhasil":
             _confirm_paid_booking(transaction, booking)
+            paid_booking_id = booking.id_pemesanan_konsultasi
         elif internal_status == "menunggu":
             booking.status_pembayaran = "belum_bayar"
             booking.status_konsultasi = "menunggu_pembayaran"
@@ -309,6 +349,7 @@ async def process_midtrans_notification(
                 booking.jadwal.apakah_tersedia = True
 
     await db.commit()
+    await _send_paid_confirmation_if_possible(db, paid_booking_id)
     await db.refresh(transaction)
     return transaction, internal_status
 
@@ -338,6 +379,7 @@ async def sync_payment_status_if_needed(
         fraud_status = payload.get("fraud_status")
         internal_status = map_midtrans_status(transaction_status, fraud_status)
 
+        paid_booking_id: int | None = None
         if internal_status != transaction.status_transaksi:
             transaction.midtrans_transaction_id = payload.get("transaction_id")
             transaction.midtrans_payment_type = payload.get("payment_type")
@@ -353,6 +395,7 @@ async def sync_payment_status_if_needed(
             if booking is not None:
                 if internal_status == "berhasil":
                     _confirm_paid_booking(transaction, booking)
+                    paid_booking_id = booking.id_pemesanan_konsultasi
                 elif internal_status in {"gagal", "kedaluwarsa", "dibatalkan"}:
                     booking.status_pembayaran = internal_status
                     booking.status_konsultasi = (
@@ -366,6 +409,7 @@ async def sync_payment_status_if_needed(
                         booking.jadwal.apakah_tersedia = True
 
             await db.commit()
+            await _send_paid_confirmation_if_possible(db, paid_booking_id)
     except Exception:
         # Gagal secara diam-diam agar tidak menghalangi loading halaman receipt
         pass
