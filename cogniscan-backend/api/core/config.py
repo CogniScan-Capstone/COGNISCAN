@@ -86,6 +86,20 @@ class Settings(BaseSettings):
     BOOKING_REMINDER_INTERVAL_SECONDS: int = 300
     BOOKING_REMINDER_RUN_ON_STARTUP: bool = True
 
+    # Rate limit ringan untuk endpoint sensitif/mahal.
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_STORAGE_URL: str = "memory://"
+    RATE_LIMIT_TRUST_PROXY_HEADERS: bool = False
+    RATE_LIMIT_AUTH_MUTATION: str = "10/minute"
+    RATE_LIMIT_SCREENING_FINALIZE: str = "6/minute"
+    RATE_LIMIT_VOICE_ANSWER: str = "20/minute"
+    RATE_LIMIT_PAYMENT_MUTATION: str = "15/minute"
+    RATE_LIMIT_PAYMENT_READ: str = "60/minute"
+    RATE_LIMIT_ADMIN_ACTION: str = "30/minute"
+    RATE_LIMIT_REMINDER_DISPATCH: str = "6/minute"
+    RATE_LIMIT_SCHEDULE_MUTATION: str = "60/minute"
+    RATE_LIMIT_CONSULTATION_RESULT: str = "12/minute"
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS string menjadi list."""

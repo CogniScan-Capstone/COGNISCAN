@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.core.config import settings
+from api.core.rate_limit import limiter
 from api.dependencies.auth import get_current_active_psikolog
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
@@ -19,9 +21,11 @@ router = APIRouter()
     response_model=ConsultationResultResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(settings.RATE_LIMIT_CONSULTATION_RESULT)
 async def create_consultation_result(
     id_pemesanan_konsultasi: int,
     payload: ConsultationResultCreate,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):

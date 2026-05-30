@@ -1,10 +1,12 @@
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from pydantic import EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.core.config import settings
+from api.core.rate_limit import limiter
 from api.dependencies.database import get_db
 from api.dependencies.auth import (
     SupabaseClaims,
@@ -115,8 +117,10 @@ async def build_user_response(
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(settings.RATE_LIMIT_AUTH_MUTATION)
 async def create_profile(
     profile_data: ProfilePasienCreate,
+    request: Request,
     claims: SupabaseClaims = Depends(verify_supabase_token),
     db: AsyncSession = Depends(get_db),
 ):
@@ -139,18 +143,6 @@ async def create_profile(
         current_user=user,
         nama_lengkap=profile_data.nama_lengkap,
     )
-
-
-@router.get(
-    "/profile/pasien",
-    response_model=ProfilePasienResponse,
-)
-async def read_profile_pasien(
-    current_user: Pengguna = Depends(require_role("pasien")),
-    db: AsyncSession = Depends(get_db),
-):
-    """Ambil profil pasien lengkap milik user yang sedang login."""
-    return await get_pasien_profile(db=db, current_user=current_user)
 
 
 @router.get(
@@ -193,7 +185,9 @@ async def update_profile_pasien(
     response_model=PsikologRegistrationResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(settings.RATE_LIMIT_AUTH_MUTATION)
 async def register_psikolog(
+    request: Request,
     email: EmailStr = Form(...),
     nama_lengkap: str = Form(..., min_length=3, max_length=150),
     nomor_hp: str = Form(..., min_length=8, max_length=20, pattern=r"^\+?[0-9]{8,20}$"),
@@ -279,8 +273,10 @@ async def update_profile_psikolog(
     "/change-temporary-password",
     response_model=MessageResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_AUTH_MUTATION)
 async def change_temporary_password(
     payload: ChangeTemporaryPasswordRequest,
+    request: Request,
     current_user: Pengguna = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

@@ -1,8 +1,10 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.core.config import settings
+from api.core.rate_limit import limiter
 from api.dependencies.auth import get_current_active_pasien, require_role
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
@@ -82,8 +84,10 @@ async def read_reschedule_availability(
     response_model=BookingCheckoutResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(settings.RATE_LIMIT_PAYMENT_MUTATION)
 async def checkout_booking(
     payload: BookingCheckoutRequest,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
@@ -111,9 +115,11 @@ async def read_my_bookings(
     "/{id_pemesanan_konsultasi}/reschedule",
     response_model=BookingReceiptResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_SCHEDULE_MUTATION)
 async def reschedule_booking(
     id_pemesanan_konsultasi: int,
     payload: BookingRescheduleRequest,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
@@ -130,9 +136,11 @@ async def reschedule_booking(
     "/{id_pemesanan_konsultasi}/cancel",
     response_model=BookingReceiptResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_PAYMENT_MUTATION)
 async def cancel_booking(
     id_pemesanan_konsultasi: int,
     payload: BookingCancelRequest,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
@@ -149,9 +157,11 @@ async def cancel_booking(
     "/{id_pemesanan_konsultasi}/reschedule-request",
     response_model=BookingReceiptResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_SCHEDULE_MUTATION)
 async def create_reschedule_request(
     id_pemesanan_konsultasi: int,
     payload: BookingRescheduleRequestCreate,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
@@ -168,8 +178,10 @@ async def create_reschedule_request(
     "/{id_pemesanan_konsultasi}/close-missed",
     response_model=BookingReceiptResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_PAYMENT_MUTATION)
 async def close_missed_consultation(
     id_pemesanan_konsultasi: int,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
@@ -185,7 +197,9 @@ async def close_missed_consultation(
     "/reminders/send-due",
     response_model=BookingReminderDispatchResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_REMINDER_DISPATCH)
 async def send_due_booking_reminders(
+    request: Request,
     _admin: Pengguna = Depends(require_role("admin")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -197,7 +211,9 @@ async def send_due_booking_reminders(
     "/status/refresh",
     response_model=BookingStatusRefreshResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_ADMIN_ACTION)
 async def refresh_booking_status(
+    request: Request,
     _admin: Pengguna = Depends(require_role("admin")),
     db: AsyncSession = Depends(get_db),
 ):

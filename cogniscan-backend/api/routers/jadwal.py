@@ -1,8 +1,10 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.core.config import settings
+from api.core.rate_limit import limiter
 from api.dependencies.auth import get_current_active_psikolog
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
@@ -61,8 +63,10 @@ async def read_psikolog_availability(
     response_model=PsikologAvailabilityResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(settings.RATE_LIMIT_SCHEDULE_MUTATION)
 async def create_psikolog_availability_slot(
     payload: PsikologAvailabilityCreate,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
@@ -79,8 +83,10 @@ async def create_psikolog_availability_slot(
     response_model=PsikologAvailabilityBulkCreateResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(settings.RATE_LIMIT_SCHEDULE_MUTATION)
 async def create_psikolog_availability_slots_bulk(
     payload: PsikologAvailabilityBulkCreate,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
@@ -96,9 +102,11 @@ async def create_psikolog_availability_slots_bulk(
     "/psikolog/availability/{id_jadwal_psikolog}",
     response_model=PsikologAvailabilityResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_SCHEDULE_MUTATION)
 async def update_psikolog_availability_slot(
     id_jadwal_psikolog: int,
     payload: PsikologAvailabilityUpdate,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
@@ -115,8 +123,10 @@ async def update_psikolog_availability_slot(
     "/psikolog/availability/{id_jadwal_psikolog}",
     response_model=PsikologAvailabilityDeleteResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_SCHEDULE_MUTATION)
 async def delete_psikolog_availability_slot(
     id_jadwal_psikolog: int,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
@@ -149,9 +159,11 @@ async def read_psikolog_reschedule_requests(
     "/psikolog/reschedule-requests/{id_permintaan_reschedule}/approve",
     response_model=BookingRescheduleRequestResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_SCHEDULE_MUTATION)
 async def approve_reschedule_request(
     id_permintaan_reschedule: int,
     payload: BookingRescheduleDecisionRequest,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
@@ -168,9 +180,11 @@ async def approve_reschedule_request(
     "/psikolog/reschedule-requests/{id_permintaan_reschedule}/reject",
     response_model=BookingRescheduleRequestResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_SCHEDULE_MUTATION)
 async def reject_reschedule_request(
     id_permintaan_reschedule: int,
     payload: BookingRescheduleRejectRequest,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):

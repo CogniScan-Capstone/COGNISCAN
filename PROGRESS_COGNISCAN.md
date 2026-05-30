@@ -9,8 +9,8 @@ Dokumen ini menyimpan konteks kerja terbaru untuk sesi berikutnya. Fokus utama s
 Status terkini (2026-05-30):
 - Aplikasi sudah melewati Phase 6B dan Phase 7 MVP utama sudah tersambung: feedback psikolog, pesan pasien, booking, pembayaran, link meeting, availability jadwal psikolog, tab konsultasi pasien, flow request/approval reschedule, reschedule paid booking tanpa pembayaran ulang, cancel/no-show/expiry booking, hasil konsultasi psikolog, follow-up booking tanpa screening ulang, UI screening teks/voice yang lebih jelas, reminder WAHA, dashboard admin dinamis, global route guard frontend, validasi wajib profil registrasi, dan cache navigasi antar tab.
 - Perubahan UX/flow terbaru sudah menutup beberapa gap setelah testing manual: tab konsultasi pasien memberi label jelas untuk jadwal yang sudah terlewat, pasien bisa membatalkan konsultasi terlewat sebagai status final no-refund, layout pilih jadwal booking pasien dibuat melebar, dan kalender availability psikolog dibuat lebih fleksibel untuk bulan/tahun berikutnya.
-- WAHA manual test dengan session connected sudah berhasil; sisa WAHA sekarang adalah validasi scheduler otomatis di environment target dan pengamanan dashboard/API.
-- Sisa utama sekarang adalah validasi E2E manual penuh, apply/validasi migration terbaru di database aktif, validasi scheduler WAHA otomatis di environment target, rekam medis lanjutan, testing otomatis, audit/rate limit/privacy hardening, dan dokumentasi operasional terbaru.
+- E2E manual utama untuk booking, batal booking, hasil konsultasi, follow-up booking, migration aktif, dan reminder WA sudah dilaporkan berhasil; sisa WAHA sekarang adalah validasi deployment target/multi-worker dan pengamanan dashboard/API.
+- Sisa utama sekarang adalah build/verifikasi final sebelum demo, rekam medis lanjutan, testing otomatis, audit log formal, privacy hardening lanjutan, dan dokumentasi operasional terbaru.
 
 Fitur yang baru diselesaikan (2026-05-30):
 - **Label konsultasi pasien yang sudah terlewat**: `/pasien/konsultasi` sekarang menampilkan badge `Sudah Terlewat` berdasarkan tanggal/waktu aktual jika jadwal paid sudah melewati waktu selesai + grace period, walaupun status backend/cache masih belum tersinkron penuh.
@@ -18,7 +18,10 @@ Fitur yang baru diselesaikan (2026-05-30):
 - **Auto-refresh missed booking lebih toleran data lama**: status `menunggu_pembayaran` yang sudah paid ikut dihitung sebagai kandidat missed agar data lama yang inkonsisten bisa masuk alur `menunggu_konfirmasi_psikolog`.
 - **Layout booking jadwal pasien diperlebar**: `/pasien/booking/jadwal` tidak lagi dibatasi `max-w-235`; kalender, pilihan waktu, metode, policy, dan tombol konfirmasi memakai grid full-width agar ruang kanan tidak kosong besar.
 - **Navigasi bulan/tahun jadwal psikolog diperjelas**: `/psikolog/jadwal` memiliki dropdown bulan eksplisit, rentang tahun ke depan, helper navigasi bulan yang stabil, dan form tambah/bulk slot otomatis mengikuti bulan yang sedang dibuka.
+- **Reminder WA setelah pembayaran berhasil**: booking yang status pembayarannya berubah ke `berhasil` langsung mencoba mengirim konfirmasi WhatsApp tipe `booking_paid`; idempotency tetap memakai tabel `reminder_konsultasi`.
 - **WAHA manual test berhasil**: endpoint admin `POST /api/booking/reminders/send-due` sudah berhasil dites dengan WAHA session connected; reminder tetap memakai log `reminder_konsultasi` sebagai idempotency agar tidak dobel.
+- **E2E manual utama berhasil**: flow booking, batal booking, hasil konsultasi, follow-up booking, migration `a6b7c8d9e0f1`, dan reminder WA sudah dilaporkan berhasil pada environment lokal/staging.
+- **Hardening rate limit ringan**: backend menambahkan `slowapi` limiter untuk endpoint mutasi auth/profile, voice/finalize screening, checkout/payment receipt, cancel/reschedule booking, admin action, jadwal psikolog, submit hasil konsultasi, dan reminder manual.
 
 Fitur yang baru diselesaikan (2026-05-26):
 - **Dashboard admin dinamis**: `GET /api/dashboard/admin/summary` ditambahkan; dashboard admin membaca total pasien, psikolog pending/terverifikasi/ditolak, total screening, screening menunggu review, konsultasi dibayar, dan pendaftaran psikolog terbaru dari database.
@@ -325,12 +328,13 @@ Yang sudah ada:
 - Tabel `reminder_konsultasi` menjadi log idempotency agar pasien tidak menerima reminder dobel untuk booking dan tipe reminder yang sama.
 - Scheduler internal reminder tersedia di `api/services/booking_reminder_scheduler.py` dan start lewat FastAPI lifespan di `api/main.py` jika `BOOKING_REMINDER_SCHEDULER_ENABLED=true`.
 - Env scheduler: `BOOKING_REMINDER_INTERVAL_SECONDS` dan `BOOKING_REMINDER_RUN_ON_STARTUP`.
+- Rate limit ringan tersedia lewat `slowapi` dan env `RATE_LIMIT_*`; default storage masih `memory://` untuk development.
 
 Belum ideal:
-- Scheduler internal sudah ada, tetapi perlu validasi di environment target/deployment agar proses FastAPI tetap hidup dan tidak membuat multiple dispatcher jika nanti scale multi-worker.
-- Migration `a6b7c8d9e0f1_add_consultation_result_followup.py` sudah dibuat tetapi belum di-apply ke database aktif pada sesi terakhir.
+- Scheduler internal sudah berhasil divalidasi secara lokal/manual, tetapi perlu strategi deployment agar proses FastAPI tetap hidup dan tidak membuat multiple dispatcher jika nanti scale multi-worker.
+- Migration `a6b7c8d9e0f1_add_consultation_result_followup.py` sudah di-apply ke database aktif; `alembic current` menampilkan `a6b7c8d9e0f1 (head)`.
 - Hasil konsultasi sudah ada untuk MVP, tetapi rekam medis lanjutan, audit akses, dan format klinis final masih perlu dilanjutkan.
-- E2E manual untuk hasil konsultasi + follow-up booking masih perlu dijalankan di database lokal/staging setelah migration terbaru di-apply.
+- E2E manual hasil konsultasi + follow-up booking sudah dilaporkan berhasil; automated regression test masih perlu dibuat.
 
 ## Frontend
 
@@ -505,7 +509,7 @@ Yang sudah ada:
 - Konsultasi yang sudah `selesai` atau `ditutup` bisa membuka CTA `Booking Sesi Lanjutan`.
 
 Belum ideal:
-- E2E manual konsultasi online/offline sampai psikolog submit hasil belum dijalankan penuh.
+- E2E manual konsultasi sampai psikolog submit hasil sudah dilaporkan berhasil; test otomatis/regression belum tersedia.
 - Validasi klinis untuk format hasil konsultasi dan rekam medis final masih perlu diputuskan.
 
 ### Reminder WhatsApp WAHA
@@ -523,7 +527,7 @@ Yang sudah ada:
 - Manual test WAHA dengan session connected sudah berhasil; reminder jatuh tempo bisa dikirim lewat endpoint admin/cron.
 
 Belum ideal:
-- Perlu validasi scheduler otomatis di environment target. Jika production memakai multi-worker, perlu strategi agar dispatcher tidak berjalan ganda.
+- Scheduler otomatis sudah berhasil divalidasi pada environment lokal/manual; environment target tetap perlu strategi multi-worker agar dispatcher tidak berjalan ganda.
 - WAHA dashboard/API perlu diamankan dengan credential dashboard, `WAHA_API_KEY`, bind lokal/private network, atau reverse proxy internal jika dipakai bersama.
 
 ### Caching Frontend (Stale-While-Revalidate)
@@ -572,6 +576,9 @@ Perubahan terbaru:
 Tujuan:
 - Pastikan alur pasien dari screening sampai konsultasi lanjutan berjalan utuh setelah perubahan UI screening, hasil konsultasi psikolog, dan follow-up booking.
 
+Status terbaru:
+- Checklist utama sudah dijalankan secara manual dan dilaporkan berhasil; pertahankan daftar ini sebagai regression checklist sebelum demo/deployment.
+
 Urutan test manual:
 1. Login pasien, jalankan screening mode teks sampai selesai.
 2. Jalankan screening mode voice pada pertanyaan lain, pastikan visualizer bergerak mengikuti suara dan tombol lanjut hanya aktif setelah consent dicentang.
@@ -600,11 +607,9 @@ Urutan test manual:
 Tujuan:
 - Menyamakan schema database aktif dengan kode backend terbaru.
 
-Yang perlu dilakukan:
-- Jalankan `conda run -n cogniscan-backend alembic upgrade head`.
-- Pastikan `alembic heads` menampilkan `a6b7c8d9e0f1 (head)`.
-- Cek tabel/kolom baru: `pemesanan_konsultasi.id_booking_sebelumnya`, field hasil konsultasi tambahan, dan unique index `uq_hasil_konsultasi_booking`.
-- Restart backend setelah migration agar router/schema terbaru terbaca.
+Status terbaru:
+- `alembic upgrade head` sudah dijalankan dan `alembic current` menampilkan `a6b7c8d9e0f1 (head)`.
+- Backend perlu tetap direstart setelah migration atau perubahan kode agar router/schema terbaru terbaca.
 
 ### Prioritas 3: Scheduler Reminder WAHA
 
@@ -613,12 +618,13 @@ Tujuan:
 
 Status terbaru:
 - Manual test endpoint `POST /api/booking/reminders/send-due` dengan WAHA session connected sudah berhasil.
+- Reminder langsung setelah booking selesai dibayar sudah berhasil muncul pada simulasi pembayaran.
 
 Yang perlu divalidasi:
-- Scheduler internal backend berjalan di environment target dengan `BOOKING_REMINDER_SCHEDULER_ENABLED=true`.
+- Scheduler internal backend di environment target berjalan stabil dengan `BOOKING_REMINDER_SCHEDULER_ENABLED=true`.
 - Jika deployment memakai multi-worker, pastikan hanya satu dispatcher reminder yang aktif atau pindahkan ke worker/cron tunggal.
 - Konfigurasi WAHA dashboard/API diamankan sebelum dipakai bersama/production.
-- Manual test H-24 dan H-2 sudah berhasil secara endpoint; ulangi lagi setelah scheduler otomatis aktif di target environment.
+- Manual test H-24 dan H-2 sudah berhasil secara endpoint; ulangi lagi sebelum demo/deployment final jika konfigurasi WAHA berubah.
 
 ### Prioritas 4: Hasil Konsultasi dan Rekam Medis
 
@@ -647,6 +653,7 @@ Test yang paling perlu:
 - Predicate feedback final di dashboard, pesan, booking, dan selesai screening.
 - Past-date booking backend/frontend.
 - Akses data sensitif dan audit log.
+- Rate limit ringan endpoint sensitif sudah ditambahkan; perlu tuning angka limit berdasarkan pola trafik nyata dan gunakan Redis/Valkey jika production multi-instance.
 
 ### Prioritas 6: Operasional dan Security Deployment
 
@@ -654,7 +661,7 @@ Yang perlu dilakukan:
 - Amankan WAHA dashboard/API dengan dashboard password, `WAHA_API_KEY`, dan network binding privat atau reverse proxy internal.
 - Cleanup user test lama di Supabase Auth jika masih ada, karena tabel aplikasi sudah dibersihkan tetapi Auth user bisa tersisa.
 - Tambahkan audit log formal untuk admin action, psikolog membuka laporan pasien, psikolog submit hasil konsultasi, pasien membuka hasil konsultasi, payment sync, dan reminder WAHA.
-- Tambahkan rate limit untuk auth, screening finalize/voice, payment create/status, admin action, dan reminder manual endpoint.
+- Rate limit ringan sudah ditambahkan untuk auth mutation, screening finalize/voice, payment create/status, admin action, jadwal/hasil konsultasi, dan reminder manual endpoint; sisa production hardening adalah tuning limit dan storage terpusat.
 
 ## Fase Berikutnya Historis (2026-05-20)
 
@@ -772,8 +779,14 @@ Yang perlu dijaga:
 ## Verifikasi Terakhir
 
 Yang sudah dijalankan pada update 2026-05-30:
+- Database:
+  - `conda run -n cogniscan-backend alembic current` menampilkan `a6b7c8d9e0f1 (head)`, sehingga migration terbaru sudah aktif di database.
 - Backend:
   - `conda run -n cogniscan-backend python -m py_compile api\services\booking_service.py` berhasil setelah perubahan cancel konsultasi terlewat dan status missed booking.
+  - `conda run -n cogniscan-backend python -m py_compile api\core\config.py api\core\rate_limit.py api\main.py api\routers\auth.py api\routers\booking.py api\routers\journal.py api\routers\pembayaran.py api\routers\admin.py api\routers\konsultasi.py api\routers\jadwal.py` berhasil setelah hardening rate limit.
+  - `conda run -n cogniscan-backend python -c "from api.main import app; schema=app.openapi(); print('openapi ok', len(schema.get('paths', {})))"` berhasil dengan `openapi ok 49`.
+  - `conda run -n cogniscan-backend ruff check ...` untuk file hardening backend berhasil.
+  - Duplikat route `GET /api/auth/profile/pasien` dibersihkan; warning duplicate operation ID OpenAPI sudah tidak muncul pada verifikasi terbaru.
 - Frontend:
   - `npm.cmd run lint` berhasil setelah perubahan `/pasien/konsultasi`, `/pasien/booking/jadwal`, dan `/psikolog/jadwal`.
   - `npx.cmd tsc --noEmit` berhasil setelah perubahan tersebut.
@@ -781,12 +794,14 @@ Yang sudah dijalankan pada update 2026-05-30:
   - `git diff --check` untuk file yang diubah berhasil; warning yang muncul hanya LF/CRLF normal dari Git.
 - Manual/operasional:
   - WAHA manual test via endpoint admin `POST /api/booking/reminders/send-due` berhasil dengan WAHA session connected.
+  - Simulasi pembayaran Midtrans sandbox berhasil memicu reminder WhatsApp tipe `booking_paid`.
+  - Booking, batal booking, hasil konsultasi, follow-up booking, dan reminder WA dilaporkan berhasil pada pengujian manual.
 
 Yang sudah dijalankan pada update 2026-05-26 validasi registrasi/profile guard:
 - Backend:
   - `python -m compileall cogniscan-backend/api` berhasil.
   - `conda run -n cogniscan-backend python -c "from api.main import app; schema=app.openapi(); print('openapi ok', len(schema.get('paths', {})))"` berhasil dengan `openapi ok 48`.
-  - Catatan: OpenAPI masih memberi warning duplicate operation ID dari router auth lama.
+  - Catatan historis: saat itu OpenAPI masih memberi warning duplicate operation ID dari router auth lama; sudah dibersihkan pada update 2026-05-30.
 - Frontend:
   - `npm run lint` berhasil.
   - `npx tsc --noEmit` berhasil.
@@ -801,7 +816,7 @@ Yang sudah dijalankan pada update 2026-05-26 security + admin dashboard + cache 
 - Backend:
   - `conda run -n cogniscan-backend python -m py_compile api\routers\dashboard.py api\routers\pre_assessment.py api\routers\jadwal.py api\routers\konsultasi.py` berhasil.
   - `conda run -n cogniscan-backend python -c "from api.main import app; app.openapi(); print('openapi ok', len(app.routes))"` berhasil dengan `openapi ok 57`.
-  - Catatan: OpenAPI masih memberi warning duplicate operation ID dari router auth lama; tidak terkait perubahan security/cache/admin dashboard.
+  - Catatan historis: saat itu OpenAPI masih memberi warning duplicate operation ID dari router auth lama; sudah dibersihkan pada update 2026-05-30.
 - Frontend:
   - `npm.cmd run lint` berhasil.
   - `npx.cmd tsc --noEmit` berhasil.
@@ -821,7 +836,7 @@ Yang sudah dijalankan pada update 2026-05-25 Session hasil konsultasi + screenin
 - Repository:
   - `git diff --check` berhasil; warning yang muncul hanya LF/CRLF normal dari Git.
 - Catatan:
-  - OpenAPI masih memberi warning duplicate operation ID dari router auth lama; tidak terkait perubahan hasil konsultasi/follow-up/screening.
+  - Catatan historis: saat itu OpenAPI masih memberi warning duplicate operation ID dari router auth lama; sudah dibersihkan pada update 2026-05-30.
 
 Yang sudah dijalankan pada update 2026-05-25:
 - Database:
@@ -846,7 +861,7 @@ Yang sudah dijalankan pada update 2026-05-22:
 - Frontend:
   - `npx.cmd tsc --noEmit` berhasil.
   - `npm.cmd run lint` berhasil.
-- Catatan: OpenAPI masih memberi warning duplicate operation ID dari router auth lama; tidak terkait perubahan booking/payment/voice.
+- Catatan historis: saat itu OpenAPI masih memberi warning duplicate operation ID dari router auth lama; sudah dibersihkan pada update 2026-05-30.
 
 Yang sudah dijalankan pada update 2026-05-22 Session 5:
 - Backend:
@@ -860,6 +875,7 @@ Yang sudah dijalankan pada update 2026-05-22 Session 5:
 Yang belum dijalankan penuh pada update 2026-05-22:
 - E2E manual lengkap dengan pembayaran Midtrans sandbox dari screening voice/teks sampai jadwal psikolog.
 - E2E manual reschedule paid booking pada database asli.
+- Catatan update 2026-05-30: E2E manual utama booking/konsultasi/follow-up sekarang sudah dilaporkan berhasil; automated regression test masih belum ada.
 - Catatan update 2026-05-30: WAHA manual test dengan session connected sudah berhasil; yang belum adalah validasi scheduler otomatis di target environment.
 - Test otomatis terstruktur untuk payment webhook, duplicate booking, past-date booking, voice answer, reschedule paid booking, dan reminder WAHA idempotency.
 

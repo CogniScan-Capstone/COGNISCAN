@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.core.config import settings
+from api.core.rate_limit import limiter
 from api.dependencies.auth import get_current_active_pasien
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
@@ -24,8 +26,10 @@ router = APIRouter()
     "/midtrans/create",
     response_model=MidtransPaymentCreateResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_PAYMENT_MUTATION)
 async def create_midtrans_payment(
     payload: MidtransPaymentCreateRequest,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
@@ -67,8 +71,10 @@ async def receive_midtrans_notification(
     "/orders/{order_id}",
     response_model=PaymentReceiptResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_PAYMENT_READ)
 async def read_payment_receipt(
     order_id: str,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):

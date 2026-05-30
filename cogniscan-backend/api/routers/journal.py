@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.core.config import settings
+from api.core.rate_limit import limiter
 from api.dependencies.auth import get_current_active_pasien
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
@@ -74,6 +76,7 @@ async def submit_answer(
     response_model=JournalVoiceAnswerAcceptedResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(settings.RATE_LIMIT_VOICE_ANSWER)
 async def submit_voice_answer(
     id_sesi_jurnal: int,
     request: Request,
@@ -136,8 +139,10 @@ async def read_session(
     "/sessions/{id_sesi_jurnal}/finalize",
     response_model=JournalFinalizeResponse,
 )
+@limiter.limit(settings.RATE_LIMIT_SCREENING_FINALIZE)
 async def finalize_session(
     id_sesi_jurnal: int,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):

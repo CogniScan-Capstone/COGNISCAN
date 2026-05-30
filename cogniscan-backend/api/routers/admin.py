@@ -1,9 +1,11 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.core.config import settings
+from api.core.rate_limit import limiter
 from api.dependencies.auth import get_current_active_admin
 from api.dependencies.database import get_db
 from api.models.pengguna import Pengguna
@@ -90,8 +92,10 @@ async def get_psikolog_verification_document(
     response_model=PsikologApproveResponse,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit(settings.RATE_LIMIT_ADMIN_ACTION)
 async def approve_psikolog_verification(
     id_psikolog: int,
+    request: Request,
     current_admin: Pengguna = Depends(get_current_active_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -117,8 +121,10 @@ async def approve_psikolog_verification(
     response_model=PsikologApproveResponse,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit(settings.RATE_LIMIT_ADMIN_ACTION)
 async def reset_psikolog_temporary_password_route(
     id_psikolog: int,
+    request: Request,
     _admin: Pengguna = Depends(get_current_active_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -141,9 +147,11 @@ async def reset_psikolog_temporary_password_route(
     response_model=PsikologRejectResponse,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit(settings.RATE_LIMIT_ADMIN_ACTION)
 async def reject_psikolog_verification(
     id_psikolog: int,
     payload: PsikologRejectRequest,
+    request: Request,
     _admin: Pengguna = Depends(get_current_active_admin),
     db: AsyncSession = Depends(get_db),
 ):
