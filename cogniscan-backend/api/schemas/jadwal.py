@@ -27,8 +27,16 @@ class PsikologScheduleBookingResponse(BaseModel):
     indikator_urgensi: str | None = None
     hasil_konsultasi_ringkasan: str | None = None
     hasil_konsultasi_rekomendasi: str | None = None
+    hasil_konsultasi_catatan_internal: str | None = None
     hasil_konsultasi_pasien_hadir: bool | None = None
     perlu_sesi_lanjutan: bool | None = None
+    hasil_konsultasi_keluhan_utama: str | None = None
+    hasil_konsultasi_observasi_psikolog: str | None = None
+    hasil_konsultasi_asesmen_klinis: str | None = None
+    hasil_konsultasi_intervensi_diberikan: str | None = None
+    hasil_konsultasi_rencana_tindak_lanjut: str | None = None
+    hasil_konsultasi_tingkat_risiko: str | None = None
+    hasil_konsultasi_versi_format: str | None = None
     reschedule_request: BookingRescheduleRequestResponse | None = None
 
 

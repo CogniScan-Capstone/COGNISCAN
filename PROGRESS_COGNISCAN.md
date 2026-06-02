@@ -1,10 +1,17 @@
 # Progress CogniScan
 
-Tanggal update: 2026-05-30
+Tanggal update: 2026-06-01
 
 Dokumen ini menyimpan konteks kerja terbaru untuk sesi berikutnya. Fokus utama saat ini adalah stabilisasi alur end-to-end setelah feedback psikolog: screening teks/voice, assignment psikolog, booking jadwal, pembayaran Midtrans, link konsultasi Jitsi, reschedule paid booking tanpa pembayaran ulang, hasil konsultasi psikolog, follow-up booking tanpa screening ulang, reminder WhatsApp WAHA, tab konsultasi dinamis, security guard lintas role, dan performa navigasi antar tab.
 
 ## Ringkasan Status
+
+Status terkini (2026-06-01):
+- Phase 8A bagian 1 sudah diverifikasi ulang: backend compile/OpenAPI, migration `a6b7c8d9e0f1 (head)`, frontend lint, TypeScript check, dan production build berhasil.
+- Phase 8B tahap awal sudah dibuat: backend sekarang punya pytest suite terstruktur untuk auth/role guard, profil pasien wajib lengkap, active psikolog guard, aturan state booking/payment/missed/expiry, validasi hasil konsultasi, dan reminder WAHA idempotency tanpa menyentuh DB produksi/Midtrans/WAHA asli.
+- Frontend sekarang punya script `typecheck` dan `verify`; `npm run verify` menjalankan lint, TypeScript check, dan build sebagai regression gate frontend yang konsisten.
+- Sisa Phase 8B berikutnya adalah menambah integration/API test dengan database test terisolasi dan test frontend sungguhan jika nanti testing library/Playwright ditambahkan secara resmi ke `package.json`.
+- Phase 8C tahap inti sudah dibuat: hasil konsultasi sekarang memiliki field rekam medis internal v1, endpoint riwayat konsultasi pasien untuk psikolog, UI psikolog untuk mengisi/readback catatan klinis, dan tombol riwayat pasien dari detail jadwal. Migration aktif terbaru menjadi `b8c9d0e1f2a3 (head)`.
 
 Status terkini (2026-05-30):
 - Aplikasi sudah melewati Phase 6B dan Phase 7 MVP utama sudah tersambung: feedback psikolog, pesan pasien, booking, pembayaran, link meeting, availability jadwal psikolog, tab konsultasi pasien, flow request/approval reschedule, reschedule paid booking tanpa pembayaran ulang, cancel/no-show/expiry booking, hasil konsultasi psikolog, follow-up booking tanpa screening ulang, UI screening teks/voice yang lebih jelas, reminder WAHA, dashboard admin dinamis, global route guard frontend, validasi wajib profil registrasi, dan cache navigasi antar tab.
@@ -632,11 +639,14 @@ Status terbaru:
 - Form hasil konsultasi sisi psikolog sudah tersedia untuk MVP.
 - Ringkasan/rekomendasi pasien sudah dipisah dari catatan internal.
 - Follow-up booking sudah tersedia lewat `id_booking_sebelumnya`.
+- Rekam medis internal v1 sudah tersedia di `hasil_konsultasi`: keluhan utama, observasi psikolog, asesmen klinis, intervensi, rencana tindak lanjut, tingkat risiko, dan versi format.
+- Endpoint psikolog `GET /api/konsultasi/pasien/{id_pasien}/riwayat` sudah tersedia dan hanya mengembalikan riwayat pasien yang pernah ditangani psikolog login.
+- UI `/psikolog/jadwal/[date]` sudah bisa mengisi field rekam medis internal, readback catatan internal lama, dan membuka riwayat konsultasi pasien dari card jadwal.
 
 Yang perlu dilanjutkan:
-- Format rekam medis final dan metadata klinis yang wajib disimpan.
-- Audit akses hasil konsultasi.
-- Ekspor/riwayat konsultasi jangka panjang jika dibutuhkan.
+- Review format rekam medis v1 dengan psikolog: field mana yang wajib, istilah klinis final, dan apakah perlu tanda tangan/lock setelah submit.
+- Audit akses hasil konsultasi/riwayat pasien.
+- Ekspor/print riwayat konsultasi jika dibutuhkan.
 
 ### Prioritas 5: Testing dan Privacy Hardening
 
@@ -777,6 +787,32 @@ Yang perlu dijaga:
 - Setelah validasi profil wajib, akun pasien lama yang belum lengkap akan diarahkan ke `/pasien/profile` dan belum bisa memakai screening/booking sampai data wajib dilengkapi.
 
 ## Verifikasi Terakhir
+
+Yang sudah dijalankan pada update 2026-06-01 Phase 8B tahap awal:
+- Backend:
+  - `conda run -n cogniscan-backend pytest` berhasil dengan `31 passed`.
+  - `conda run -n cogniscan-backend python -m compileall -q api tests` berhasil.
+  - `conda run -n cogniscan-backend ruff check tests` berhasil dengan `All checks passed!`.
+- Frontend:
+  - `npm.cmd run verify` berhasil; command ini menjalankan `npm run lint`, `npm run typecheck`, dan `npm run build`.
+  - Build Next.js tetap berhasil generate 27 static pages dan mendeteksi `Proxy (Middleware)`.
+- Catatan:
+  - Test backend Phase 8B saat ini bersifat unit/regression cepat dan tidak memakai database produksi, Midtrans, Gemini, atau WAHA sungguhan.
+  - Integration test dengan database test terisolasi dan frontend component/E2E test masih menjadi pekerjaan lanjutan.
+
+Yang sudah dijalankan pada update 2026-06-01 Phase 8C rekam medis:
+- Database:
+  - Migration `b8c9d0e1f2a3_add_clinical_record_fields.py` dibuat dan `alembic upgrade head` berhasil.
+  - `conda run -n cogniscan-backend alembic current` menampilkan `b8c9d0e1f2a3 (head)`.
+- Backend:
+  - `conda run -n cogniscan-backend pytest` berhasil dengan `32 passed`.
+  - `conda run -n cogniscan-backend python -m compileall -q api tests` berhasil.
+  - `conda run -n cogniscan-backend python -c "from api.main import app; schema=app.openapi(); print('openapi ok', len(schema.get('paths', {})))"` berhasil dengan `openapi ok 50`.
+  - `conda run -n cogniscan-backend ruff check ...` untuk file Phase 8C yang diubah berhasil.
+- Frontend:
+  - `npm.cmd run verify` berhasil; lint, TypeScript check, dan Next.js build berhasil.
+- Catatan:
+  - `ruff check api tests` penuh masih menemukan beberapa isu historis di file lama yang tidak disentuh, seperti unused import/redefinition di modul lain. File yang disentuh Phase 8C sudah lulus ruff.
 
 Yang sudah dijalankan pada update 2026-05-30:
 - Database:

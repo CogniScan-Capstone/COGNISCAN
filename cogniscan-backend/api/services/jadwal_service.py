@@ -523,6 +523,11 @@ def _to_schedule_response(
             if hasil_konsultasi
             else None
         ),
+        hasil_konsultasi_catatan_internal=(
+            hasil_konsultasi.catatan_internal
+            if hasil_konsultasi
+            else None
+        ),
         hasil_konsultasi_pasien_hadir=(
             hasil_konsultasi.pasien_hadir
             if hasil_konsultasi
@@ -530,6 +535,41 @@ def _to_schedule_response(
         ),
         perlu_sesi_lanjutan=(
             hasil_konsultasi.perlu_sesi_lanjutan
+            if hasil_konsultasi
+            else None
+        ),
+        hasil_konsultasi_keluhan_utama=(
+            hasil_konsultasi.keluhan_utama
+            if hasil_konsultasi
+            else None
+        ),
+        hasil_konsultasi_observasi_psikolog=(
+            hasil_konsultasi.observasi_psikolog
+            if hasil_konsultasi
+            else None
+        ),
+        hasil_konsultasi_asesmen_klinis=(
+            hasil_konsultasi.asesmen_klinis
+            if hasil_konsultasi
+            else None
+        ),
+        hasil_konsultasi_intervensi_diberikan=(
+            hasil_konsultasi.intervensi_diberikan
+            if hasil_konsultasi
+            else None
+        ),
+        hasil_konsultasi_rencana_tindak_lanjut=(
+            hasil_konsultasi.rencana_tindak_lanjut
+            if hasil_konsultasi
+            else None
+        ),
+        hasil_konsultasi_tingkat_risiko=(
+            hasil_konsultasi.tingkat_risiko
+            if hasil_konsultasi
+            else None
+        ),
+        hasil_konsultasi_versi_format=(
+            hasil_konsultasi.versi_format_rekam_medis
             if hasil_konsultasi
             else None
         ),

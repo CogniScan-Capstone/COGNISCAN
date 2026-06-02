@@ -297,8 +297,16 @@ export type PsikologScheduleBooking = {
   indikator_urgensi?: string | null;
   hasil_konsultasi_ringkasan?: string | null;
   hasil_konsultasi_rekomendasi?: string | null;
+  hasil_konsultasi_catatan_internal?: string | null;
   hasil_konsultasi_pasien_hadir?: boolean | null;
   perlu_sesi_lanjutan?: boolean | null;
+  hasil_konsultasi_keluhan_utama?: string | null;
+  hasil_konsultasi_observasi_psikolog?: string | null;
+  hasil_konsultasi_asesmen_klinis?: string | null;
+  hasil_konsultasi_intervensi_diberikan?: string | null;
+  hasil_konsultasi_rencana_tindak_lanjut?: string | null;
+  hasil_konsultasi_tingkat_risiko?: string | null;
+  hasil_konsultasi_versi_format?: string | null;
   reschedule_request?: RescheduleRequest | null;
 };
 
@@ -364,6 +372,12 @@ export type ConsultationResultPayload = {
   catatan_internal?: string | null;
   rekomendasi_tindak_lanjut?: string | null;
   perlu_sesi_lanjutan?: boolean;
+  keluhan_utama?: string | null;
+  observasi_psikolog?: string | null;
+  asesmen_klinis?: string | null;
+  intervensi_diberikan?: string | null;
+  rencana_tindak_lanjut?: string | null;
+  tingkat_risiko?: string | null;
 };
 
 export type ConsultationResultResponse = {
@@ -374,9 +388,50 @@ export type ConsultationResultResponse = {
   catatan_internal?: string | null;
   rekomendasi_tindak_lanjut?: string | null;
   perlu_sesi_lanjutan?: boolean | null;
+  keluhan_utama?: string | null;
+  observasi_psikolog?: string | null;
+  asesmen_klinis?: string | null;
+  intervensi_diberikan?: string | null;
+  rencana_tindak_lanjut?: string | null;
+  tingkat_risiko?: string | null;
+  versi_format_rekam_medis?: string | null;
   status_konsultasi?: string | null;
   dibuat_pada?: string | null;
   diperbarui_pada?: string | null;
+};
+
+export type ConsultationHistoryItem = {
+  id_pemesanan_konsultasi: number;
+  id_booking_sebelumnya?: number | null;
+  tanggal_konsultasi?: string | null;
+  waktu_mulai?: string | null;
+  waktu_selesai?: string | null;
+  mode_konsultasi?: string | null;
+  status_konsultasi?: string | null;
+  status_pembayaran?: string | null;
+  konteks_pemicu?: string | null;
+  indikator_urgensi?: string | null;
+  pasien_hadir?: boolean | null;
+  ringkasan_untuk_pasien?: string | null;
+  rekomendasi_tindak_lanjut?: string | null;
+  catatan_internal?: string | null;
+  keluhan_utama?: string | null;
+  observasi_psikolog?: string | null;
+  asesmen_klinis?: string | null;
+  intervensi_diberikan?: string | null;
+  rencana_tindak_lanjut?: string | null;
+  tingkat_risiko?: string | null;
+  perlu_sesi_lanjutan?: boolean | null;
+  hasil_dibuat_pada?: string | null;
+  hasil_diperbarui_pada?: string | null;
+};
+
+export type PatientConsultationHistory = {
+  id_pasien: number;
+  nama_pasien?: string | null;
+  email_pasien?: string | null;
+  total_konsultasi: number;
+  items: ConsultationHistoryItem[];
 };
 
 export type PatientLatestScreeningStatus = {
@@ -1120,6 +1175,26 @@ export async function submitPsikologConsultationResult(
   }
 
   return response.json() as Promise<ConsultationResultResponse>;
+}
+
+export async function fetchPsikologPatientConsultationHistory(
+  accessToken: string,
+  idPasien: number,
+): Promise<PatientConsultationHistory> {
+  const response = await fetchApi(
+    `${API_BASE_URL}/api/konsultasi/pasien/${idPasien}/riwayat`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  return response.json() as Promise<PatientConsultationHistory>;
 }
 
 export async function fetchPsikologAvailability(

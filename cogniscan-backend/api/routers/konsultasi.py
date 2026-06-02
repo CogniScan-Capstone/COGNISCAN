@@ -9,11 +9,32 @@ from api.models.pengguna import Pengguna
 from api.schemas.konsultasi import (
     ConsultationResultCreate,
     ConsultationResultResponse,
+    PatientConsultationHistoryResponse,
 )
-from api.services.konsultasi_service import submit_consultation_result
+from api.services.konsultasi_service import (
+    list_psikolog_patient_consultation_history,
+    submit_consultation_result,
+)
 
 
 router = APIRouter()
+
+
+@router.get(
+    "/pasien/{id_pasien}/riwayat",
+    response_model=PatientConsultationHistoryResponse,
+)
+async def read_patient_consultation_history(
+    id_pasien: int,
+    current_user: Pengguna = Depends(get_current_active_psikolog),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ambil riwayat konsultasi pasien yang pernah ditangani psikolog login."""
+    return await list_psikolog_patient_consultation_history(
+        db=db,
+        current_user=current_user,
+        id_pasien=id_pasien,
+    )
 
 
 @router.post(

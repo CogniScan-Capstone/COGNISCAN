@@ -29,6 +29,15 @@ class HasilKonsultasi(Base):
     catatan_internal: Mapped[str | None] = mapped_column(Text, nullable=True)
     rekomendasi_tindak_lanjut: Mapped[str | None] = mapped_column(Text, nullable=True)
     perlu_sesi_lanjutan: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    keluhan_utama: Mapped[str | None] = mapped_column(Text, nullable=True)
+    observasi_psikolog: Mapped[str | None] = mapped_column(Text, nullable=True)
+    asesmen_klinis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    intervensi_diberikan: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rencana_tindak_lanjut: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tingkat_risiko: Mapped[str | None] = mapped_column(Text, nullable=True)
+    versi_format_rekam_medis: Mapped[str | None] = mapped_column(
+        Text, default="rekam_medis_v1", nullable=True
+    )
     dibuat_pada: Mapped[str | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

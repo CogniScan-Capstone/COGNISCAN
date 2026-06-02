@@ -7,8 +7,10 @@ import {
   ArrowLeft,
   CalendarPlus,
   CheckCircle2,
+  ClipboardList,
   Clock,
   ExternalLink,
+  FileText,
   Loader2,
   Mail,
   MapPin,
@@ -29,9 +31,11 @@ import {
   createPsikologAvailability,
   deletePsikologAvailability,
   fetchPsikologAvailability,
+  fetchPsikologPatientConsultationHistory,
   fetchPsikologScheduleBookings,
   submitPsikologConsultationResult,
   type ConsultationResultPayload,
+  type PatientConsultationHistory,
   type PsikologAvailabilitySlot,
   type PsikologScheduleBooking,
 } from "@/lib/auth";
@@ -56,6 +60,7 @@ type MethodFilter = "semua" | "online" | "offline";
 
 type Session = {
   id: string;
+  patientId?: number | null;
   time: string;
   endTime?: string | null;
   name: string;
@@ -68,7 +73,15 @@ type Session = {
   status: SessionStatus;
   resultSummary?: string | null;
   resultRecommendation?: string | null;
+  resultInternalNote?: string | null;
   patientAttended?: boolean | null;
+  needsFollowup?: boolean | null;
+  clinicalComplaint?: string | null;
+  clinicalObservation?: string | null;
+  clinicalAssessment?: string | null;
+  clinicalIntervention?: string | null;
+  clinicalPlan?: string | null;
+  clinicalRisk?: string | null;
 };
 
 const topicToneClass: Record<Session["topicTone"], string> = {
@@ -210,6 +223,7 @@ function toSession(booking: PsikologScheduleBooking): Session {
   const topic = booking.konteks_pemicu?.trim() || "Konsultasi";
   return {
     id: String(booking.id_pemesanan_konsultasi),
+    patientId: booking.id_pasien,
     time: booking.waktu_mulai || "-",
     endTime: booking.waktu_selesai,
     name: booking.nama_pasien || "Pasien CogniScan",
@@ -222,7 +236,15 @@ function toSession(booking: PsikologScheduleBooking): Session {
     status: normalizeStatus(booking.status_konsultasi),
     resultSummary: booking.hasil_konsultasi_ringkasan,
     resultRecommendation: booking.hasil_konsultasi_rekomendasi,
+    resultInternalNote: booking.hasil_konsultasi_catatan_internal,
     patientAttended: booking.hasil_konsultasi_pasien_hadir,
+    needsFollowup: booking.perlu_sesi_lanjutan,
+    clinicalComplaint: booking.hasil_konsultasi_keluhan_utama,
+    clinicalObservation: booking.hasil_konsultasi_observasi_psikolog,
+    clinicalAssessment: booking.hasil_konsultasi_asesmen_klinis,
+    clinicalIntervention: booking.hasil_konsultasi_intervensi_diberikan,
+    clinicalPlan: booking.hasil_konsultasi_rencana_tindak_lanjut,
+    clinicalRisk: booking.hasil_konsultasi_tingkat_risiko,
   };
 }
 
@@ -407,6 +429,11 @@ export default function JadwalDetailPage({
     const accessToken = await getAccessToken();
     await submitPsikologConsultationResult(accessToken, bookingId, payload);
     await reloadScheduleContext();
+  }
+
+  async function handleFetchPatientHistory(patientId: number) {
+    const accessToken = await getAccessToken();
+    return fetchPsikologPatientConsultationHistory(accessToken, patientId);
   }
 
   return (
@@ -615,6 +642,7 @@ export default function JadwalDetailPage({
                 key={s.id}
                 session={s}
                 onSubmitResult={handleSubmitConsultationResult}
+                onFetchPatientHistory={handleFetchPatientHistory}
               />
             ))
           )}
@@ -627,15 +655,28 @@ export default function JadwalDetailPage({
 function SessionCard({
   session,
   onSubmitResult,
+  onFetchPatientHistory,
 }: {
   session: Session;
   onSubmitResult: (bookingId: number, payload: ConsultationResultPayload) => Promise<void>;
+  onFetchPatientHistory: (patientId: number) => Promise<PatientConsultationHistory>;
 }) {
   const [formOpen, setFormOpen] = useState(false);
   const [pasienHadir, setPasienHadir] = useState(true);
   const [ringkasan, setRingkasan] = useState(session.resultSummary || "");
   const [rekomendasi, setRekomendasi] = useState(session.resultRecommendation || "");
-  const [catatanInternal, setCatatanInternal] = useState("");
+  const [catatanInternal, setCatatanInternal] = useState(session.resultInternalNote || "");
+  const [keluhanUtama, setKeluhanUtama] = useState(session.clinicalComplaint || "");
+  const [observasi, setObservasi] = useState(session.clinicalObservation || "");
+  const [asesmenKlinis, setAsesmenKlinis] = useState(session.clinicalAssessment || "");
+  const [intervensi, setIntervensi] = useState(session.clinicalIntervention || "");
+  const [rencanaTindakLanjut, setRencanaTindakLanjut] = useState(session.clinicalPlan || "");
+  const [tingkatRisiko, setTingkatRisiko] = useState(session.clinicalRisk || "");
+  const [perluSesiLanjutan, setPerluSesiLanjutan] = useState(Boolean(session.needsFollowup));
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<PatientConsultationHistory | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const [savingResult, setSavingResult] = useState(false);
   const [resultError, setResultError] = useState("");
 
@@ -646,8 +687,15 @@ function SessionCard({
     "reschedule_ditolak",
   ].includes(session.status);
   const hasResult = Boolean(
-    session.resultSummary ||
+      session.resultSummary ||
       session.resultRecommendation ||
+      session.resultInternalNote ||
+      session.clinicalComplaint ||
+      session.clinicalObservation ||
+      session.clinicalAssessment ||
+      session.clinicalIntervention ||
+      session.clinicalPlan ||
+      session.clinicalRisk ||
       (session.patientAttended !== null && session.patientAttended !== undefined),
   );
   const canOpenMeetingLink = [
@@ -673,12 +721,40 @@ function SessionCard({
         ringkasan_untuk_pasien: ringkasan.trim() || null,
         catatan_internal: catatanInternal.trim() || null,
         rekomendasi_tindak_lanjut: rekomendasi.trim() || null,
+        perlu_sesi_lanjutan: perluSesiLanjutan,
+        keluhan_utama: keluhanUtama.trim() || null,
+        observasi_psikolog: observasi.trim() || null,
+        asesmen_klinis: asesmenKlinis.trim() || null,
+        intervensi_diberikan: intervensi.trim() || null,
+        rencana_tindak_lanjut: rencanaTindakLanjut.trim() || null,
+        tingkat_risiko: tingkatRisiko || null,
       });
       setFormOpen(false);
     } catch (err) {
       setResultError(err instanceof Error ? err.message : "Gagal menyimpan hasil konsultasi.");
     } finally {
       setSavingResult(false);
+    }
+  }
+
+  async function handleToggleHistory() {
+    if (historyOpen) {
+      setHistoryOpen(false);
+      return;
+    }
+
+    setHistoryOpen(true);
+    if (history || historyLoading || !session.patientId) return;
+
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const data = await onFetchPatientHistory(session.patientId);
+      setHistory(data);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : "Gagal memuat riwayat pasien.");
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
@@ -786,6 +862,16 @@ function SessionCard({
               Selesaikan
             </button>
           ) : null}
+          {session.patientId ? (
+            <button
+              type="button"
+              onClick={handleToggleHistory}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-outline-variant px-4 text-[13px] font-semibold text-on-surface-variant transition hover:border-primary hover:text-primary"
+            >
+              <ClipboardList className="h-4 w-4" aria-hidden="true" />
+              Riwayat Pasien
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -794,6 +880,83 @@ function SessionCard({
           <p className="font-semibold">Hasil konsultasi sudah tersimpan.</p>
           {session.resultSummary ? (
             <p className="mt-1 leading-6 text-[#3f5a3f]">{session.resultSummary}</p>
+          ) : null}
+          {session.resultRecommendation ? (
+            <p className="mt-2 leading-6 text-[#3f5a3f]">
+              Rekomendasi: <span className="font-medium">{session.resultRecommendation}</span>
+            </p>
+          ) : null}
+          {session.resultInternalNote || session.clinicalAssessment || session.clinicalRisk ? (
+            <div className="mt-3 rounded-[10px] bg-white/70 px-3 py-2 text-[#3f5a3f]">
+              {session.clinicalRisk ? (
+                <p className="font-medium">Risiko: {session.clinicalRisk}</p>
+              ) : null}
+              {session.clinicalAssessment ? (
+                <p className="mt-1 leading-6">Asesmen: {session.clinicalAssessment}</p>
+              ) : null}
+              {session.resultInternalNote ? (
+                <p className="mt-1 leading-6">Catatan internal: {session.resultInternalNote}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {historyOpen ? (
+        <div className="mt-5 rounded-[14px] border border-outline-variant bg-white px-4 py-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="inline-flex items-center gap-2 text-sm font-bold text-on-surface">
+                <FileText className="h-4 w-4 text-primary" aria-hidden="true" />
+                Riwayat Konsultasi Pasien
+              </p>
+              {history ? (
+                <p className="mt-1 text-xs text-on-surface-muted">
+                  {history.total_konsultasi} sesi dengan {history.nama_pasien || session.name}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          {historyLoading ? (
+            <p className="inline-flex items-center gap-2 text-sm font-medium text-on-surface-variant">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Memuat riwayat...
+            </p>
+          ) : historyError ? (
+            <p className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+              {historyError}
+            </p>
+          ) : history ? (
+            <div className="space-y-3">
+              {history.items.map((item) => (
+                <div
+                  key={item.id_pemesanan_konsultasi}
+                  className="rounded-[12px] border border-outline-variant bg-surface-container/30 px-4 py-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold text-on-surface">
+                      {item.tanggal_konsultasi ? formatDateId(item.tanggal_konsultasi) : "Tanggal belum tersedia"}
+                    </p>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-on-surface-variant">
+                      {item.status_konsultasi || "-"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-on-surface-muted">
+                    {item.waktu_mulai || "-"}{item.waktu_selesai ? ` - ${item.waktu_selesai}` : ""} · {item.mode_konsultasi || "-"}
+                  </p>
+                  {item.ringkasan_untuk_pasien ? (
+                    <p className="mt-2 leading-6 text-on-surface-variant">{item.ringkasan_untuk_pasien}</p>
+                  ) : null}
+                  {item.keluhan_utama || item.asesmen_klinis || item.catatan_internal ? (
+                    <div className="mt-2 rounded-[10px] bg-white px-3 py-2 text-on-surface-variant">
+                      {item.keluhan_utama ? <p>Keluhan: {item.keluhan_utama}</p> : null}
+                      {item.asesmen_klinis ? <p className="mt-1">Asesmen: {item.asesmen_klinis}</p> : null}
+                      {item.catatan_internal ? <p className="mt-1">Internal: {item.catatan_internal}</p> : null}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -845,6 +1008,80 @@ function SessionCard({
               className="mt-2 w-full resize-none rounded-[10px] border border-outline-variant bg-white px-3 py-3 text-sm font-medium leading-6 text-on-surface placeholder:text-on-surface-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </label>
+
+          <div className="mt-4 rounded-[12px] border border-outline-variant bg-white p-4">
+            <p className="text-sm font-bold text-on-surface">Rekam medis internal</p>
+            <div className="mt-3 grid gap-4 lg:grid-cols-2">
+              <label className="text-sm font-semibold text-on-surface">
+                Keluhan utama
+                <textarea
+                  value={keluhanUtama}
+                  onChange={(event) => setKeluhanUtama(event.target.value)}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-[10px] border border-outline-variant bg-white px-3 py-3 text-sm font-medium leading-6 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </label>
+              <label className="text-sm font-semibold text-on-surface">
+                Observasi psikolog
+                <textarea
+                  value={observasi}
+                  onChange={(event) => setObservasi(event.target.value)}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-[10px] border border-outline-variant bg-white px-3 py-3 text-sm font-medium leading-6 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </label>
+              <label className="text-sm font-semibold text-on-surface">
+                Asesmen klinis
+                <textarea
+                  value={asesmenKlinis}
+                  onChange={(event) => setAsesmenKlinis(event.target.value)}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-[10px] border border-outline-variant bg-white px-3 py-3 text-sm font-medium leading-6 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </label>
+              <label className="text-sm font-semibold text-on-surface">
+                Intervensi diberikan
+                <textarea
+                  value={intervensi}
+                  onChange={(event) => setIntervensi(event.target.value)}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-[10px] border border-outline-variant bg-white px-3 py-3 text-sm font-medium leading-6 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </label>
+              <label className="text-sm font-semibold text-on-surface lg:col-span-2">
+                Rencana tindak lanjut
+                <textarea
+                  value={rencanaTindakLanjut}
+                  onChange={(event) => setRencanaTindakLanjut(event.target.value)}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-[10px] border border-outline-variant bg-white px-3 py-3 text-sm font-medium leading-6 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </label>
+              <label className="text-sm font-semibold text-on-surface">
+                Tingkat risiko
+                <select
+                  value={tingkatRisiko}
+                  onChange={(event) => setTingkatRisiko(event.target.value)}
+                  className="mt-2 h-11 w-full rounded-[10px] border border-outline-variant bg-white px-3 text-sm font-medium text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Belum ditentukan</option>
+                  <option value="rendah">Rendah</option>
+                  <option value="sedang">Sedang</option>
+                  <option value="tinggi">Tinggi</option>
+                  <option value="krisis">Krisis</option>
+                </select>
+              </label>
+              <label className="inline-flex items-center gap-2 self-end text-sm font-semibold text-on-surface">
+                <input
+                  type="checkbox"
+                  checked={perluSesiLanjutan}
+                  onChange={(event) => setPerluSesiLanjutan(event.target.checked)}
+                  className="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/20"
+                />
+                Perlu sesi lanjutan
+              </label>
+            </div>
+          </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <button
