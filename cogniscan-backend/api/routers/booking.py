@@ -31,6 +31,7 @@ from api.services.booking_service import (
     request_booking_reschedule,
     reschedule_paid_booking,
 )
+from api.services.audit_log_service import record_audit_log
 
 router = APIRouter()
 
@@ -92,11 +93,28 @@ async def checkout_booking(
     db: AsyncSession = Depends(get_db),
 ):
     """Buat booking konsultasi dan transaksi Snap Midtrans dalam satu alur."""
-    return await create_booking_checkout(
+    checkout = await create_booking_checkout(
         db=db,
         current_user=current_user,
         payload=payload,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="patient_create_booking_checkout",
+        target_type="pemesanan_konsultasi",
+        target_id=checkout.id_pemesanan_konsultasi,
+        request=request,
+        metadata={
+            "id_pra_asesmen": checkout.id_pra_asesmen,
+            "id_booking_sebelumnya": checkout.id_booking_sebelumnya,
+            "mode_konsultasi": checkout.mode_konsultasi,
+            "status_pembayaran": checkout.status_pembayaran,
+            "status_konsultasi": checkout.status_konsultasi,
+        },
+        commit=True,
+    )
+    return checkout
 
 
 @router.get(
@@ -124,12 +142,27 @@ async def reschedule_booking(
     db: AsyncSession = Depends(get_db),
 ):
     """Ubah jadwal booking yang sudah dibayar tanpa membuat transaksi baru."""
-    return await reschedule_paid_booking(
+    booking = await reschedule_paid_booking(
         db=db,
         current_user=current_user,
         id_pemesanan_konsultasi=id_pemesanan_konsultasi,
         payload=payload,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="patient_reschedule_paid_booking",
+        target_type="pemesanan_konsultasi",
+        target_id=id_pemesanan_konsultasi,
+        request=request,
+        metadata={
+            "tanggal_konsultasi": booking.tanggal_konsultasi,
+            "waktu_konsultasi": booking.waktu_konsultasi,
+            "mode_konsultasi": booking.mode_konsultasi,
+        },
+        commit=True,
+    )
+    return booking
 
 
 @router.post(
@@ -145,12 +178,27 @@ async def cancel_booking(
     db: AsyncSession = Depends(get_db),
 ):
     """Batalkan booking pasien. Paid booking tidak membuat refund otomatis."""
-    return await cancel_patient_booking(
+    booking = await cancel_patient_booking(
         db=db,
         current_user=current_user,
         id_pemesanan_konsultasi=id_pemesanan_konsultasi,
         payload=payload,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="patient_cancel_booking",
+        target_type="pemesanan_konsultasi",
+        target_id=id_pemesanan_konsultasi,
+        request=request,
+        metadata={
+            "status_pembayaran": booking.status_pembayaran,
+            "status_konsultasi": booking.status_konsultasi,
+            "has_reason": bool(payload.alasan_pasien),
+        },
+        commit=True,
+    )
+    return booking
 
 
 @router.post(
@@ -166,12 +214,23 @@ async def create_reschedule_request(
     db: AsyncSession = Depends(get_db),
 ):
     """Ajukan reschedule booking ke psikolog. Pasien belum bisa pilih slot baru sebelum disetujui."""
-    return await request_booking_reschedule(
+    booking = await request_booking_reschedule(
         db=db,
         current_user=current_user,
         id_pemesanan_konsultasi=id_pemesanan_konsultasi,
         payload=payload,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="patient_request_booking_reschedule",
+        target_type="pemesanan_konsultasi",
+        target_id=id_pemesanan_konsultasi,
+        request=request,
+        metadata={"alasan_length": len(payload.alasan_pasien.strip())},
+        commit=True,
+    )
+    return booking
 
 
 @router.post(
@@ -186,11 +245,25 @@ async def close_missed_consultation(
     db: AsyncSession = Depends(get_db),
 ):
     """Tutup booking yang sudah terlewat sebagai no-show tanpa refund otomatis."""
-    return await close_missed_booking(
+    booking = await close_missed_booking(
         db=db,
         current_user=current_user,
         id_pemesanan_konsultasi=id_pemesanan_konsultasi,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="patient_close_missed_booking",
+        target_type="pemesanan_konsultasi",
+        target_id=id_pemesanan_konsultasi,
+        request=request,
+        metadata={
+            "status_pembayaran": booking.status_pembayaran,
+            "status_konsultasi": booking.status_konsultasi,
+        },
+        commit=True,
+    )
+    return booking
 
 
 @router.post(
@@ -200,11 +273,26 @@ async def close_missed_consultation(
 @limiter.limit(settings.RATE_LIMIT_REMINDER_DISPATCH)
 async def send_due_booking_reminders(
     request: Request,
-    _admin: Pengguna = Depends(require_role("admin")),
+    current_admin: Pengguna = Depends(require_role("admin")),
     db: AsyncSession = Depends(get_db),
 ):
     """Kirim reminder WhatsApp untuk booking yang waktunya sudah jatuh tempo."""
-    return await dispatch_due_booking_reminders(db=db)
+    result = await dispatch_due_booking_reminders(db=db)
+    await record_audit_log(
+        db,
+        actor=current_admin,
+        action="admin_dispatch_due_booking_reminders",
+        target_type="booking_reminder",
+        request=request,
+        metadata={
+            "checked": result.checked,
+            "sent": result.sent,
+            "skipped": result.skipped,
+            "failed": result.failed,
+        },
+        commit=True,
+    )
+    return result
 
 
 @router.post(
@@ -214,8 +302,23 @@ async def send_due_booking_reminders(
 @limiter.limit(settings.RATE_LIMIT_ADMIN_ACTION)
 async def refresh_booking_status(
     request: Request,
-    _admin: Pengguna = Depends(require_role("admin")),
+    current_admin: Pengguna = Depends(require_role("admin")),
     db: AsyncSession = Depends(get_db),
 ):
     """Refresh status booking expired dan terlewat untuk scheduler/cron production."""
-    return await refresh_booking_statuses(db=db)
+    result = await refresh_booking_statuses(db=db)
+    await record_audit_log(
+        db,
+        actor=current_admin,
+        action="admin_refresh_booking_statuses",
+        target_type="pemesanan_konsultasi",
+        request=request,
+        metadata={
+            "checked": result.checked,
+            "payment_expired": result.payment_expired,
+            "missed": result.missed,
+            "slots_released": result.slots_released,
+        },
+        commit=True,
+    )
+    return result

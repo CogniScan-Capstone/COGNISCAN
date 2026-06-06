@@ -22,7 +22,7 @@ from api.core.config import settings
 engine = create_async_engine(
     settings.async_database_url,
     poolclass=pool.NullPool,
-    echo=settings.DEBUG,
+    echo=settings.SQL_ECHO,
     connect_args={
         "ssl": "require",
         "statement_cache_size": 0,

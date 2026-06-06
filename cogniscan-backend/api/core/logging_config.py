@@ -17,26 +17,62 @@ from api.core.config import settings
 
 
 SENSITIVE_KEYS = {
-    "password",
-    "password_hash",
-    "token",
     "access_token",
-    "refresh_token",
-    "authorization",
-    "jwt",
     "api_key",
+    "asesmen_klinis",
+    "audio",
+    "audio_bytes",
+    "authorization",
+    "catatan_internal",
+    "catatan_internal_psikolog",
+    "draft_catatan_internal",
+    "draft_feedback_psikolog",
+    "feedback_psikolog",
     "google_api_key",
-    "narrative",
+    "jwt",
+    "midtrans_client_key",
+    "midtrans_server_key",
+    "midtrans_snap_token",
     "narasi",
+    "narrative",
+    "new_password",
+    "observasi_psikolog",
+    "password",
+    "password_baru",
+    "password_hash",
+    "payload_notifikasi",
+    "raw_payload",
+    "refresh_token",
+    "ringkasan_kondisi",
+    "ringkasan_untuk_pasien",
+    "signature_key",
+    "smtp_password",
+    "snap_token",
+    "supabase_service_role_key",
+    "temporary_password",
+    "teks_jawaban",
+    "teks_pertanyaan",
     "teks_user",
+    "token",
 }
 
-SENSITIVE_PATTERN = re.compile(
-    r"(?i)\b("
-    r"password|password_hash|token|access_token|refresh_token|authorization|"
-    r"jwt|api_key|google_api_key|narrative|narasi|teks_user"
-    r")\b\s*[:=]\s*[^,\s}\]]+"
+_SENSITIVE_KEY_PATTERN = "|".join(
+    re.escape(key) for key in sorted(SENSITIVE_KEYS, key=len, reverse=True)
 )
+SENSITIVE_PATTERN = re.compile(
+    r"(?i)\b(?P<key>("
+    + _SENSITIVE_KEY_PATTERN
+    + r"))\b(?P<sep>\s*[:=]\s*)(\".*?\"|'.*?'|[^,\s}\]]+)"
+)
+BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
+
+
+def _redact_sensitive_string(value: str) -> str:
+    value = BEARER_PATTERN.sub("Bearer [REDACTED]", value)
+    return SENSITIVE_PATTERN.sub(
+        lambda match: f"{match.group('key')}{match.group('sep')}[REDACTED]",
+        value,
+    )
 
 
 def _redact_value(value: Any) -> Any:
@@ -47,11 +83,11 @@ def _redact_value(value: Any) -> Any:
             for key, val in value.items()
         }
 
-    if isinstance(value, list | tuple):
+    if isinstance(value, (list, tuple)):
         return type(value)(_redact_value(item) for item in value)
 
     if isinstance(value, str):
-        return SENSITIVE_PATTERN.sub(r"\1=[REDACTED]", value)
+        return _redact_sensitive_string(value)
 
     return value
 

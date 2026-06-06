@@ -18,6 +18,7 @@ from api.services.pembayaran_service import (
     get_payment_receipt_by_order_id,
     process_midtrans_notification,
 )
+from api.services.audit_log_service import record_audit_log
 
 router = APIRouter()
 
@@ -34,11 +35,26 @@ async def create_midtrans_payment(
     db: AsyncSession = Depends(get_db),
 ):
     """Buat transaksi Snap Midtrans untuk booking milik pasien login."""
-    return await create_midtrans_payment_for_booking(
+    payment = await create_midtrans_payment_for_booking(
         db=db,
         current_user=current_user,
         id_pemesanan_konsultasi=payload.id_pemesanan_konsultasi,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="patient_create_midtrans_payment",
+        target_type="pemesanan_konsultasi",
+        target_id=payload.id_pemesanan_konsultasi,
+        request=request,
+        metadata={
+            "id_transaksi_pembayaran": payment.id_transaksi_pembayaran,
+            "order_id": payment.order_id,
+            "status_transaksi": payment.status_transaksi,
+        },
+        commit=True,
+    )
+    return payment
 
 
 @router.post(
@@ -47,6 +63,7 @@ async def create_midtrans_payment(
 )
 async def receive_midtrans_notification(
     payload: MidtransWebhookPayload,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -58,6 +75,20 @@ async def receive_midtrans_notification(
     transaction, internal_status = await process_midtrans_notification(
         db=db,
         payload=payload.raw_payload(),
+    )
+    await record_audit_log(
+        db,
+        action="midtrans_webhook_processed",
+        target_type="transaksi_pembayaran",
+        target_id=transaction.id_transaksi_pembayaran,
+        request=request,
+        metadata={
+            "order_id": transaction.midtrans_order_id,
+            "transaction_status": transaction.midtrans_transaction_status,
+            "status_transaksi": internal_status,
+            "id_pemesanan_konsultasi": transaction.id_pemesanan_konsultasi,
+        },
+        commit=True,
     )
     return MidtransNotificationResponse(
         order_id=transaction.midtrans_order_id,
@@ -79,8 +110,24 @@ async def read_payment_receipt(
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil receipt pembayaran berdasarkan Midtrans order_id."""
-    return await get_payment_receipt_by_order_id(
+    receipt = await get_payment_receipt_by_order_id(
         db=db,
         current_user=current_user,
         order_id=order_id,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="patient_view_payment_receipt",
+        target_type="pemesanan_konsultasi",
+        target_id=receipt.id_pemesanan_konsultasi,
+        request=request,
+        metadata={
+            "order_id": receipt.order_id,
+            "status_transaksi": receipt.status_transaksi,
+            "status_pembayaran": receipt.status_pembayaran,
+            "status_konsultasi": receipt.status_konsultasi,
+        },
+        commit=True,
+    )
+    return receipt

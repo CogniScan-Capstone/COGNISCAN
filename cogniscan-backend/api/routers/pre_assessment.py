@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies.auth import get_current_active_pasien, get_current_active_psikolog
@@ -22,6 +22,7 @@ from api.services.pre_assessment_service import (
     save_pre_assessment_feedback_draft,
     submit_pre_assessment_feedback,
 )
+from api.services.audit_log_service import record_audit_log
 
 router = APIRouter()
 
@@ -56,15 +57,26 @@ async def read_patient_pre_assessments(
 )
 async def read_patient_pre_assessment(
     id_pra_asesmen: int,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil hasil pra-asesmen milik pasien login."""
-    return await get_patient_pre_assessment(
+    pra_asesmen = await get_patient_pre_assessment(
         db=db,
         current_user=current_user,
         id_pra_asesmen=id_pra_asesmen,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="patient_view_pre_assessment",
+        target_type="pra_asesmen",
+        target_id=id_pra_asesmen,
+        request=request,
+        commit=True,
+    )
+    return pra_asesmen
 
 
 @router.patch(
@@ -74,16 +86,28 @@ async def read_patient_pre_assessment(
 async def assign_patient_pre_assessment_psikolog(
     id_pra_asesmen: int,
     payload: PraAsesmenAssignPsikologRequest,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_pasien),
     db: AsyncSession = Depends(get_db),
 ):
     """Simpan psikolog pilihan pasien untuk review hasil pra-asesmen."""
-    return await assign_psikolog_to_pre_assessment(
+    pra_asesmen = await assign_psikolog_to_pre_assessment(
         db=db,
         current_user=current_user,
         id_pra_asesmen=id_pra_asesmen,
         id_psikolog=payload.id_psikolog,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="patient_assign_psikolog_to_pre_assessment",
+        target_type="pra_asesmen",
+        target_id=id_pra_asesmen,
+        request=request,
+        metadata={"id_psikolog": payload.id_psikolog},
+        commit=True,
+    )
+    return pra_asesmen
 
 
 @router.get(
@@ -104,15 +128,27 @@ async def read_psikolog_pre_assessments(
 )
 async def read_psikolog_pre_assessment(
     id_pra_asesmen: int,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Ambil detail pra-asesmen yang ditugaskan ke psikolog login."""
-    return await get_psikolog_pre_assessment(
+    pra_asesmen = await get_psikolog_pre_assessment(
         db=db,
         current_user=current_user,
         id_pra_asesmen=id_pra_asesmen,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="psikolog_view_pre_assessment",
+        target_type="pra_asesmen",
+        target_id=id_pra_asesmen,
+        request=request,
+        metadata={"id_pasien": pra_asesmen.sesi_jurnal.id_pasien if pra_asesmen.sesi_jurnal else None},
+        commit=True,
+    )
+    return pra_asesmen
 
 
 @router.patch(
@@ -122,11 +158,12 @@ async def read_psikolog_pre_assessment(
 async def draft_patient_pre_assessment_feedback(
     id_pra_asesmen: int,
     payload: PraAsesmenFeedbackDraftRequest,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Simpan draft feedback psikolog tanpa menampilkannya ke pasien."""
-    return await save_pre_assessment_feedback_draft(
+    pra_asesmen = await save_pre_assessment_feedback_draft(
         db=db,
         current_user=current_user,
         id_pra_asesmen=id_pra_asesmen,
@@ -136,6 +173,20 @@ async def draft_patient_pre_assessment_feedback(
         draft_severity_final=payload.draft_severity_final,
         draft_rekomendasi_tindak_lanjut=payload.draft_rekomendasi_tindak_lanjut,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="psikolog_save_pre_assessment_feedback_draft",
+        target_type="pra_asesmen",
+        target_id=id_pra_asesmen,
+        request=request,
+        metadata={
+            "has_feedback_draft": bool(payload.draft_feedback_psikolog),
+            "has_internal_note_draft": bool(payload.draft_catatan_internal),
+        },
+        commit=True,
+    )
+    return pra_asesmen
 
 
 @router.patch(
@@ -145,11 +196,12 @@ async def draft_patient_pre_assessment_feedback(
 async def feedback_patient_pre_assessment(
     id_pra_asesmen: int,
     payload: PraAsesmenFeedbackRequest,
+    request: Request,
     current_user: Pengguna = Depends(get_current_active_psikolog),
     db: AsyncSession = Depends(get_db),
 ):
     """Simpan feedback psikolog pada hasil pra-asesmen pasien."""
-    return await submit_pre_assessment_feedback(
+    pra_asesmen = await submit_pre_assessment_feedback(
         db=db,
         current_user=current_user,
         id_pra_asesmen=id_pra_asesmen,
@@ -160,3 +212,18 @@ async def feedback_patient_pre_assessment(
         severity_final_psikolog=payload.severity_final_psikolog,
         rekomendasi_tindak_lanjut_psikolog=payload.rekomendasi_tindak_lanjut_psikolog,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="psikolog_submit_pre_assessment_feedback",
+        target_type="pra_asesmen",
+        target_id=id_pra_asesmen,
+        request=request,
+        metadata={
+            "status_validasi": payload.status_validasi,
+            "severity_final": payload.severity_final_psikolog,
+            "feedback_length": len(payload.feedback_psikolog.strip()),
+        },
+        commit=True,
+    )
+    return pra_asesmen

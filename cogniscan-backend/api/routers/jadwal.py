@@ -35,6 +35,7 @@ from api.services.jadwal_service import (
     list_psikolog_paid_schedule_bookings,
     update_psikolog_availability,
 )
+from api.services.audit_log_service import record_audit_log
 
 router = APIRouter()
 
@@ -71,11 +72,26 @@ async def create_psikolog_availability_slot(
     db: AsyncSession = Depends(get_db),
 ):
     """Buat satu slot availability psikolog."""
-    return await create_psikolog_availability(
+    slot = await create_psikolog_availability(
         db=db,
         current_user=current_user,
         payload=payload,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="psikolog_create_availability_slot",
+        target_type="jadwal_psikolog",
+        target_id=slot.id_jadwal_psikolog,
+        request=request,
+        metadata={
+            "tanggal_praktik": slot.tanggal_praktik,
+            "waktu_mulai": slot.waktu_mulai,
+            "waktu_selesai": slot.waktu_selesai,
+        },
+        commit=True,
+    )
+    return slot
 
 
 @router.post(
@@ -91,11 +107,28 @@ async def create_psikolog_availability_slots_bulk(
     db: AsyncSession = Depends(get_db),
 ):
     """Buat banyak slot availability dalam rentang tanggal tertentu."""
-    return await create_psikolog_availability_bulk(
+    result = await create_psikolog_availability_bulk(
         db=db,
         current_user=current_user,
         payload=payload,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="psikolog_create_availability_slots_bulk",
+        target_type="jadwal_psikolog",
+        request=request,
+        metadata={
+            "start_date": payload.start_date,
+            "end_date": payload.end_date,
+            "weekdays": payload.weekdays,
+            "requested_slots": len(payload.slots),
+            "created_count": result.created_count,
+            "skipped_count": result.skipped_count,
+        },
+        commit=True,
+    )
+    return result
 
 
 @router.patch(
@@ -111,12 +144,28 @@ async def update_psikolog_availability_slot(
     db: AsyncSession = Depends(get_db),
 ):
     """Ubah slot availability psikolog jika belum memiliki booking aktif."""
-    return await update_psikolog_availability(
+    slot = await update_psikolog_availability(
         db=db,
         current_user=current_user,
         id_jadwal_psikolog=id_jadwal_psikolog,
         payload=payload,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="psikolog_update_availability_slot",
+        target_type="jadwal_psikolog",
+        target_id=id_jadwal_psikolog,
+        request=request,
+        metadata={
+            "tanggal_praktik": slot.tanggal_praktik,
+            "waktu_mulai": slot.waktu_mulai,
+            "waktu_selesai": slot.waktu_selesai,
+            "apakah_tersedia": slot.apakah_tersedia,
+        },
+        commit=True,
+    )
+    return slot
 
 
 @router.delete(
@@ -131,11 +180,21 @@ async def delete_psikolog_availability_slot(
     db: AsyncSession = Depends(get_db),
 ):
     """Hapus slot availability yang belum memiliki booking aktif."""
-    return await delete_psikolog_availability(
+    result = await delete_psikolog_availability(
         db=db,
         current_user=current_user,
         id_jadwal_psikolog=id_jadwal_psikolog,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="psikolog_delete_availability_slot",
+        target_type="jadwal_psikolog",
+        target_id=id_jadwal_psikolog,
+        request=request,
+        commit=True,
+    )
+    return result
 
 
 @router.get(
@@ -168,12 +227,28 @@ async def approve_reschedule_request(
     db: AsyncSession = Depends(get_db),
 ):
     """Setujui pengajuan reschedule agar pasien bisa memilih slot baru."""
-    return await approve_psikolog_reschedule_request(
+    result = await approve_psikolog_reschedule_request(
         db=db,
         current_user=current_user,
         id_permintaan_reschedule=id_permintaan_reschedule,
         payload=payload,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="psikolog_approve_reschedule_request",
+        target_type="permintaan_reschedule_konsultasi",
+        target_id=id_permintaan_reschedule,
+        request=request,
+        metadata={
+            "id_pemesanan_konsultasi": result.id_pemesanan_konsultasi,
+            "id_pasien": result.id_pasien,
+            "status": result.status,
+            "has_note": bool(payload.catatan_psikolog),
+        },
+        commit=True,
+    )
+    return result
 
 
 @router.post(
@@ -189,12 +264,28 @@ async def reject_reschedule_request(
     db: AsyncSession = Depends(get_db),
 ):
     """Tolak pengajuan reschedule dengan catatan untuk pasien."""
-    return await reject_psikolog_reschedule_request(
+    result = await reject_psikolog_reschedule_request(
         db=db,
         current_user=current_user,
         id_permintaan_reschedule=id_permintaan_reschedule,
         payload=payload,
     )
+    await record_audit_log(
+        db,
+        actor=current_user,
+        action="psikolog_reject_reschedule_request",
+        target_type="permintaan_reschedule_konsultasi",
+        target_id=id_permintaan_reschedule,
+        request=request,
+        metadata={
+            "id_pemesanan_konsultasi": result.id_pemesanan_konsultasi,
+            "id_pasien": result.id_pasien,
+            "status": result.status,
+            "note_length": len(payload.catatan_psikolog.strip()),
+        },
+        commit=True,
+    )
+    return result
 
 
 @router.get(

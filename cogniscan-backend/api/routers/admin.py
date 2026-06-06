@@ -22,6 +22,7 @@ from api.services.admin_service import (
     reject_psikolog,
     reset_psikolog_temporary_password,
 )
+from api.services.audit_log_service import record_audit_log
 from api.services.psikolog_document_service import resolve_psikolog_document
 
 router = APIRouter()
@@ -57,7 +58,8 @@ async def get_psikolog_verification_detail(
 async def get_psikolog_verification_document(
     id_psikolog: int,
     document_type: str,
-    _admin: Pengguna = Depends(get_current_active_admin),
+    request: Request,
+    current_admin: Pengguna = Depends(get_current_active_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Preview dokumen STR/SIP psikolog untuk admin terautentikasi."""
@@ -79,6 +81,17 @@ async def get_psikolog_verification_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File dokumen belum tersedia di server",
         )
+
+    await record_audit_log(
+        db,
+        actor=current_admin,
+        action="admin_preview_psikolog_document",
+        target_type="psikolog",
+        target_id=id_psikolog,
+        request=request,
+        metadata={"document_type": document_type},
+        commit=True,
+    )
 
     response = FileResponse(document_path, media_type="application/pdf")
     response.headers["Content-Disposition"] = (
@@ -107,6 +120,16 @@ async def approve_psikolog_verification(
         id_psikolog=id_psikolog,
         current_admin=current_admin,
     )
+    await record_audit_log(
+        db,
+        actor=current_admin,
+        action="admin_approve_psikolog",
+        target_type="psikolog",
+        target_id=psikolog.id_psikolog,
+        request=request,
+        metadata={"email_psikolog": psikolog.email, "status_akun": psikolog.status_akun},
+        commit=True,
+    )
     return PsikologApproveResponse(
         id_psikolog=psikolog.id_psikolog,
         email=psikolog.email or "",
@@ -125,13 +148,23 @@ async def approve_psikolog_verification(
 async def reset_psikolog_temporary_password_route(
     id_psikolog: int,
     request: Request,
-    _admin: Pengguna = Depends(get_current_active_admin),
+    current_admin: Pengguna = Depends(get_current_active_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Reset dan kirim ulang temporary password psikolog."""
     psikolog = await reset_psikolog_temporary_password(
         db=db,
         id_psikolog=id_psikolog,
+    )
+    await record_audit_log(
+        db,
+        actor=current_admin,
+        action="admin_reset_psikolog_temporary_password",
+        target_type="psikolog",
+        target_id=psikolog.id_psikolog,
+        request=request,
+        metadata={"email_psikolog": psikolog.email},
+        commit=True,
     )
     return PsikologApproveResponse(
         id_psikolog=psikolog.id_psikolog,
@@ -152,7 +185,7 @@ async def reject_psikolog_verification(
     id_psikolog: int,
     payload: PsikologRejectRequest,
     request: Request,
-    _admin: Pengguna = Depends(get_current_active_admin),
+    current_admin: Pengguna = Depends(get_current_active_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Tolak verifikasi psikolog dan kirim email penolakan jika SMTP aktif."""
@@ -160,6 +193,20 @@ async def reject_psikolog_verification(
         db=db,
         id_psikolog=id_psikolog,
         alasan=payload.alasan,
+    )
+    await record_audit_log(
+        db,
+        actor=current_admin,
+        action="admin_reject_psikolog",
+        target_type="psikolog",
+        target_id=psikolog.id_psikolog,
+        request=request,
+        metadata={
+            "email_psikolog": psikolog.email,
+            "alasan_length": len(payload.alasan.strip()),
+            "status_akun": psikolog.status_akun,
+        },
+        commit=True,
     )
     return PsikologRejectResponse(
         id_psikolog=psikolog.id_psikolog,

@@ -67,13 +67,42 @@ function adminHeaders(accessToken: string) {
   };
 }
 
+function getLocalBackendFallback(input: RequestInfo | URL) {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === "localhost") {
+      parsed.hostname = "127.0.0.1";
+      return parsed.toString();
+    }
+    if (parsed.hostname === "127.0.0.1") {
+      parsed.hostname = "localhost";
+      return parsed.toString();
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 async function fetchAdminApi(input: RequestInfo | URL, init?: RequestInit) {
   try {
     return await fetch(input, init);
   } catch (error) {
     if (error instanceof TypeError) {
+      const fallbackUrl = getLocalBackendFallback(input);
+      if (fallbackUrl) {
+        try {
+          return await fetch(fallbackUrl, init);
+        } catch {
+          // Keep the stable user-facing message below.
+        }
+      }
+
       throw new Error(
-        "Tidak bisa menghubungi backend. Pastikan backend aktif, URL API frontend benar, dan CORS mengizinkan origin frontend.",
+        "Tidak bisa menghubungi backend. Pastikan backend aktif, sudah direstart, dan frontend memakai URL API yang benar.",
       );
     }
 

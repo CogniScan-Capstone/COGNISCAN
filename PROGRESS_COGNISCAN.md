@@ -1,10 +1,20 @@
 # Progress CogniScan
 
-Tanggal update: 2026-06-01
+Tanggal update: 2026-06-06
 
 Dokumen ini menyimpan konteks kerja terbaru untuk sesi berikutnya. Fokus utama saat ini adalah stabilisasi alur end-to-end setelah feedback psikolog: screening teks/voice, assignment psikolog, booking jadwal, pembayaran Midtrans, link konsultasi Jitsi, reschedule paid booking tanpa pembayaran ulang, hasil konsultasi psikolog, follow-up booking tanpa screening ulang, reminder WhatsApp WAHA, tab konsultasi dinamis, security guard lintas role, dan performa navigasi antar tab.
 
 ## Ringkasan Status
+
+Status terkini (2026-06-06):
+- Phase audit log formal sudah dibuat: tabel `audit_log`, model `AuditLog`, service `record_audit_log`, dan migration `c9d0e1f2a3b4_add_audit_log.py` sudah aktif di database (`alembic current` = `c9d0e1f2a3b4 (head)`).
+- Audit log dipasang pada aksi sensitif utama: admin preview dokumen/approve/reject/reset psikolog, pasien melihat/assign pra-asesmen, psikolog membuka pra-asesmen/draft/final feedback, checkout/booking cancel/reschedule, payment create/webhook/receipt, reminder/status refresh admin, mutasi jadwal psikolog, keputusan reschedule, riwayat konsultasi, dan submit hasil konsultasi.
+- Metadata audit sengaja ringkas dan tidak menyimpan raw narasi pasien, isi feedback, catatan klinis, alasan lengkap, token, password, atau payload Midtrans penuh.
+- Privacy/security hardening lanjutan sudah dibuat: SQLAlchemy query echo dipisahkan dari `DEBUG` lewat `SQL_ECHO=false` default, redaction log diperluas untuk field klinis/password/token/payment secret, dan rate limit production memberi warning jika masih memakai storage lokal `memory://`.
+- Phase 8B testing otomatis lanjutan bertambah: backend sekarang punya regression test untuk Midtrans status mapping/webhook processing, invalid signature, efek payment ke booking/slot/link Jitsi, serta API-level test endpoint preview dokumen STR/SIP admin.
+- Test dokumen admin memakai `TestClient`, dependency override, dan file PDF temporary; test ini tidak menyentuh DB produksi atau storage asli.
+- Full backend pytest terbaru berhasil dengan `57 passed`. Ruff untuk file audit/router/privacy test baru dan `git diff --check` juga berhasil.
+- Frontend E2E/component test masih belum ditambahkan karena project belum memasang Playwright/testing library secara resmi.
 
 Status terkini (2026-06-01):
 - Phase 8A bagian 1 sudah diverifikasi ulang: backend compile/OpenAPI, migration `a6b7c8d9e0f1 (head)`, frontend lint, TypeScript check, dan production build berhasil.
@@ -17,7 +27,7 @@ Status terkini (2026-05-30):
 - Aplikasi sudah melewati Phase 6B dan Phase 7 MVP utama sudah tersambung: feedback psikolog, pesan pasien, booking, pembayaran, link meeting, availability jadwal psikolog, tab konsultasi pasien, flow request/approval reschedule, reschedule paid booking tanpa pembayaran ulang, cancel/no-show/expiry booking, hasil konsultasi psikolog, follow-up booking tanpa screening ulang, UI screening teks/voice yang lebih jelas, reminder WAHA, dashboard admin dinamis, global route guard frontend, validasi wajib profil registrasi, dan cache navigasi antar tab.
 - Perubahan UX/flow terbaru sudah menutup beberapa gap setelah testing manual: tab konsultasi pasien memberi label jelas untuk jadwal yang sudah terlewat, pasien bisa membatalkan konsultasi terlewat sebagai status final no-refund, layout pilih jadwal booking pasien dibuat melebar, dan kalender availability psikolog dibuat lebih fleksibel untuk bulan/tahun berikutnya.
 - E2E manual utama untuk booking, batal booking, hasil konsultasi, follow-up booking, migration aktif, dan reminder WA sudah dilaporkan berhasil; sisa WAHA sekarang adalah validasi deployment target/multi-worker dan pengamanan dashboard/API.
-- Sisa utama sekarang adalah build/verifikasi final sebelum demo, rekam medis lanjutan, testing otomatis, audit log formal, privacy hardening lanjutan, dan dokumentasi operasional terbaru.
+- Sisa utama sekarang adalah build/verifikasi final sebelum demo, review format rekam medis lanjutan dengan psikolog, integration/E2E test lanjutan, tuning rate limit production dengan Redis/Valkey jika multi-instance, retention policy audit log, dan dokumentasi deployment final.
 
 Fitur yang baru diselesaikan (2026-05-30):
 - **Label konsultasi pasien yang sudah terlewat**: `/pasien/konsultasi` sekarang menampilkan badge `Sudah Terlewat` berdasarkan tanggal/waktu aktual jika jadwal paid sudah melewati waktu selesai + grace period, walaupun status backend/cache masih belum tersinkron penuh.
@@ -650,6 +660,13 @@ Yang perlu dilanjutkan:
 
 ### Prioritas 5: Testing dan Privacy Hardening
 
+Status terbaru:
+- Audit log formal untuk akses/aksi sensitif utama sudah aktif.
+- `SQL_ECHO` default `false`, sehingga query SQLAlchemy tidak mencetak parameter sensitif hanya karena `DEBUG=true`.
+- Redaction logging diperluas untuk raw narasi/jawaban asesmen, audio marker, feedback/catatan klinis, temporary password, JWT/token, Supabase service role key, SMTP password, dan Midtrans secret/snap token.
+- Rate limit endpoint sensitif tetap aktif; production multi-instance akan memberi warning jika masih memakai `memory://`.
+- Regression test baru `tests/test_privacy_security_hardening.py` memverifikasi redaction, default `SQL_ECHO`, dan deteksi storage rate limit.
+
 Test yang paling perlu:
 - Route guard frontend: pasien/admin/psikolog tidak bisa membuka route role lain dan user sudah login tidak diarahkan ke auth page.
 - Validasi registrasi pasien/psikolog: payload kosong/blank dari frontend dan Postman harus ditolak sebelum user bisa memakai fitur role.
@@ -662,16 +679,15 @@ Test yang paling perlu:
 - Voice answer tanpa storage audio mentah.
 - Predicate feedback final di dashboard, pesan, booking, dan selesai screening.
 - Past-date booking backend/frontend.
-- Akses data sensitif dan audit log.
-- Rate limit ringan endpoint sensitif sudah ditambahkan; perlu tuning angka limit berdasarkan pola trafik nyata dan gunakan Redis/Valkey jika production multi-instance.
+- Tuning angka rate limit berdasarkan pola trafik nyata dan Redis/Valkey sebagai storage terpusat jika production multi-instance.
 
 ### Prioritas 6: Operasional dan Security Deployment
 
 Yang perlu dilakukan:
 - Amankan WAHA dashboard/API dengan dashboard password, `WAHA_API_KEY`, dan network binding privat atau reverse proxy internal.
 - Cleanup user test lama di Supabase Auth jika masih ada, karena tabel aplikasi sudah dibersihkan tetapi Auth user bisa tersisa.
-- Tambahkan audit log formal untuk admin action, psikolog membuka laporan pasien, psikolog submit hasil konsultasi, pasien membuka hasil konsultasi, payment sync, dan reminder WAHA.
-- Rate limit ringan sudah ditambahkan untuk auth mutation, screening finalize/voice, payment create/status, admin action, jadwal/hasil konsultasi, dan reminder manual endpoint; sisa production hardening adalah tuning limit dan storage terpusat.
+- Audit log formal sudah tersedia untuk aksi sensitif utama; sisa deployment adalah menentukan retention policy dan siapa yang boleh membaca/mengekspor audit log.
+- Rate limit ringan sudah ditambahkan untuk auth mutation, screening finalize/voice, payment create/status, admin action, jadwal/hasil konsultasi, dan reminder manual endpoint; sisa production hardening adalah tuning limit dan storage terpusat Redis/Valkey.
 
 ## Fase Berikutnya Historis (2026-05-20)
 
@@ -763,6 +779,8 @@ Yang perlu dijaga:
 ## Catatan Risiko
 
 - Jangan log raw narasi pasien.
+- Jangan aktifkan `SQL_ECHO=true` di environment yang memakai data pasien nyata; `DEBUG=true` tidak lagi cukup untuk mengaktifkan SQL query echo.
+- Field klinis/password/token/payment secret wajib lewat redaction log; jangan menambah logger baru yang bypass `api.core.logging_config`.
 - Jangan tampilkan ringkasan AI mentah, skor, rekomendasi AI, atau distorsi terdeteksi langsung ke pasien setelah screening; sisi pasien cukup terima kasih, status review, pesan kerahasiaan, dan feedback psikolog final.
 - Jangan return password/token di response.
 - Jangan modifikasi `analyzer/` atau `prompts/` tanpa instruksi eksplisit; perubahan terakhir ke Gemini 3 Flash dan prompt rekomendasi sudah atas permintaan user.
@@ -787,6 +805,44 @@ Yang perlu dijaga:
 - Setelah validasi profil wajib, akun pasien lama yang belum lengkap akan diarahkan ke `/pasien/profile` dan belum bisa memakai screening/booking sampai data wajib dilengkapi.
 
 ## Verifikasi Terakhir
+
+Yang sudah dijalankan pada update 2026-06-06 privacy dan security hardening:
+- Backend:
+  - `conda run -n cogniscan-backend pytest tests/test_privacy_security_hardening.py -q` berhasil dengan `4 passed`.
+  - `conda run -n cogniscan-backend pytest -q` berhasil dengan `57 passed`.
+  - `conda run -n cogniscan-backend python -m compileall -q api tests` berhasil.
+  - `conda run -n cogniscan-backend ruff check api/core/config.py api/core/database.py api/core/logging_config.py api/core/rate_limit.py tests/test_privacy_security_hardening.py` berhasil.
+  - `git diff --check` berhasil; warning yang muncul hanya LF/CRLF normal dari Git.
+- Catatan:
+  - `SQL_ECHO=false` menjadi default agar parameter query berisi narasi, catatan klinis, token, atau secret tidak ikut tercetak.
+  - Redaction log sekarang mencakup field klinis, temporary password, bearer token, Supabase service role key, SMTP password, Midtrans key/signature/snap token, dan payload sensitif lain.
+  - Rate limit production multi-instance perlu `RATE_LIMIT_STORAGE_URL` terpusat seperti Redis/Valkey.
+
+Yang sudah dijalankan pada update 2026-06-06 audit log formal:
+- Database:
+  - Migration `c9d0e1f2a3b4_add_audit_log.py` dibuat.
+  - `conda run -n cogniscan-backend alembic upgrade head` berhasil menjalankan upgrade `b8c9d0e1f2a3 -> c9d0e1f2a3b4`.
+  - `conda run -n cogniscan-backend alembic current` menampilkan `c9d0e1f2a3b4 (head)`.
+- Backend:
+  - `conda run -n cogniscan-backend pytest tests/test_audit_log_service.py tests/test_admin_document_api.py tests/test_payment_midtrans_rules.py -q` berhasil dengan `21 passed`.
+  - `conda run -n cogniscan-backend pytest -q` berhasil dengan `53 passed`.
+  - `conda run -n cogniscan-backend python -m compileall -q api tests` berhasil.
+  - `conda run -n cogniscan-backend python -c "from api.main import app; schema=app.openapi(); print('openapi ok', len(schema.get('paths', {})))"` berhasil dengan `openapi ok 50`.
+  - `conda run -n cogniscan-backend ruff check ...` untuk file audit/router/test yang diubah berhasil.
+  - `git diff --check` untuk file audit log berhasil; warning yang muncul hanya LF/CRLF normal dari Git.
+- Catatan:
+  - Audit log mencatat event dan metadata ringkas. Isi raw narasi, feedback, catatan klinis, alasan lengkap, token, password, dan payload Midtrans penuh tidak disimpan di metadata audit.
+
+Yang sudah dijalankan pada update 2026-06-06 Phase 8B testing otomatis lanjutan:
+- Backend:
+  - `conda run -n cogniscan-backend pytest tests/test_payment_midtrans_rules.py tests/test_admin_document_api.py -q` berhasil dengan `19 passed`.
+  - `conda run -n cogniscan-backend python -m py_compile tests\test_payment_midtrans_rules.py tests\test_admin_document_api.py` berhasil.
+  - `conda run -n cogniscan-backend pytest -q` berhasil dengan `51 passed`.
+  - `conda run -n cogniscan-backend ruff check tests\test_payment_midtrans_rules.py tests\test_admin_document_api.py` berhasil dengan `All checks passed!`.
+  - `git diff --check` untuk file test baru berhasil.
+- Catatan:
+  - Test baru masih tidak memakai DB produksi, Midtrans asli, WAHA asli, atau Gemini asli.
+  - Frontend E2E/component test masih pekerjaan lanjutan jika Playwright/testing library ditambahkan ke project.
 
 Yang sudah dijalankan pada update 2026-06-01 Phase 8B tahap awal:
 - Backend:

@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     PSIKOLOG_DOCUMENT_MAX_BYTES: int = 10 * 1024 * 1024
     APP_ENV: str = "development"
     DEBUG: bool = True
+    SQL_ECHO: bool = False
 
     # ── Server ─────────────────────────────────────────────
     HOST: str = "0.0.0.0"
@@ -99,6 +100,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_REMINDER_DISPATCH: str = "6/minute"
     RATE_LIMIT_SCHEDULE_MUTATION: str = "60/minute"
     RATE_LIMIT_CONSULTATION_RESULT: str = "12/minute"
+
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV.lower() in {"prod", "production"}
 
     @property
     def cors_origins_list(self) -> list[str]:
