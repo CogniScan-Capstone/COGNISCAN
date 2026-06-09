@@ -66,6 +66,11 @@ async def read_root():
     }
 
 
+@app.get("/healthz", tags=["Health Check"], include_in_schema=False)
+async def healthz():
+    return {"status": "ok"}
+
+
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])

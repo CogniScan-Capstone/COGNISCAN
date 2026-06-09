@@ -18,18 +18,23 @@ from google.api_core import exceptions as google_exceptions
 from pydantic import BaseModel, Field, ValidationError
 
 # Load environment variables
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(BASE_DIR / ".env")
 
 # ============================================================
 # LOGGING SETUP
 # ============================================================
+log_handlers: list[logging.Handler] = [logging.StreamHandler()]
+if os.getenv("APP_ENV", "development").lower() not in {"prod", "production"}:
+    log_handlers.insert(
+        0,
+        logging.FileHandler(BASE_DIR / "cogniscan_gemini3.log", mode="a", encoding="utf-8"),
+    )
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler('cogniscan_gemini3.log', mode='a', encoding='utf-8'),
-        logging.StreamHandler(),
-    ]
+    handlers=log_handlers,
 )
 logger = logging.getLogger(__name__)
 
@@ -104,6 +109,7 @@ class CognitiveDistortionAnalysis(BaseModel):
 def load_system_prompt(version: str = "v2") -> str:
     """Load system prompt dari file."""
     candidates = [
+        BASE_DIR / "prompts" / f"system_prompt_{version}.md",
         Path(__file__).parent / "prompts" / f"system_prompt_{version}.md",
         Path(f"prompts/system_prompt_{version}.md"),
         Path(f"system_prompt_{version}.md"),

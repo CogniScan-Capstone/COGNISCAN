@@ -3,14 +3,19 @@ Konfigurasi aplikasi CogniScan menggunakan Pydantic Settings.
 Load otomatis dari file .env di folder cogniscan-backend/.
 """
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BASE_DIR = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
     """Konfigurasi utama aplikasi, di-load dari environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",  # abaikan env vars yang tidak didefinisikan di sini
@@ -18,7 +23,7 @@ class Settings(BaseSettings):
 
     # ── Google Cloud / Gemini ──────────────────────────────
     GEMINI_API_KEY: str
-    GEMINI_MODEL: str = "gemini-3-flash"
+    GEMINI_MODEL: str = "gemini-3-flash-preview"
 
     # ── Database (Supabase) ────────────────────────────────
     # Transaction Pooler (port 6543) → untuk FastAPI runtime
@@ -50,7 +55,7 @@ class Settings(BaseSettings):
     # ── Server ─────────────────────────────────────────────
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    RELOAD: bool = True
+    RELOAD: bool = False
 
     # ── CORS ───────────────────────────────────────────────
     CORS_ORIGINS: str = "http://localhost:3000"
@@ -108,7 +113,7 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS string menjadi list."""
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     @property
     def async_database_url(self) -> str:

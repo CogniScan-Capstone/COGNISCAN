@@ -27,6 +27,7 @@ ENV/
 .coverage
 *.log
 scratch/
+.tmp/
 riwayat_percakapan.txt
 storage/
 

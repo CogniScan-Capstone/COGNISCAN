@@ -1,5 +1,6 @@
 import asyncio
 import os
+from pathlib import Path
 from logging.config import fileConfig
 
 from dotenv import load_dotenv
@@ -10,7 +11,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from alembic import context
 
 # Load .env file
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(BASE_DIR / ".env")
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -21,18 +23,21 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Ambil DATABASE_URL_SYNC dari .env dan konversi ke asyncpg
+db_url_sync = os.getenv("DATABASE_URL_SYNC", "")
+if not db_url_sync:
+    raise RuntimeError("DATABASE_URL_SYNC wajib di-set untuk menjalankan Alembic migrations")
+
+if db_url_sync.startswith("postgresql://"):
+    ASYNC_DB_URL = db_url_sync.replace("postgresql://", "postgresql+asyncpg://", 1)
+else:
+    ASYNC_DB_URL = db_url_sync
+
 # Import semua model agar Alembic autogenerate melihat metadata lengkap.
 import api.models  # noqa: F401,E402
 from api.core.database import Base  # noqa: E402
 
 target_metadata = Base.metadata
-
-# Ambil DATABASE_URL_SYNC dari .env dan konversi ke asyncpg
-db_url_sync = os.getenv("DATABASE_URL_SYNC", "")
-if db_url_sync.startswith("postgresql://"):
-    ASYNC_DB_URL = db_url_sync.replace("postgresql://", "postgresql+asyncpg://", 1)
-else:
-    ASYNC_DB_URL = db_url_sync
 
 
 def run_migrations_offline() -> None:
